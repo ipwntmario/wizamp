@@ -1,0 +1,31 @@
+{
+  "sections": {
+    "Intro": {
+      "defaultDisplayName": "Intro",
+      "firstClip": "Intro",
+      "nextSection": "Main",
+      "type": "auto"
+    },
+    "Main": {
+      "defaultDisplayName": "Main",
+      "firstClip": "Main_a",
+      "nextSection": [
+        "End"
+      ],
+      "type": "",
+      "modes": [
+        "keychange"
+      ],
+      "defaultBaseModeName": "original key"
+    },
+    "End": {
+      "defaultDisplayName": "End",
+      "firstClip": "End",
+      "type": "end",
+      "modes": [
+        "keychange"
+      ],
+      "defaultBaseModeName": "original key"
+    }
+  }
+}

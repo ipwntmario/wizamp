@@ -1,9 +1,7 @@
 {
   "clips": {
     "BleepBloop_intro": {
-      "file": {
-        "base": "BleepBloop_intro.ogg"
-      },
+      "file": "BleepBloop_intro.ogg",
       "loopPoint": 4.615397,
       "clipEnd": 11.538481,
       "nextClip": [
@@ -11,9 +9,7 @@
       ]
     },
     "BleepBloop_main_a": {
-      "file": {
-        "base": "BleepBloop_main_a.ogg"
-      },
+      "file": "BleepBloop_main_a.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -21,9 +17,7 @@
       ]
     },
     "BleepBloop_main_b": {
-      "file": {
-        "base": "BleepBloop_main_b.ogg"
-      },
+      "file": "BleepBloop_main_b.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -31,9 +25,7 @@
       ]
     },
     "BleepBloop_main_c": {
-      "file": {
-        "base": "BleepBloop_main_c.ogg"
-      },
+      "file": "BleepBloop_main_c.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -41,9 +33,7 @@
       ]
     },
     "BleepBloop_main_d": {
-      "file": {
-        "base": "BleepBloop_main_d.ogg"
-      },
+      "file": "BleepBloop_main_d.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -51,9 +41,7 @@
       ]
     },
     "BleepBloop_keychange_a": {
-      "file": {
-        "base": "BleepBloop_keychange_a.ogg"
-      },
+      "file": "BleepBloop_keychange_a.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 13.846168,
       "nextClip": [
@@ -61,9 +49,7 @@
       ]
     },
     "BleepBloop_keychange_b": {
-      "file": {
-        "base": "BleepBloop_keychange_b.ogg"
-      },
+      "file": "BleepBloop_keychange_b.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 13.846168,
       "nextClip": [
@@ -71,9 +57,7 @@
       ]
     },
     "BleepBloop_keychange_c": {
-      "file": {
-        "base": "BleepBloop_keychange_c.ogg"
-      },
+      "file": "BleepBloop_keychange_c.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 13.846168,
       "nextClip": [
@@ -81,9 +65,7 @@
       ]
     },
     "BleepBloop_keychange_d": {
-      "file": {
-        "base": "BleepBloop_keychange_d.ogg"
-      },
+      "file": "BleepBloop_keychange_d.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 13.846168,
       "nextClip": [
@@ -91,25 +73,19 @@
       ]
     },
     "BleepBloop_end": {
-      "file": {
-        "base": "BleepBloop_end.ogg"
-      },
+      "file": "BleepBloop_end.ogg",
       "loopPoint": 16.153855,
       "clipEnd": 16.153855,
       "nextClip": []
     },
     "BleepBloop_endInKeychange": {
-      "file": {
-        "base": "BleepBloop_endInKeychange.ogg"
-      },
+      "file": "BleepBloop_endInKeychange.ogg",
       "loopPoint": 13.846168,
       "clipEnd": 13.846168,
       "nextClip": []
     },
     "BleepBloopRANDOM_intro": {
-      "file": {
-        "base": "BleepBloop_intro.ogg"
-      },
+      "file": "BleepBloop_intro.ogg",
       "loopPoint": 4.615397,
       "clipEnd": 11.538481,
       "nextClip": [
@@ -117,9 +93,7 @@
       ]
     },
     "BleepBloopRANDOM_main_a": {
-      "file": {
-        "base": "BleepBloop_main_a.ogg"
-      },
+      "file": "BleepBloop_main_a.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -129,9 +103,7 @@
       ]
     },
     "BleepBloopRANDOM_main_b": {
-      "file": {
-        "base": "BleepBloop_main_b.ogg"
-      },
+      "file": "BleepBloop_main_b.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -141,9 +113,7 @@
       ]
     },
     "BleepBloopRANDOM_main_c": {
-      "file": {
-        "base": "BleepBloop_main_c.ogg"
-      },
+      "file": "BleepBloop_main_c.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -153,9 +123,7 @@
       ]
     },
     "BleepBloopRANDOM_main_d": {
-      "file": {
-        "base": "BleepBloop_main_d.ogg"
-      },
+      "file": "BleepBloop_main_d.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -165,9 +133,7 @@
       ]
     },
     "BleepBloopRANDOM_keychange_a": {
-      "file": {
-        "base": "BleepBloop_keychange_a.ogg"
-      },
+      "file": "BleepBloop_keychange_a.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 13.846168,
       "nextClip": [
@@ -177,9 +143,7 @@
       ]
     },
     "BleepBloopRANDOM_keychange_b": {
-      "file": {
-        "base": "BleepBloop_keychange_b.ogg"
-      },
+      "file": "BleepBloop_keychange_b.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 13.846168,
       "nextClip": [
@@ -189,9 +153,7 @@
       ]
     },
     "BleepBloopRANDOM_keychange_c": {
-      "file": {
-        "base": "BleepBloop_keychange_c.ogg"
-      },
+      "file": "BleepBloop_keychange_c.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 13.846168,
       "nextClip": [
@@ -201,9 +163,7 @@
       ]
     },
     "BleepBloopRANDOM_keychange_d": {
-      "file": {
-        "base": "BleepBloop_keychange_d.ogg"
-      },
+      "file": "BleepBloop_keychange_d.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 13.846168,
       "nextClip": [
@@ -213,25 +173,19 @@
       ]
     },
     "BleepBloopRANDOM_end": {
-      "file": {
-        "base": "BleepBloop_end.ogg"
-      },
+      "file": "BleepBloop_end.ogg",
       "loopPoint": 16.153855,
       "clipEnd": 16.153855,
       "nextClip": []
     },
     "BleepBloopRANDOM_endInKeychange": {
-      "file": {
-        "base": "BleepBloop_endInKeychange.ogg"
-      },
+      "file": "BleepBloop_endInKeychange.ogg",
       "loopPoint": 13.846168,
       "clipEnd": 13.846168,
       "nextClip": []
     },
     "BleepBloopTEST_intro": {
-      "file": {
-        "base": "BleepBloop_introTEST.ogg"
-      },
+      "file": "BleepBloop_introTEST.ogg",
       "loopPoint": 4.615397,
       "clipEnd": 11.538481,
       "nextClip": [
@@ -239,9 +193,7 @@
       ]
     },
     "BleepBloopTEST_main_a": {
-      "file": {
-        "base": "BleepBloop_main_aTEST.ogg"
-      },
+      "file": "BleepBloop_main_aTEST.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -251,9 +203,7 @@
       ]
     },
     "BleepBloopTEST_main_b": {
-      "file": {
-        "base": "BleepBloop_main_b.ogg"
-      },
+      "file": "BleepBloop_main_b.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -263,9 +213,7 @@
       ]
     },
     "BleepBloopTEST_main_c": {
-      "file": {
-        "base": "BleepBloop_main_c.ogg"
-      },
+      "file": "BleepBloop_main_c.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -275,9 +223,7 @@
       ]
     },
     "BleepBloopTEST_main_d": {
-      "file": {
-        "base": "BleepBloop_main_d.ogg"
-      },
+      "file": "BleepBloop_main_d.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -287,17 +233,13 @@
       ]
     },
     "BleepBloopTEST_end": {
-      "file": {
-        "base": "BleepBloop_end.ogg"
-      },
+      "file": "BleepBloop_end.ogg",
       "loopPoint": 16.153855,
       "clipEnd": 16.153855,
       "nextClip": []
     },
     "Follow the Moth": {
-      "file": {
-        "base": "Follow the Moth.ogg"
-      },
+      "file": "Follow the Moth.ogg",
       "loopPoint": 116.170227,
       "clipEnd": 116.170227,
       "nextClip": [
@@ -305,9 +247,7 @@
       ]
     },
     "The Ashwights Attack": {
-      "file": {
-        "base": "The Ashwights Attack.ogg"
-      },
+      "file": "The Ashwights Attack.ogg",
       "loopPoint": 144.915261,
       "clipEnd": 144.915261,
       "nextClip": [
@@ -315,9 +255,7 @@
       ]
     },
     "Tommy's Haunted Thoughts (reprise)": {
-      "file": {
-        "base": "Tommy's Haunted Thoughts (reprise).ogg"
-      },
+      "file": "Tommy's Haunted Thoughts (reprise).ogg",
       "loopPoint": 120,
       "clipEnd": 120,
       "nextClip": [
@@ -325,9 +263,7 @@
       ]
     },
     "Lena's Sight": {
-      "file": {
-        "base": "Lena's Sight.ogg"
-      },
+      "file": "Lena's Sight.ogg",
       "loopPoint": 192,
       "clipEnd": 192,
       "nextClip": [
@@ -335,9 +271,7 @@
       ]
     },
     "One Who Sees": {
-      "file": {
-        "base": "One Who Sees.ogg"
-      },
+      "file": "One Who Sees.ogg",
       "loopPoint": 144,
       "clipEnd": 144,
       "nextClip": [
@@ -345,9 +279,7 @@
       ]
     },
     "A Hearth of Mysteries": {
-      "file": {
-        "base": "A Hearth of Mysteries.ogg"
-      },
+      "file": "A Hearth of Mysteries.ogg",
       "loopPoint": 116.003197,
       "clipEnd": 116.003197,
       "nextClip": [
@@ -355,9 +287,7 @@
       ]
     },
     "The Tower Card": {
-      "file": {
-        "base": "The Tower Card.ogg"
-      },
+      "file": "The Tower Card.ogg",
       "loopPoint": 75.937506,
       "clipEnd": 75.937506,
       "nextClip": [
@@ -365,9 +295,7 @@
       ]
     },
     "Lena's Home": {
-      "file": {
-        "base": "Lena's Home.ogg"
-      },
+      "file": "Lena's Home.ogg",
       "loopPoint": 180,
       "clipEnd": 180,
       "nextClip": []

@@ -1,9 +1,7 @@
 {
   "clips": {
     "The Ashwights Attack": {
-      "file": {
-        "base": "The Ashwights Attack.ogg"
-      },
+      "file": "The Ashwights Attack.ogg",
       "loopPoint": 144.915261,
       "clipEnd": 144.915261,
       "nextClip": [

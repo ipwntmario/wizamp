@@ -1,9 +1,7 @@
 {
   "clips": {
     "A Hearth of Mysteries": {
-      "file": {
-        "base": "A Hearth of Mysteries.ogg"
-      },
+      "file": "A Hearth of Mysteries.ogg",
       "loopPoint": 116.003197,
       "clipEnd": 116.003197,
       "nextClip": [

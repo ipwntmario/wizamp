@@ -1,9 +1,7 @@
 {
   "clips": {
     "Intro": {
-      "file": {
-        "base": "Intro.ogg"
-      },
+      "file": "Intro.ogg",
       "loopPoint": 4.615397,
       "clipEnd": 11.538481,
       "nextClip": [
@@ -11,9 +9,7 @@
       ]
     },
     "Main_a": {
-      "file": {
-        "base": "Main_a.ogg"
-      },
+      "file": "Main_a.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -21,9 +17,7 @@
       ]
     },
     "Main_b": {
-      "file": {
-        "base": "Main_b.ogg"
-      },
+      "file": "Main_b.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -31,9 +25,7 @@
       ]
     },
     "Main_c": {
-      "file": {
-        "base": "Main_c.ogg"
-      },
+      "file": "Main_c.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -41,9 +33,7 @@
       ]
     },
     "Main_d": {
-      "file": {
-        "base": "Main_d.ogg"
-      },
+      "file": "Main_d.ogg",
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
       "nextClip": [
@@ -51,59 +41,47 @@
       ]
     },
     "Keychange_a": {
-      "file": {
-        "base": "Keychange_a.ogg"
-      },
+      "file": "Keychange_a.ogg",
       "loopPoint": 9.230771,
-      "clipEnd": 16.153855,
+      "clipEnd": 13.846168,
       "nextClip": [
         "Keychange_b"
       ]
     },
     "Keychange_b": {
-      "file": {
-        "base": "Keychange_b.ogg"
-      },
+      "file": "Keychange_b.ogg",
       "loopPoint": 9.230771,
-      "clipEnd": 16.153855,
+      "clipEnd": 13.846168,
       "nextClip": [
         "Keychange_c"
       ]
     },
     "Keychange_c": {
-      "file": {
-        "base": "Keychange_c.ogg"
-      },
+      "file": "Keychange_c.ogg",
       "loopPoint": 9.230771,
-      "clipEnd": 16.153855,
+      "clipEnd": 13.846168,
       "nextClip": [
         "Keychange_d"
       ]
     },
     "Keychange_d": {
-      "file": {
-        "base": "Keychange_d.ogg"
-      },
+      "file": "Keychange_d.ogg",
       "loopPoint": 9.230771,
-      "clipEnd": 16.153855,
+      "clipEnd": 13.846168,
       "nextClip": [
         "Keychange_a"
       ]
     },
     "End": {
-      "file": {
-        "base": "End.ogg"
-      },
+      "file": "End.ogg",
       "loopPoint": 16.153855,
       "clipEnd": 16.153855,
       "nextClip": []
     },
     "EndInKeychange": {
-      "file": {
-        "base": "EndInKeychange.ogg"
-      },
+      "file": "EndInKeychange.ogg",
       "loopPoint": 13.846168,
-      "clipEnd": 16.153855,
+      "clipEnd": 13.846168,
       "nextClip": []
     }
   }

@@ -1,21 +1,28 @@
 {
   "tracks": {
     "BleepBloop": {
-      "defaultDisplayName": "BleepBloop (TEST TRACK)",
+      "defaultDisplayName": "BleepBloop",
       "basePath": "/tracks/BleepBloop",
       "firstSection": "Intro",
       "simple": false,
       "test": true
     },
+    "BleepBloop Modes": {
+      "defaultDisplayName": "BleepBloop with Modes",
+      "basePath": "/tracks/BleepBloop Modes",
+      "firstSection": "Intro",
+      "simple": false,
+      "test": true
+    },
     "BleepBloop Randomized": {
-      "defaultDisplayName": "BleepBloop Randomized (TEST TRACK)",
+      "defaultDisplayName": "BleepBloop Randomized",
       "basePath": "/tracks/BleepBloop Randomized",
       "firstSection": "Intro",
       "simple": false,
       "test": true
     },
     "BleepBloop UglyOnPurpose": {
-      "defaultDisplayName": "BleepBloop UglyOnPurpose (TEST TRACK)",
+      "defaultDisplayName": "BleepBloop UglyOnPurpose",
       "basePath": "/tracks/BleepBloop UglyOnPurpose",
       "firstSection": "Intro",
       "simple": false,

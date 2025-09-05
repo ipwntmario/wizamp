@@ -1,18 +1,19 @@
 {
   "clips": {
-    "IntroTEST": {
+    "Intro": {
       "file": {
-        "base": "IntroTEST.ogg"
+        "base": "Intro.ogg"
       },
       "loopPoint": 4.615397,
       "clipEnd": 11.538481,
       "nextClip": [
-        "IntroTEST"
+        "Intro"
       ]
     },
-    "Main_aTEST": {
+    "Main_a": {
       "file": {
-        "base": "Main_aTEST.ogg"
+        "base": "Main_a.ogg",
+        "keychange": "Main_a_keychange.ogg"
       },
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
@@ -22,7 +23,8 @@
     },
     "Main_b": {
       "file": {
-        "base": "Main_b.ogg"
+        "base": "Main_b.ogg",
+        "keychange": "Main_b_keychange.ogg"
       },
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
@@ -32,7 +34,8 @@
     },
     "Main_c": {
       "file": {
-        "base": "Main_c.ogg"
+        "base": "Main_c.ogg",
+        "keychange": "Main_c_keychange.ogg"
       },
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
@@ -42,7 +45,8 @@
     },
     "Main_d": {
       "file": {
-        "base": "Main_d.ogg"
+        "base": "Main_d.ogg",
+        "keychange": "Main_d_keychange.ogg"
       },
       "loopPoint": 9.230771,
       "clipEnd": 16.153855,
@@ -52,7 +56,8 @@
     },
     "End": {
       "file": {
-        "base": "End.ogg"
+        "base": "End.ogg",
+        "keychange": "End_keychange.ogg"
       },
       "loopPoint": 16.153855,
       "clipEnd": 16.153855,
