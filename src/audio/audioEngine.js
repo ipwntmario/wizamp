@@ -6,7 +6,8 @@ export class AudioEngine {
     onQueueChange,
     onModeChange,
     onModeQueueChange,
-    onReady
+    onReady,
+    onPreloadComplete
   } = {}) {
     this.onStatus = onStatus || (() => {});
     this.onSectionChange = onSectionChange || (() => {});
@@ -14,6 +15,7 @@ export class AudioEngine {
     this.onModeChange = onModeChange || (() => {});
     this.onModeQueueChange = onModeQueueChange || (() => {});
     this.onReady = onReady || (() => {});
+    this.onPreloadComplete = onPreloadComplete || (() => {});
 
     this.audioCtx = null;
     this.masterGain = null;
@@ -198,6 +200,7 @@ export class AudioEngine {
     this._isPreloaded = true;
     this.onStatus?.(`Track '${trackName}' preloaded`);
     this.onReady?.();
+    this.onPreloadComplete?.(this.currentTrackName || trackName);
   }
 
   // ----- stop -----

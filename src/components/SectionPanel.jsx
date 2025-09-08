@@ -26,47 +26,7 @@ export default function SectionPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Modes row (if multiple) */}
-      {showModes && (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {modes.map((mode) => {
-            const isActive = currentModeName === mode;
-            const isQueued = queuedModeName === mode && !isActive;
-
-            let background = "#6d528c"; // default
-            let color = "white";
-            if (isQueued) { background = "#d299ba"; color = "black"; }
-            if (isActive) { background = "white"; color = "black"; }
-
-            const label = mode === "base" ? (getBaseModeLabel(currentSectionName) || "base") : mode;
-
-            return (
-              <button
-                key={mode}
-                onClick={() => {
-                  if (isActive) return; // active mode: no-op
-                  if (isQueued) onToggleQueuedMode?.(null);
-                  else onToggleQueuedMode?.(mode);
-                }}
-                style={{
-                  padding: largeButtons ? "8px 14px" : "6px 12px",
-                  fontSize: largeButtons ? 15 : 13,
-                  borderRadius: 8,
-                  border: "1px solid #555",
-                  cursor: isActive ? "default" : "pointer",
-                  background, color,
-                  minWidth: 90
-                }}
-                title={label}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Section transition buttons (existing) */}
+      {/* Section transition buttons */}
       {nextSections.length > 0 && (
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {nextSections.map((name) => {
@@ -110,6 +70,46 @@ export default function SectionPanel({
                 title={sections[name]?.defaultDisplayName ?? name}
               >
                 {sections[name]?.defaultDisplayName ?? name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+            {/* Modes row (if multiple) */}
+      {showModes && (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {modes.map((mode) => {
+            const isActive = currentModeName === mode;
+            const isQueued = queuedModeName === mode && !isActive;
+
+            let background = "#6d528c"; // default
+            let color = "white";
+            if (isQueued) { background = "#d299ba"; color = "black"; }
+            if (isActive) { background = "white"; color = "black"; }
+
+            const label = mode === "base" ? (getBaseModeLabel(currentSectionName) || "base") : mode;
+
+            return (
+              <button
+                key={mode}
+                onClick={() => {
+                  if (isActive) return; // active mode: no-op
+                  if (isQueued) onToggleQueuedMode?.(null);
+                  else onToggleQueuedMode?.(mode);
+                }}
+                style={{
+                  padding: largeButtons ? "8px 14px" : "6px 12px",
+                  fontSize: largeButtons ? 15 : 13,
+                  borderRadius: 8,
+                  border: "1px solid #555",
+                  cursor: isActive ? "default" : "pointer",
+                  background, color,
+                  minWidth: 90
+                }}
+                title={label}
+              >
+                {label}
               </button>
             );
           })}

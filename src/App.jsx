@@ -19,7 +19,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AudioEngine } from "./audio/audioEngine";
 import { useMusicData } from "./data/useMusicData";
 import TrackSelector from "./components/TrackSelector";
-import Transport from "./components/Transport";
 import SectionPanel from "./components/SectionPanel";
 import StatusBar from "./components/StatusBar";
 
@@ -49,6 +48,32 @@ export default function App() {
   const [currentSectionName, setCurrentSectionName] = useState(null);
   const [queuedSectionName, setQueuedSectionName] = useState(null);
 
+  // derive playing state
+  const isPlaying = /^Playing/.test(status);
+
+  // Autoplay setting (persist)
+  const [autoplay, setAutoplay] = useState(() => {
+    try { return localStorage.getItem("wizamp_autoplay") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wizamp_autoplay", autoplay ? "1" : "0"); } catch {}
+  }, [autoplay]);
+
+  // Keep track of the last ended track for correct Autoplay functionality
+  const lastEndedTrackRef = useRef(null);
+
+  // If non-null, we will auto-start this track AFTER its preload finishes.
+  const autoStartForRef = useRef(null);
+
+
+  // Status visibility (persist)
+  const [showStatus, setShowStatus] = useState(() => {
+    try { return localStorage.getItem("wizamp_showStatus") !== "0"; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wizamp_showStatus", showStatus ? "1" : "0"); } catch {}
+  }, [showStatus]);
+
   // Modes
   const [currentModeName, setCurrentModeName] = useState("base");
   const [queuedModeName, setQueuedModeName] = useState(null);
@@ -72,12 +97,20 @@ export default function App() {
   const engineRef = useRef(null);
   if (!engineRef.current) {
     engineRef.current = new AudioEngine({
-      onStatus: (s) => {
+      onStatus: async (s) => {
         setStatus(s);
         if (s === "Stopped") {
           setPlayDisabled(false);
           setClipProgress(0);
-          setPlayingTrackName(null);  // force post-stop reload
+          // remember which track just ended, then clear playing marker
+          lastEndedTrackRef.current = playingTrackName || null;
+          setPlayingTrackName(null);
+
+          // If Auto-Play is ON, and dropdown points to a *different* track,
+          // request auto-start for that track (we will start AFTER preload completes).
+          if (autoplay && selectedTrack && selectedTrack !== lastEndedTrackRef.current) {
+            autoStartForRef.current = selectedTrack;
+          }
         }
       },
       onSectionChange: (name) => setCurrentSectionName(name ?? null),
@@ -85,9 +118,29 @@ export default function App() {
       onModeChange: (modeName) => setCurrentModeName(modeName || "base"),
       onModeQueueChange: (nameOrNull) => setQueuedModeName(nameOrNull),
       onReady: () => { setPlayDisabled(false); setClipProgress(0); },  // when engine finished resetting
+      onPreloadComplete: async (trackName) => {
+        // mark which track's assets are now loaded
+        setPlayingTrackName(trackName);
+        setClipProgress(0);
+
+        // If an auto-start was requested for this track, do it now
+        if (autoStartForRef.current === trackName) {
+          await awaitAllClientsReady(trackName); // local no-op; future: wait for all clients
+          const first = tracks[trackName]?.firstSection;
+          if (first) engine.playSection(first);
+          autoStartForRef.current = null; // consume the request
+        }
+      },
     });
   }
   const engine = engineRef.current;
+
+  // Placeholder: in the future, replace this with a networked "all clients ready" await.
+  // For now, it's immediate.
+  const awaitAllClientsReady = async (trackName) => {
+    // e.g., in MP mode you'd await a signal that all players preloaded 'trackName'
+    return;
+  };
 
   // Keep engine data in sync (optional safety when clips/sections set)
   useEffect(() => {
@@ -101,6 +154,7 @@ export default function App() {
 
   // When a track is selected, point UI at its first section
   useEffect(() => {
+    if (isPlaying) return;        // ← don’t switch UI mid-play
     if (!selectedTrack) {
       setCurrentSectionName(null);
       setQueuedSectionName(null);
@@ -109,7 +163,7 @@ export default function App() {
     const first = tracks[selectedTrack]?.firstSection || null;
     setCurrentSectionName(first);
     setQueuedSectionName(null);
-  }, [selectedTrack, tracks]);
+  }, [selectedTrack, tracks, isPlaying]);
 
   // Derived: firstSection of the selected track (for Transport button label)
   const firstSection = useMemo(() => {
@@ -125,21 +179,17 @@ export default function App() {
     return Array.isArray(ns) ? ns : (ns ? [ns] : []);
   }, [sections, currentSectionName]);
 
-    // RAF loop for clip progress
-    useEffect(() => {
-      let raf = 0;
-      const tick = () => {
-        const info = engine.getPlaybackInfo?.();
-        setClipProgress(info?.progress01 ?? 0);
-        raf = requestAnimationFrame(tick);
-      };
+  // RAF loop for clip progress
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const info = engine.getPlaybackInfo?.();
+      setClipProgress(info?.progress01 ?? 0);
       raf = requestAnimationFrame(tick);
-      return () => cancelAnimationFrame(raf);
-    }, [engine]);
-
-
-  // derive playing state
-  const isPlaying = /^Playing/.test(status);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [engine]);
 
   // derive if not "simple" track
   const isDynamicTrack = tracks[selectedTrack]?.simple === false;
@@ -230,9 +280,19 @@ export default function App() {
 
       setPlayingTrackName(name); // reflect what's actually loaded/ready
       setClipProgress(0); // start progress at 0 for newly loaded track
-      } finally {
-        setIsLoadingTrack(false);
+
+      // If this preload was requested for auto-start, do it now
+      if (autoStartForRef.current === name) {
+        await awaitAllClientsReady(name); // local no-op; future: wait for all clients
+        const first = tracks[name]?.firstSection;
+        if (first) {
+          engine.playSection(first);
+        }
+        autoStartForRef.current = null; // consume the request
       }
+    } finally {
+      setIsLoadingTrack(false);
+    }
   };
 
   // When fully stopped (end of fade or true end), load whichever track is selected.
@@ -369,17 +429,6 @@ export default function App() {
               )}
             </div>
           )}
-
-          {selectedTrack && (
-            <Transport
-              isPlaying={isPlaying}
-              onPlay={handlePlay}
-              onStop={handleStop}
-              playDisabled={playDisabled}
-              controlSize={36}                                   // match 🔊 height
-              stopStyle={isDynamicPlayingTrack ? { background: "transparent" } : undefined}
-            />
-          )}
         </div>
       </section>
 
@@ -437,22 +486,70 @@ export default function App() {
         </div>
       </section>
 
-      {/* Status (collapsible) */}
-      <section>
-        <button
-          onClick={() => setStatusOpen(s => !s)}
-          style={{ background: "transparent", color: "white", border: "1px solid #555", borderRadius: 6, padding: "4px 10px", cursor: "pointer", marginBottom: 8 }}
-          aria-label={statusOpen ? "Collapse" : "Expand"}
-          title={statusOpen ? "Collapse" : "Expand"}
-        >
-          {statusOpen ? "−" : "+"}
-        </button>
-        {statusOpen && (
-          <div>
-            <StatusBar text={loading ? "Loading data…" : status} />
-          </div>
-        )}
+      {/* Control Row: Auto-Play • Play/Pause • Stop */}
+      <section style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Auto-Play toggle (smaller circle) */}
+          <button
+            onClick={() => setAutoplay(a => !a)}
+            title={autoplay ? "Auto-Play is ON (↠)" : "Auto-Play is OFF (⇥)"}
+            aria-pressed={autoplay}
+            style={{
+              width: 36, height: 36, borderRadius: "50%",
+              border: "1px solid #555", background: autoplay ? "#2f6b76" : "transparent",
+              color: "white", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center"
+            }}
+          >
+            {autoplay ? "↠" : "⇥"}
+          </button>
+
+          {/* Play/Pause (largest circle) */}
+          <button
+            onClick={() => { if (!isPlaying) handlePlay(); /* pause TBD */ }}
+            disabled={playDisabled}
+            title={isPlaying ? "Pause (coming soon)" : "Play"}
+            style={{
+              width: 52, height: 52, borderRadius: "50%",
+              border: "1px solid #555",
+              background: isPlaying ? "#000" : "#0aa",
+              color: isPlaying ? "white" : "black",
+              fontSize: 18,
+              cursor: playDisabled ? "not-allowed" : "pointer",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}
+            >
+              {isPlaying ? "⏸" : "⏵"}
+            </button>
+
+            {/* Stop (always visible; black by default, red if a SIMPLE track is playing) */}
+            <button
+              onClick={() => { if (isPlaying) handleStop(); }}
+              title="Stop"
+              style={{
+                width: 40, height: 40, borderRadius: "50%",
+                border: "1px solid #555",
+                background: (isPlaying && tracks[playingTrackName]?.simple === true) ? "#ad2f49" : "#000",
+                color: "white",
+                cursor: isPlaying ? "pointer" : "default",
+                display: "inline-flex", alignItems: "center", justifyContent: "center"
+              }}
+              >
+                ⏹
+              </button>
+        </div>
       </section>
+
+      {/* Fixed bottom status bar (left), if enabled */}
+      {showStatus && (
+        <div style={{
+          position: "fixed", left: 20, bottom: 20,
+          background: "#2a2a2a", color: "white",
+          border: "1px solid #555", borderRadius: 10,
+          padding: "8px 12px", zIndex: 1, maxWidth: "40vw"
+        }}>
+          <StatusBar text={loading ? "Loading data…" : status} />
+        </div>
+      )}
 
       {/* Settings modal */}
       {settingsOpen && (
@@ -490,6 +587,18 @@ export default function App() {
               </div>
               <div style={{ marginTop: 12, fontSize: 12, color: "#bbb" }}>(0 = instantaneous, max 30s)</div>
             </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={showStatus}
+                  onChange={(e) => setShowStatus(e.target.checked)}
+                  />
+                  <span>Show status bar</span>
+              </label>
+            </div>
+
             <div>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <span>App icon:</span>
