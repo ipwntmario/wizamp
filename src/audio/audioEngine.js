@@ -1,58 +1,106 @@
-// A small class so React components stay tiny.
-// Holds: AudioContext, master gain, active clips, scheduled events.
-// Exposes the same methods you already use.
-
+// audioEngine.js
 export class AudioEngine {
-  constructor({ onStatus, onSectionChange, onQueueChange, onReady } = {}) {
+  constructor({
+    onStatus,
+    onSectionChange,
+    onQueueChange,
+    onModeChange,
+    onModeQueueChange,
+    onReady
+  } = {}) {
     this.onStatus = onStatus || (() => {});
     this.onSectionChange = onSectionChange || (() => {});
     this.onQueueChange = onQueueChange || (() => {});
+    this.onModeChange = onModeChange || (() => {});
+    this.onModeQueueChange = onModeQueueChange || (() => {});
     this.onReady = onReady || (() => {});
 
     this.audioCtx = null;
     this.masterGain = null;
-    this.fadeOutSeconds = 4;
 
-    this.lastTrackName = null;
+    this.fadeOutSeconds = 6;
+    this.userGain = 1.0;
 
-    this.currentSectionName = null;
-    this.queuedNextSectionName = null;
-
-    this.activeClips = {};
-    this.scheduledTimeouts = [];
-    this.lastPlayingClipName = null;
-    this._isPreloaded = false;
-
+    // track & dataset
     this.clipData = {};
     this.sectionData = {};
     this.trackData = {};
-    this.trackBase = ""; // e.g. "/tracks/BleepBloop"
+    this.lastTrackName = null;
 
-    this.userGain = null;   // per-user, local
-    this.trackGain = null;  // per-track, shared
-    this.currentTrackVolume = 1; // 0..1 (for UI syncing, optional)
+    // preloading / playback
+    this.activeClips = {};       // { clipName: { source, gainNode, buffersByMode, startedAt, offsetAtStart } }
+    this.scheduledTimeouts = []; // [timeoutId]
+    this._isPreloaded = false;
+
+    // section & mode state
+    this.currentSectionName = null;
+    this.queuedNextSectionName = null;
+
+    this.currentModeName = "base";
+    this.queuedNextModeName = null;
+
+    this.lastPlayingClipName = null;
+    this.currentTrackName = null;
+
+    // cache section->availableModes (includes "base")
+    this.sectionModes = new Map();
+  }
+
+  get isPlaying() {
+    return !!this.lastPlayingClipName;
+  }
+  get isPreloaded() {
+    return !!this._isPreloaded;
+  }
+
+  ensureContext() {
+    if (this.audioCtx) return this.audioCtx;
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(1, ctx.currentTime);
+    master.connect(ctx.destination);
+    this.audioCtx = ctx;
+    this.masterGain = master;
+    return ctx;
+  }
+
+  setUserVolume(v) {
+    const ctx = this.ensureContext();
+    const val = Math.max(0, Math.min(1, Number(v) || 0));
+    this.userGain = val;
+    if (this.masterGain) {
+      this.masterGain.gain.setValueAtTime(val, ctx.currentTime);
+    }
+  }
+
+  setTrackVolume(v) {
+    // you already scale track volume at individual clip gains;
+    // if you centralize it later, apply here.
+    this.trackVolume = Math.max(0, Math.min(1, Number(v) || 0));
+  }
+
+  setFadeOutSeconds(n) {
+    this.fadeOutSeconds = Math.max(0, Math.min(30, Number(n) || 0));
   }
 
   setData({ clips, sections, tracks }) {
     this.clipData = clips || {};
     this.sectionData = sections || {};
     this.trackData = tracks || {};
+    // recompute modes per section (always include "base")
+    this.sectionModes = new Map(
+      Object.entries(this.sectionData).map(([name, s]) => {
+        const extra = Array.isArray(s?.modes) ? s.modes : (s?.modes ? [s.modes] : []);
+        const modes = ["base", ...extra.filter(Boolean)];
+        return [name, modes];
+      })
+    );
   }
 
-  setTrackVolume(vol01) {
-    const ctx = this.ensureContext();
-    const v = Math.max(0, Math.min(1, Number(vol01) || 0));
-    this.trackGain?.gain.setValueAtTime(v, ctx.currentTime);
-    this.currentTrackVolume = v;
+  clearScheduled() {
+    this.scheduledTimeouts.forEach(clearTimeout);
+    this.scheduledTimeouts = [];
   }
-
-  setUserVolume(vol01) {
-    const ctx = this.ensureContext();
-    const v = Math.max(0, Math.min(1, Number(vol01) || 0));
-    this.userGain?.gain.setValueAtTime(v, ctx.currentTime);
-  }
-
-  get isPreloaded() { return !!this._isPreloaded; }
 
   _clearActiveClipsSilently() {
     Object.values(this.activeClips).forEach(({ source }) => {
@@ -62,194 +110,175 @@ export class AudioEngine {
     this._isPreloaded = false;
   }
 
-  ensureContext() {
-    if (this.audioCtx) return this.audioCtx;
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-
-    // create nodes
-    const userGain   = ctx.createGain();   userGain.gain.setValueAtTime(1, ctx.currentTime);
-    const trackGain  = ctx.createGain();   trackGain.gain.setValueAtTime(1, ctx.currentTime);
-
-    // final destination: source -> clipGain -> trackGain -> userGain -> destination
-    trackGain.connect(userGain).connect(ctx.destination);
-
-    // keep refs (masterGain stays for back-compat, but we route to trackGain now)
-    this.audioCtx   = ctx;
-    this.userGain   = userGain;
-    this.trackGain  = trackGain;
-    this.masterGain = trackGain; // <— sources still “connect(..., this.masterGain)”
-    return ctx;
-  }
-
-  setFadeOutSeconds(secs) {                         // ← NEW
-    const s = Math.max(0, Math.min(30, Number(secs) || 0));
-    this.fadeOutSeconds = s;
-  }
-
-  clearScheduled() {
-    this.scheduledTimeouts.forEach(clearTimeout);
-    this.scheduledTimeouts = [];
-  }
-
   setCurrentSection(name) {
     this.currentSectionName = name || null;
     this.onSectionChange?.(this.currentSectionName);
   }
 
-  queueSectionTransition(name) {
-    this.queuedNextSectionName = name || null;
-    this.onQueueChange(this.queuedNextSectionName);   // NEW
+  // ----- modes API -----
+  getAvailableModes(sectionName) {
+    return this.sectionModes.get(sectionName) || ["base"];
   }
 
-  clearQueuedSection() {
-    this.queuedNextSectionName = null;
-    this.onQueueChange(null);                         // NEW
+  setCurrentMode(modeName) {
+    const modes = this.getAvailableModes(this.currentSectionName);
+    const chosen = modes.includes(modeName) ? modeName : "base";
+    this.currentModeName = chosen;
+    this.onModeChange?.(chosen);
   }
 
+  queueModeTransition(modeNameOrNull) {
+    // only queue if it exists for the *current* section
+    if (modeNameOrNull) {
+      const modes = this.getAvailableModes(this.currentSectionName);
+      if (!modes.includes(modeNameOrNull)) return;
+      this.queuedNextModeName = modeNameOrNull;
+    } else {
+      this.queuedNextModeName = null;
+    }
+    this.onModeQueueChange?.(this.queuedNextModeName);
+  }
+
+  clearQueuedMode() {
+    this.queuedNextModeName = null;
+    this.onModeQueueChange?.(null);
+  }
+
+  // ----- preload -----
+  async preloadTrack(trackName, opts = {}) {
+    const ctx = this.ensureContext();
+
+    this.lastTrackName = trackName;
+    this.currentTrackName = trackName;
+
+    const { basePath, trackVolume } = opts || {};
+    if (typeof trackVolume === "number") this.setTrackVolume(trackVolume);
+    this.trackBase = basePath ? String(basePath) : this.trackBase;
+
+    // If not playing but we had previous preloaded sources, clear them
+    if (!this.isPlaying && Object.keys(this.activeClips).length > 0) {
+      this._clearActiveClipsSilently();
+    }
+    // If playing, defer
+    if (this.isPlaying) {
+      this.onStatus?.("Preload deferred: still playing");
+      return;
+    }
+
+    // Decode all clips + all mode files to buffers (no need to start muted loopers)
+    this.activeClips = {};
+    const clipEntries = Object.entries(this.clipData);
+
+    for (const [clipName, clipObj] of clipEntries) {
+      const fileMap = clipObj?.file || {};
+      const modes = Object.keys(fileMap);
+      if (modes.length === 0) continue;
+
+      const buffersByMode = {};
+      for (const modeKey of modes) {
+        const fname = fileMap[modeKey];
+        if (!fname) continue;
+        const url = `${this.trackBase ? this.trackBase : ""}/audio/${fname}`.replace(/([^:])\/{2,}/g, "$1/"); // normalize
+        const res = await fetch(url);
+        const arr = await res.arrayBuffer();
+        const buf = await ctx.decodeAudioData(arr.slice(0));
+        buffersByMode[modeKey] = buf;
+      }
+
+      // store buffers; source/gainNode allocated when playing
+      this.activeClips[clipName] = {
+        source: null,
+        gainNode: null,
+        buffersByMode,
+        startedAt: 0,
+        offsetAtStart: 0
+      };
+    }
+
+    this._isPreloaded = true;
+    this.onStatus?.(`Track '${trackName}' preloaded`);
+    this.onReady?.();
+  }
+
+  // ----- stop -----
   stopTrack(withFade = true) {
     if (!this.audioCtx) return;
-
-    // Cancel any queued transitions
     this.clearScheduled();
 
     const fade = Math.max(0, Number(this.fadeOutSeconds ?? 0));
-    const now = this.audioCtx?.currentTime ?? 0;
+    const now = this.audioCtx.currentTime;
 
     const finish = () => {
-      // Stop sources and wipe state
       Object.values(this.activeClips).forEach(({ source }) => {
         try { source.stop(); } catch {}
       });
       this.activeClips = {};
       this.lastPlayingClipName = null;
-      // mark not preloaded so the app knows it must reload buffers
       this._isPreloaded = false;
       this.onStatus?.("Stopped");
     };
 
     if (withFade && fade > 0) {
-      // ramp down but keep refs intact until we’re done
       Object.values(this.activeClips).forEach(({ gainNode }) => {
+        if (!gainNode) return;
         try {
           gainNode.gain.cancelScheduledValues(now);
           gainNode.gain.setValueAtTime(gainNode.gain.value, now);
           gainNode.gain.linearRampToValueAtTime(0, now + fade);
         } catch {}
       });
-
-      // after fade finishes, stop + clear + announce "Stopped"
       const id = setTimeout(finish, fade * 1000 + 60);
       this.scheduledTimeouts.push(id);
     } else {
-      // instant stop
+      // instant
       Object.values(this.activeClips).forEach(({ source, gainNode }) => {
         try {
-          gainNode.gain.cancelScheduledValues(now);
-          gainNode.gain.setValueAtTime(0, now);
+          if (gainNode) {
+            gainNode.gain.cancelScheduledValues(now);
+            gainNode.gain.setValueAtTime(0, now);
+          }
         } catch {}
-        try { source.stop(); } catch {}
+        try { source && source.stop(); } catch {}
       });
-      this.activeClips = {};
-      this.lastPlayingClipName = null;
-      this._isPreloaded = false;
-      this.onStatus?.("Stopped");
+      finish();
     }
   }
 
-  async preloadTrack(trackName, opts = {}) {
-    const ctx = this.ensureContext();
-    this.currentTrackName = trackName;
-    this.lastTrackName = trackName;
-
-    // accept a per-track base path (folder for this track)
-    if (opts.basePath) this.trackBase = String(opts.basePath);
-
-    // apply provided per-track volume if present
-    const { trackVolume } = opts || {};
-    if (typeof trackVolume === "number") this.setTrackVolume(trackVolume);
-
-    // If we’re NOT playing but have a previously preloaded set of sources,
-    // clear them quietly so we can preload the newly selected track.
-    if (!this.isPlaying && Object.keys(this.activeClips).length > 0) {
-      this._clearActiveClipsSilently();
-    }
-
-    // If we ARE playing, don’t allow preload; app defers until stop.
-    if (this.isPlaying) {
-      this.onStatus?.("Preload deferred: still playing");
-      return;
-    }
-
-    // Preload every clip known in clipData for this selected track
-    const clipNames = Object.keys(this.clipData || {});
-    if (!clipNames.length) { this.onStatus(`No clips found for '${trackName}'`); return; }
-
-    this.activeClips = {};
-
-    for (const clipName of clipNames) {
-      const clip = this.clipData[clipName];
-      if (!clip) continue;
-
-      // Load from the track-specific folder
-      const url = `${this.trackBase}/audio/${clip.file}`;
-      const res = await fetch(url);
-      const arr = await res.arrayBuffer();
-      const buffer = await ctx.decodeAudioData(arr);
-
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.loop = true;
-
-      const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(0, ctx.currentTime);
-      source.connect(gainNode).connect(this.masterGain);
-      source.start(0);
-
-      this.activeClips[clipName] = { source, gainNode, buffer };
-    }
-
-    this._isPreloaded = true;
-    this.onStatus(`Track '${trackName}' preloaded`);
-  }
-
-  async resetToTrackStart() {
-    if (!this.lastTrackName) return;
-
-    // ensure progress bar can reset to 0 in the UI
-    this.lastPlayingClipName = null;
-
-    this.clearQueuedSection?.();
-    this.stopTrack(false); // hard stop
-    await this.preloadTrack(this.lastTrackName);
-    const track = this.trackData[this.lastTrackName];
-    if (track?.firstSection) this.setCurrentSection(track.firstSection);
-
-    // tells App that we're fully reset (use this to zero the bar)
-    this.onReady?.();
-  }
-
-  stopAndReload() {
-    const fade = this.fadeOutSeconds;              // ← use live value at click time
-    return new Promise((resolve) => {
-      this.stopTrack(true);
-      const id = setTimeout(async () => {
-        await this.resetToTrackStart();
-        resolve();
-      }, (fade > 0 ? fade * 1000 + 80 : 80));      // ← handle 0s “instant”
-      this.scheduledTimeouts.push(id);
-    });
-  }
-
+  // ----- sections / modes -----
   playSection(sectionName) {
     const section = this.sectionData[sectionName];
     if (!section) {
       console.error(`Section '${sectionName}' not found`);
       return;
     }
+
+    // Determine starting mode for the target section:
+    // default to base; if the section supports the *current* mode, keep it
+    const available = this.getAvailableModes(sectionName);
+    const keepMode = available.includes(this.currentModeName) ? this.currentModeName : "base";
+    this.currentModeName = keepMode;
+    this.onModeChange?.(keepMode);
+
     this.setCurrentSection(sectionName);
     this.playClip(section.firstClip);
   }
 
+  queueSectionTransition(name) {
+    this.queuedNextSectionName = name || null;
+    this.onQueueChange?.(this.queuedNextSectionName);
+  }
+  clearQueuedSection() {
+    this.queuedNextSectionName = null;
+    this.onQueueChange?.(null);
+  }
+
+  // Helper: which section does a clip belong to? (prefix before first "_")
+  _sectionOfClip(clipName) {
+    const idx = clipName.indexOf("_");
+    return idx === -1 ? clipName : clipName.slice(0, idx);
+  }
+
+  // ----- core playback -----
   playClip = (clipName) => {
     const ctx = this.ensureContext();
     const clip = this.clipData[clipName];
@@ -259,171 +288,192 @@ export class AudioEngine {
       return;
     }
 
-    const { buffer } = entry;
-    const now = ctx.currentTime;
+    // choose buffer by mode (fallback base)
+    const sectionName = this._sectionOfClip(clipName);
+    const mode = this.currentModeName || "base";
+    const buffer =
+      entry.buffersByMode?.[mode] ??
+      entry.buffersByMode?.base;
 
-    // stop previous instance for this clip
+    if (!buffer) {
+      console.error(`No buffer for clip '${clipName}' in mode '${mode}' (or base)`);
+      return;
+    }
+
+    // stop old instance for this clip
     if (entry.source) {
       try { entry.source.stop(); } catch {}
     }
 
-    // new source per “play”
+    const now = ctx.currentTime;
+
+    // Build source + gain
     const source = ctx.createBufferSource();
     source.buffer = buffer;
 
     const hasNextInClip = Array.isArray(clip.nextClip) && clip.nextClip.length > 0;
-    const sectionOfClip = this.sectionData[this.currentSectionName];
-    const inEndSection = sectionOfClip?.type === "end";
-    const noNextClip = !clip.nextClip || (Array.isArray(clip.nextClip) && clip.nextClip.length === 0);
-    const treatAsTerminal = inEndSection && noNextClip; // terminal in an "end" section
-
 
     const loopEndPoint = (!hasNextInClip)
       ? (clip.loopPoint ?? buffer.duration)
       : (clip.clipEnd ?? buffer.duration);
 
-    // If terminal-in-end-section, do NOT loop; we want to play out to clipEnd and finish.
-    source.loop = (!hasNextInClip && !treatAsTerminal) ? true : false;
+    source.loop = !hasNextInClip;
     source.loopStart = clip.loopStart || 0;
     source.loopEnd  = loopEndPoint;
 
     const gainNode = ctx.createGain();
-    gainNode.gain.setValueAtTime(0, now);
+    // apply trackVolume * userVolume (masterGain already applies user; keep trackVolume here)
+    const startGain = 0;
+    gainNode.gain.setValueAtTime(startGain, now);
+
     source.connect(gainNode).connect(this.masterGain);
     source.start(0, clip.loopStart || 0);
 
-    // --- AUTO-TRANSITION LOGIC ---
-    // If current section has autoTransition, and this clip "self-loops"
-    // (its nextClip points to its own name), auto-queue the next section.
-    if (this.currentSectionName) {
-      const section = this.sectionData[this.currentSectionName];
-      const isAuto = section?.type === "auto";
-
-      const nextSections = Array.isArray(section?.nextSection)
-        ? section.nextSection
-        : (section?.nextSection ? [section.nextSection] : []);
-
-      const hasTarget = nextSections.length > 0;
-
-      const selfLoops =
-        Array.isArray(clip.nextClip)
-          ? clip.nextClip.includes(clipName)
-          : clip.nextClip === clipName;
-
-      if (isAuto && hasTarget && selfLoops && !this.queuedNextSectionName) {
-        const targetSection = nextSections[0];
-        this.queueSectionTransition(targetSection);
-      }
-    }
-    // --- END AUTO-TRANSITION LOGIC ---
-
-    // record timing so we can reschedule on loopers
-    const startedAt = now;
-    const offsetAtStart = clip.loopStart || 0;
-
-    // update ref (include timing fields)
-    this.activeClips[clipName] = { source, gainNode, buffer, startedAt, offsetAtStart };
-
-    // remember the currently playing clip for the progress bar
-    this.lastPlayingClipName = clipName;
+    // store entry
+    entry.source = source;
+    entry.gainNode = gainNode;
+    entry.startedAt = now;
+    entry.offsetAtStart = clip.loopStart || 0;
 
     // fade in
     gainNode.gain.cancelScheduledValues(now);
     gainNode.gain.setValueAtTime(gainNode.gain.value, now);
-    gainNode.gain.linearRampToValueAtTime(1.0, now + 0.2);
+    const targetGain = (typeof this.trackVolume === "number" ? this.trackVolume : 1);
+    gainNode.gain.linearRampToValueAtTime(targetGain, now + 0.2);
 
-    this.onStatus(`Playing: ${clipName}`);
+    this.onStatus?.(`Playing: ${clipName}`);
+    this.lastPlayingClipName = clipName;
 
-    // Always schedule a loop-point check so late queues are honored
-    const scheduleLoopCheck = () => {
-      // how long from *now* until we reach the next loop point?
-      const elapsed = this.audioCtx.currentTime - startedAt;
-      const timeFromStartToLoop = (clip.loopPoint ?? buffer.duration) - offsetAtStart;
-
-      let waitSec = timeFromStartToLoop - elapsed;
-      // If we already passed it (can happen if code paused in dev tools), roll to next cycle
-      if (waitSec < 0) {
-        // On non-looping sources (hasNextInClip), we still want an immediate check
-        // to avoid missing the window.
-        if (!source.loop) {
-          waitSec = 0;
-        } else {
-          const cycle = (clip.loopPoint ?? buffer.duration) - (clip.loopStart || 0);
-          waitSec = ((-waitSec) % cycle);
+    // --- Auto section behavior: if this section is "auto" and this clip self-loops,
+    // queue the next section now, so the scheduler will switch at loopPoint.
+    const currSection = this.sectionData[this.currentSectionName];
+    if (currSection?.type === "auto") {
+      const ns = currSection.nextSection;
+      const targets = Array.isArray(ns) ? ns : (ns ? [ns] : []);
+      if (targets.length) {
+        const selfLoops = Array.isArray(clip.nextClip) && clip.nextClip.includes(clipName);
+        if (selfLoops) {
+          const chosen = targets[0]; // pick the first if multiple
+          if (chosen && this.queuedNextSectionName !== chosen) {
+            this.queueSectionTransition(chosen); // updates queued state & notifies UI
+          }
         }
       }
+    }
 
+    // unified scheduler at loopPoint: handle (1) queued section, (2) queued mode, (3) clip.nextClip
+    const timeUntilLoopPoint = (clip.loopPoint ?? buffer.duration) - (clip.loopStart || 0);
+    if (timeUntilLoopPoint > 0) {
       const id = setTimeout(() => {
-        let nextClipName = null;
-        const hasNextInClip = Array.isArray(clip.nextClip) && clip.nextClip.length > 0;
+        const now2 = ctx.currentTime;
 
+        // (1) Section queued?
         if (this.queuedNextSectionName) {
           const targetSection = this.sectionData[this.queuedNextSectionName];
-          nextClipName = targetSection?.firstClip || null;
-          if (targetSection) this.setCurrentSection(this.queuedNextSectionName);
+          const nextClipName = targetSection?.firstClip || null;
+
+          // mode selection on section change:
+          // default to base; if new section supports currentModeName, keep it
+          if (targetSection) {
+            const modes = this.getAvailableModes(this.queuedNextSectionName);
+            const nextMode = modes.includes(this.currentModeName) ? this.currentModeName : "base";
+            this.currentModeName = nextMode;
+            this.onModeChange?.(nextMode);
+            this.setCurrentSection(this.queuedNextSectionName);
+          }
           this.clearQueuedSection();
-        } else if (hasNextInClip) {
-          const arr = clip.nextClip;
-          nextClipName = arr.length > 1 ? arr[Math.floor(Math.random() * arr.length)] : arr[0];
+          this.clearQueuedMode(); // also clear any queued mode
+
+          if (nextClipName && this.clipData[nextClipName] && this.activeClips[nextClipName]) {
+            this.playClip(nextClipName);
+          }
+
+          // fade out this clip until clipEnd
+          const clipEndTime = clip.clipEnd ?? buffer.duration;
+          const delta = clipEndTime - (clip.loopPoint ?? buffer.duration);
+          gainNode.gain.setValueAtTime(0, now2 + Math.max(0, delta));
+          return;
         }
 
-        if (nextClipName && this.clipData[nextClipName] && this.activeClips[nextClipName]) {
-          this.playClip(nextClipName);
-        } else {
-          if (source.loop) {
-            // looping: keep watching future loop points (late queue may arrive)
-            scheduleLoopCheck();
-          } else {
-            // non-looping: terminal?
-            const section = this.sectionData[this.currentSectionName];
-            const inEnd = section?.type === "end";
-            const noNext = !clip.nextClip || (Array.isArray(clip.nextClip) && clip.nextClip.length === 0);
-            const isTerminalInEnd = inEnd && noNext;
+        // (2) Mode queued (same section)?
+        if (this.queuedNextModeName) {
+          // apply NOW: change currentMode, clear queue; continue normal nextClip transition below
+          const modes = this.getAvailableModes(this.currentSectionName);
+          const chosen = modes.includes(this.queuedNextModeName) ? this.queuedNextModeName : "base";
+          this.currentModeName = chosen;
+          this.onModeChange?.(chosen);
+          this.clearQueuedMode();
+          // do not return; allow clip.nextClip to proceed,
+          // but next playClip() will select buffer for new mode
+        }
 
-            if (isTerminalInEnd) {
-              const clipEndTime = clip.clipEnd ?? buffer.duration;
-              const delta = clipEndTime - (clip.loopPoint ?? buffer.duration);
-              gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime + Math.max(0, delta));
-              const id2 = setTimeout(() => this.resetToTrackStart(), Math.max(0, delta) * 1000 + 60);
-              this.scheduledTimeouts.push(id2);
-              return;
-            }
+        // (3) Normal nextClip
+        if (hasNextInClip) {
+          const arr = clip.nextClip;
+          const next = arr.length > 1 ? arr[Math.floor(Math.random() * arr.length)] : arr[0];
+          if (this.clipData[next] && this.activeClips[next]) {
+            this.playClip(next);
           }
         }
 
-        // Default fade at clipEnd when not handled above
+        // fade remainder to 0 at clipEnd
         const clipEndTime = clip.clipEnd ?? buffer.duration;
         const delta = clipEndTime - (clip.loopPoint ?? buffer.duration);
-        gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime + Math.max(0, delta));
-
-      }, Math.max(0, waitSec) * 1000);
-
+        gainNode.gain.setValueAtTime(0, now2 + Math.max(0, delta));
+      }, timeUntilLoopPoint * 1000);
       this.scheduledTimeouts.push(id);
-    };
+    }
 
-    scheduleLoopCheck();
-
+    // true end detection for "end" sections: when last clip has no nextClip
+    const section = this.sectionData[this.currentSectionName];
+    if (!hasNextInClip && section?.type === "end") {
+      const tail = (clip.clipEnd ?? buffer.duration) - (clip.loopStart || 0);
+      const id2 = setTimeout(() => this.stopTrack(true), tail * 1000 + 60);
+      this.scheduledTimeouts.push(id2);
+    }
   }
 
-  // Used by the clip progress bar
   getPlaybackInfo() {
-    const name = this.lastPlayingClipName;
-    if (!name) return null;
-    const entry = this.activeClips[name];
-    if (!entry) return null;
-    const clip = this.clipData[name] || {};
-    const { buffer, startedAt, offsetAtStart } = entry;
-    if (!this.audioCtx || !buffer) return null;
+    // No audio context or nothing playing → nothing to report
+    if (!this.audioCtx || !this.lastPlayingClipName) return null;
 
-    const now = this.audioCtx.currentTime;
-    const loopPoint = clip.loopPoint ?? buffer.duration;
-    const elapsed = Math.max(0, now - (startedAt ?? 0));
-    const pos = (offsetAtStart ?? 0) + elapsed;        // seconds since clip start position
-    const norm = Math.max(0, Math.min(1, loopPoint > 0 ? pos / loopPoint : 0));
-    return { clipName: name, positionSec: pos, loopPointSec: loopPoint, progress01: norm };
+    const clipName = this.lastPlayingClipName;
+    const entry = this.activeClips[clipName];
+    const clip  = this.clipData[clipName];
+    if (!entry || !clip) return null;
+
+    // Choose the same buffer we used to play (by current mode, fallback base)
+    const mode   = this.currentModeName || "base";
+    const buffer = (entry.buffersByMode?.[mode]) ?? entry.buffersByMode?.base;
+    if (!buffer) return null;
+
+    const ctx = this.audioCtx;
+    const now = ctx.currentTime;
+
+    const loopStart = clip.loopStart || 0;
+    const loopPoint = (clip.loopPoint ?? buffer.duration);
+    const segLen    = Math.max(1e-6, loopPoint - loopStart);
+
+    const startedAt      = entry.startedAt || 0;
+    const offsetAtStart  = entry.offsetAtStart || 0;
+    const elapsed        = Math.max(0, now - startedAt);
+    const position       = offsetAtStart + elapsed;
+
+    // progress from loopStart → loopPoint, clamped [0..1]
+    const progress01 = Math.max(0, Math.min(1, (position - loopStart) / segLen));
+
+    return {
+      clipName,
+      sectionName: this.currentSectionName || this._sectionOfClip(clipName),
+      mode,
+      position,
+      loopStart,
+      loopPoint,
+      progress01
+    };
   }
 
-  // For future net-sync: schedule by *audio time*
+
   schedule(fn, atAudioTime) {
     const ctx = this.ensureContext();
     const ms = Math.max(0, (atAudioTime - ctx.currentTime) * 1000);

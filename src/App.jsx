@@ -49,6 +49,10 @@ export default function App() {
   const [currentSectionName, setCurrentSectionName] = useState(null);
   const [queuedSectionName, setQueuedSectionName] = useState(null);
 
+  // Modes
+  const [currentModeName, setCurrentModeName] = useState("base");
+  const [queuedModeName, setQueuedModeName] = useState(null);
+
   // Setings menu
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fadeOutSeconds, setFadeOutSeconds] = useState(6); // default 4
@@ -78,6 +82,8 @@ export default function App() {
       },
       onSectionChange: (name) => setCurrentSectionName(name ?? null),
       onQueueChange: (nameOrNull) => setQueuedSectionName(nameOrNull),
+      onModeChange: (modeName) => setCurrentModeName(modeName || "base"),
+      onModeQueueChange: (nameOrNull) => setQueuedModeName(nameOrNull),
       onReady: () => { setPlayDisabled(false); setClipProgress(0); },  // when engine finished resetting
     });
   }
@@ -163,6 +169,7 @@ export default function App() {
   const handlePlaySection = (sectionName) => {
     setQueuedSectionName(null);
     engine.clearQueuedSection?.();
+    engine.clearQueuedMode?.();
     engine.playSection(sectionName);
   };
 
@@ -389,7 +396,6 @@ export default function App() {
       {/* Section Controls */}
       {currentSectionName && (
         <section style={{ marginBottom: 16 }}>
-          {!isDynamicTrack && null}
           {isDynamicPlayingTrack && (
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
               <span style={{ color: "#aaa", fontSize: 14, fontWeight: 600 }}>Section:</span>
@@ -403,6 +409,17 @@ export default function App() {
             currentSectionName={currentSectionName}
             queuedSectionName={queuedSectionName}
             autoLockedTargets={autoLockedTargets}
+            // Modes:
+            currentModeName={currentModeName}
+            queuedModeName={queuedModeName}
+            onToggleQueuedMode={(modeOrNull) => {
+              if (modeOrNull) engine.queueModeTransition?.(modeOrNull);
+              else engine.clearQueuedMode?.();
+            }}
+            // base mode display name override (label)
+            getBaseModeLabel={(sectionName) =>
+              sections[sectionName]?.defaultBaseModeName || "base"
+            }
             onToggleQueuedSection={(nameOrNull) => {
               setQueuedSectionName(nameOrNull);
               if (nameOrNull) engine.queueSectionTransition(nameOrNull);
