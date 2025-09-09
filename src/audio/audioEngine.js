@@ -349,6 +349,9 @@ export class AudioEngine {
     source.loopEnd  = loopEndPoint;
 
     const gainNode = ctx.createGain();
+
+
+
     // apply trackVolume * userVolume (masterGain already applies user; keep trackVolume here)
     const startGain = 0;
     gainNode.gain.setValueAtTime(startGain, now);
@@ -365,12 +368,15 @@ export class AudioEngine {
 
     // fade in
     gainNode.gain.cancelScheduledValues(now);
-    gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+    // ✅ always start from silence so we have something to ramp *from*
+    gainNode.gain.setValueAtTime(0, now);
     const targetGain = (typeof this.trackVolume === "number" ? this.trackVolume : 1);
     if (skipFadeIn) {
       gainNode.gain.setValueAtTime(targetGain, now);
+      console.log("[FADE-IN]", { skip: opts.skipFadeIn, usePauseFade: opts.usePauseFade})
     } else {
       const fadeInDur = usePauseFade ? Math.max(1, this.pauseFadeSeconds) : 0.2;
+      console.log("[FADE-IN]", { skip: opts.skipFadeIn, usePauseFade: opts.usePauseFade, fadeInDur });
       gainNode.gain.linearRampToValueAtTime(targetGain, now + fadeInDur);
     }
 
@@ -548,6 +554,12 @@ export class AudioEngine {
     const opts = simpleTrack
       ? { offsetSeconds: offsetSeconds ?? null, skipFadeIn: false, usePauseFade: true }
       : { offsetSeconds: null, skipFadeIn: true, usePauseFade: false }; // restart from beginning, no fade-in
+
+    if (simpleTrack) {
+      console.log("[RESUME simple] offsetSeconds:", offsetSeconds, "fade:", this.pauseFadeSeconds);
+    } else {
+      console.log("[RESUME complex] restart from beginning (no fade-in)");
+    }
 
     this.playClip(clipName, opts);
 
