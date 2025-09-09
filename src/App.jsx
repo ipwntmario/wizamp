@@ -50,6 +50,8 @@ export default function App() {
 
   // derive playing state
   const isPlaying = /^Playing/.test(status);
+  const isPaused = status === "Paused";
+  const isActive = isPlaying || isPaused;
 
   // Mirrors of state for engine callbacks (avoid stale closures)
   const selectedTrackRef = useRef(null);
@@ -90,6 +92,9 @@ export default function App() {
   // Setings menu
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fadeOutSeconds, setFadeOutSeconds] = useState(6); // default 4
+  const [pauseFadeSeconds, setPauseFadeSeconds] = useState(() => {
+    try { return Number(localStorage.getItem("wizamp_pauseFade")) || 1; } catch { return 1; }
+  });
 
   const [playDisabled, setPlayDisabled] = useState(false);
 
@@ -182,6 +187,11 @@ export default function App() {
     engine.setFadeOutSeconds?.(fadeOutSeconds);
   }, [engine, fadeOutSeconds]);
 
+  useEffect(() => {
+    engine.setPauseFadeSeconds?.(pauseFadeSeconds);
+    try { localStorage.setItem("wizamp_pauseFade", String(pauseFadeSeconds)); } catch {}
+  }, [engine, pauseFadeSeconds]);
+
   // Keep refs in sync
   useEffect(() => { selectedTrackRef.current = selectedTrack; }, [selectedTrack]);
   useEffect(() => { playingTrackNameRef.current = playingTrackName; }, [playingTrackName]);
@@ -191,7 +201,7 @@ export default function App() {
 
   // When a track is selected, point UI at its first section
   useEffect(() => {
-    if (isPlaying) return;        // ← don’t switch UI mid-play
+    if (isActive) return;         // ← don’t switch UI when playing *or paused*
     if (!selectedTrack) {
       setCurrentSectionName(null);
       setQueuedSectionName(null);
@@ -200,7 +210,7 @@ export default function App() {
     const first = tracks[selectedTrack]?.firstSection || null;
     setCurrentSectionName(first);
     setQueuedSectionName(null);
-  }, [selectedTrack, tracks, isPlaying]);
+  }, [selectedTrack, tracks, isActive]);
 
   // Derived: firstSection of the selected track (for Transport button label)
   const firstSection = useMemo(() => {
@@ -221,12 +231,13 @@ export default function App() {
     let raf = 0;
     const tick = () => {
       const info = engine.getPlaybackInfo?.();
-      setClipProgress(info?.progress01 ?? 0);
+      // Freeze during pause: keep the last rendered value.
+      setClipProgress(prev => (isPaused ? prev : (info?.progress01 ?? 0)));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [engine]);
+  }, [engine, isPaused]);
 
   // derive if not "simple" track
   const isDynamicTrack = tracks[selectedTrack]?.simple === false;
@@ -557,24 +568,36 @@ export default function App() {
 
           {/* Play/Pause (largest circle) */}
           <button
-            onClick={() => { if (!isPlaying) handlePlay(); /* pause TBD */ }}
+            onClick={() => {
+              if (isLoadingTrack) return;
+              const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
+              if (isPlaying) {
+                engine.pause(simple);
+              } else if (isPaused) {
+                engine.resume(simple);
+              } else {
+                handlePlay();
+              }
+            }}
             disabled={playDisabled || isLoadingTrack}
             title={
-              isLoadingTrack
-                ? "Loading… please wait"
-                : (isPlaying ? "Pause (coming soon)" : "Play")
+              isLoadingTrack ? "Loading… please wait"
+              : (isPlaying ? "Pause"
+              : (isPaused ? "Resume" : "Play"))
             }
             style={{
               width: 52, height: 52, borderRadius: "50%",
               border: "1px solid #555",
-              background: isLoadingTrack ? "#333" : (isPlaying ? "#000" : "#0aa"),
+              background: isLoadingTrack ? "#333"
+                        : (isPlaying ? "#000"
+                        : (isPaused ? "#0aa" : "#0aa")),
               color: isLoadingTrack ? "#888" : (isPlaying ? "white" : "black"),
               fontSize: 18,
               cursor: (playDisabled || isLoadingTrack) ? "not-allowed" : "pointer",
               display: "inline-flex", alignItems: "center", justifyContent: "center",
             }}
             >
-              {isLoadingTrack ? "⏳" : (isPlaying ? "⏸" : "⏵")}
+              {isLoadingTrack ? "⏳" : (isPlaying ? "⏸" : (isPaused ? "⏵" : "⏵"))}
             </button>
 
             {/* Stop (always visible; black by default, red if a SIMPLE track is playing) */}
@@ -653,6 +676,28 @@ export default function App() {
                 <span>seconds of fade-out when Stop is pressed</span>
               </div>
               <div style={{ marginTop: 12, fontSize: 12, color: "#bbb" }}>(0 = instantaneous, max 30s)</div>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
+                Pause fade
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="number" min={1} max={30} step={0.1}
+                  value={pauseFadeSeconds}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (Number.isFinite(v)) {
+                      const clamped = Math.max(1, Math.min(30, v));
+                      setPauseFadeSeconds(clamped);
+                    }
+                  }}
+                  style={{ width: 90, padding: "6px 8px" }}
+                />
+                <span>seconds to fade when Pausing</span>
+              </div>
+              <div style={{ marginTop: 12, fontSize: 12, color: "#bbb" }}>(1–30s)</div>
             </div>
 
             <div style={{ marginTop: 16 }}>

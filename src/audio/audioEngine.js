@@ -22,6 +22,10 @@ export class AudioEngine {
 
     this.fadeOutSeconds = 6;
     this.userGain = 1.0;
+    this.pauseFadeSeconds = 1;
+
+    this.isPaused = false;
+    this.pausedInfo = null; // { clipName, offsetSeconds? }
 
     // track & dataset
     this.clipData = {};
@@ -84,6 +88,10 @@ export class AudioEngine {
 
   setFadeOutSeconds(n) {
     this.fadeOutSeconds = Math.max(0, Math.min(30, Number(n) || 0));
+  }
+
+  setPauseFadeSeconds(n) {
+    this.pauseFadeSeconds = Math.max(1, Math.min(30, Number(n) || 1));
   }
 
   setData({ clips, sections, tracks }) {
@@ -292,7 +300,8 @@ export class AudioEngine {
   }
 
   // ----- core playback -----
-  playClip = (clipName) => {
+  playClip = (clipName, opts = {}) => {
+    const { offsetSeconds = null, skipFadeIn = false, usePauseFade = false } = opts || {};
     console.log("[ENGINE] playClip", clipName,
                 "mode:", this.currentModeName, "section:", this.currentSectionName);
     const ctx = this.ensureContext();
@@ -345,7 +354,8 @@ export class AudioEngine {
     gainNode.gain.setValueAtTime(startGain, now);
 
     source.connect(gainNode).connect(this.masterGain);
-    source.start(0, clip.loopStart || 0);
+    const startOffset = (offsetSeconds != null) ? offsetSeconds : (clip.loopStart || 0);
+    source.start(0, startOffset);
 
     // store entry
     entry.source = source;
@@ -357,8 +367,29 @@ export class AudioEngine {
     gainNode.gain.cancelScheduledValues(now);
     gainNode.gain.setValueAtTime(gainNode.gain.value, now);
     const targetGain = (typeof this.trackVolume === "number" ? this.trackVolume : 1);
-    gainNode.gain.linearRampToValueAtTime(targetGain, now + 0.2);
+    if (skipFadeIn) {
+      gainNode.gain.setValueAtTime(targetGain, now);
+    } else {
+      const fadeInDur = usePauseFade ? Math.max(1, this.pauseFadeSeconds) : 0.2;
+      gainNode.gain.linearRampToValueAtTime(targetGain, now + fadeInDur);
+    }
 
+    // Record timing for progress + subsequent pauses
+    const startedAt = now;
+    const offsetAtStart = startOffset; // whatever you named the computed start offset
+
+    // Keep buffer references consistent
+    // If you support per-mode buffers (e.g., entry.buffersByMode), also keep entry.buffer for generic reads.
+    this.activeClips[clipName] = {
+      source,
+      gainNode,
+      buffer,          // retain classic field
+      buffersByMode: entry.buffersByMode || undefined,
+      startedAt,
+      offsetAtStart
+    };
+
+    // Emit status and remember last playing clip
     this.onStatus?.(`Playing: ${clipName}`);
     this.lastPlayingClipName = clipName;
 
@@ -459,51 +490,126 @@ export class AudioEngine {
     }
   }
 
-  getPlaybackInfo() {
-    // No audio context or nothing playing → nothing to report
-    if (!this.audioCtx || !this.lastPlayingClipName) return null;
-
-    const clipName = this.lastPlayingClipName;
-    const entry = this.activeClips[clipName];
-    const clip  = this.clipData[clipName];
-    if (!entry || !clip) return null;
-
-    // Choose the same buffer we used to play (by current mode, fallback base)
-    const mode   = this.currentModeName || "base";
-    const buffer = (entry.buffersByMode?.[mode]) ?? entry.buffersByMode?.base;
-    if (!buffer) return null;
+  pause(simpleTrack = true) {
+    if (!this.audioCtx || !this.lastPlayingClipName) return;
+    if (this.isPaused) return;
 
     const ctx = this.audioCtx;
+    const fade = Math.max(1, Number(this.pauseFadeSeconds || 1));
+    const entry = this.activeClips[this.lastPlayingClipName];
+    if (!entry || !entry.gainNode || !entry.source) return;
+
+    if (!simpleTrack) {
+      // Complex: stop further transitions *immediately*
+      this.clearScheduled();
+    }
+
     const now = ctx.currentTime;
+    try {
+      const g = entry.gainNode.gain;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      g.linearRampToValueAtTime(0, now + fade);
+    } catch {}
 
-    const loopStart = clip.loopStart || 0;
-    const loopPoint = (clip.loopPoint ?? buffer.duration);
-    const segLen    = Math.max(1e-6, loopPoint - loopStart);
+    setTimeout(() => {
+      // Compute offset at fade end (simple only)
+      let offsetSeconds = null;
+      if (simpleTrack) {
+        const clipName = this.lastPlayingClipName;
+        const buff = this._bufferForClipMode(clipName);
+        if (buff) {
+          const elapsed = Math.max(0, (ctx.currentTime - entry.startedAt));
+          const rawPos = (entry.offsetAtStart || 0) + elapsed;
+          const dur = Math.max(1e-6, buff.duration);
+          offsetSeconds = ((rawPos % dur) + dur) % dur; // [0,dur)
+        }
+      }
 
-    const startedAt      = entry.startedAt || 0;
-    const offsetAtStart  = entry.offsetAtStart || 0;
-    const elapsed        = Math.max(0, now - startedAt);
-    const position       = offsetAtStart + elapsed;
+      try { entry.source.stop(); } catch {}
 
-    // progress from loopStart → loopPoint, clamped [0..1]
-    const progress01 = Math.max(0, Math.min(1, (position - loopStart) / segLen));
-
-    return {
-      clipName,
-      sectionName: this.currentSectionName || this._sectionOfClip(clipName),
-      mode,
-      position,
-      loopStart,
-      loopPoint,
-      progress01
-    };
+      this.isPaused = true;
+      this.pausedInfo = { clipName: this.lastPlayingClipName, offsetSeconds };
+      this.onStatus?.("Paused");
+    }, fade * 1000 + 20);
   }
 
+  resume(simpleTrack = true) {
+    if (!this.isPaused || !this.pausedInfo) return;
+    const { clipName, offsetSeconds } = this.pausedInfo;
+
+    // If buffers are gone, just unpause
+    if (!this.clipData[clipName] || !this.activeClips[clipName]) {
+      this.isPaused = false;
+      this.pausedInfo = null;
+      return;
+    }
+
+    const opts = simpleTrack
+      ? { offsetSeconds: offsetSeconds ?? null, skipFadeIn: false, usePauseFade: true }
+      : { offsetSeconds: null, skipFadeIn: true, usePauseFade: false }; // restart from beginning, no fade-in
+
+    this.playClip(clipName, opts);
+
+    this.isPaused = false;
+    this.pausedInfo = null;
+  }
+
+  getPlaybackInfo() {
+    // If we paused and captured an offset, keep the bar frozen at that location.
+    if (this.isPaused && this.pausedInfo) {
+      const { clipName, offsetSeconds } = this.pausedInfo;
+      const clip = this.clipData?.[clipName];
+      const buff = this._bufferForClipMode?.(clipName) || this.activeClips?.[clipName]?.buffer;
+      if (clip && buff) {
+        const loopStart = clip.loopStart || 0;
+        const loopPoint = (clip.loopPoint ?? buff.duration);
+        const span = Math.max(1e-6, loopPoint - loopStart);
+        const offset = (offsetSeconds != null) ? offsetSeconds : loopStart;
+        const rel = Math.max(0, Math.min(1, (offset - loopStart) / span));
+        return { progress01: rel };
+      }
+      return { progress01: 0 };
+    }
+
+    // Normal running path
+    const clipName = this.lastPlayingClipName;
+    const entry = clipName ? this.activeClips?.[clipName] : null;
+    const clip  = clipName ? this.clipData?.[clipName] : null;
+    const buff  = this._bufferForClipMode?.(clipName) || entry?.buffer;
+    const ctx   = this.audioCtx;
+
+    if (!ctx || !entry || !clip || !buff) return { progress01: 0 };
+
+    const loopStart = clip.loopStart || 0;
+    const loopPoint = (clip.loopPoint ?? buff.duration);
+    const span = Math.max(1e-6, loopPoint - loopStart);
+
+    // Estimate current playhead (offsetAtStart + elapsed)
+    const elapsed = Math.max(0, (ctx.currentTime - entry.startedAt));
+    const pos = (entry.offsetAtStart || 0) + elapsed;
+
+    // Map to 0..1 between loopStart..loopPoint (wrapping if necessary)
+    const dur = Math.max(1e-6, buff.duration);
+    const posWrapped = ((pos % dur) + dur) % dur;
+    const clamped = Math.max(loopStart, Math.min(loopPoint, posWrapped));
+    const rel = Math.max(0, Math.min(1, (clamped - loopStart) / span));
+
+    return { progress01: rel };
+  }
 
   schedule(fn, atAudioTime) {
     const ctx = this.ensureContext();
     const ms = Math.max(0, (atAudioTime - ctx.currentTime) * 1000);
     const id = setTimeout(fn, ms);
     this.scheduledTimeouts.push(id);
+  }
+
+  _bufferForClipMode(clipName) {
+    const entry = this.activeClips?.[clipName];
+    if (!entry) return null;
+    const mode = this.currentModeName || "base";
+    // If you load per-mode buffers into entry.buffersByMode, select it; otherwise fall back to entry.buffer
+    return entry.buffersByMode?.[mode] ?? entry.buffer ?? null;
   }
 }
