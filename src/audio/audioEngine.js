@@ -15,7 +15,7 @@ export class AudioEngine {
     this.onModeChange = onModeChange || (() => {});
     this.onModeQueueChange = onModeQueueChange || (() => {});
     this.onReady = onReady || (() => {});
-    this.onPreloadComplete = onPreloadComplete || (() => {});
+    this.onPreloadComplete = typeof onPreloadComplete === "function" ? onPreloadComplete : () => {};
 
     this.audioCtx = null;
     this.masterGain = null;
@@ -32,6 +32,7 @@ export class AudioEngine {
     // preloading / playback
     this.activeClips = {};       // { clipName: { source, gainNode, buffersByMode, startedAt, offsetAtStart } }
     this.scheduledTimeouts = []; // [timeoutId]
+    this._playbackToken = 0; // increments each new playClip; stale timers check this
     this._isPreloaded = false;
 
     // section & mode state
@@ -200,6 +201,13 @@ export class AudioEngine {
     this._isPreloaded = true;
     this.onStatus?.(`Track '${trackName}' preloaded`);
     this.onReady?.();
+    console.log("[ENGINE] preloadTrack complete for", trackName,
+                "currentTrackName:", this.currentTrackName);
+    try {
+      this.onPreloadComplete?.(this.currentTrackName || trackName);
+    } catch (e) {
+      console.warn("[ENGINE] onPreloadComplete handler threw:", e);
+    }
     this.onPreloadComplete?.(this.currentTrackName || trackName);
   }
 
@@ -249,6 +257,8 @@ export class AudioEngine {
 
   // ----- sections / modes -----
   playSection(sectionName) {
+    console.log("[ENGINE] playSection", sectionName,
+            "currentMode:", this.currentModeName);
     const section = this.sectionData[sectionName];
     if (!section) {
       console.error(`Section '${sectionName}' not found`);
@@ -283,6 +293,8 @@ export class AudioEngine {
 
   // ----- core playback -----
   playClip = (clipName) => {
+    console.log("[ENGINE] playClip", clipName,
+                "mode:", this.currentModeName, "section:", this.currentSectionName);
     const ctx = this.ensureContext();
     const clip = this.clipData[clipName];
     const entry = this.activeClips[clipName];
@@ -307,6 +319,9 @@ export class AudioEngine {
     if (entry.source) {
       try { entry.source.stop(); } catch {}
     }
+
+    this._playbackToken++;
+    const myToken = this._playbackToken;
 
     const now = ctx.currentTime;
 
@@ -368,10 +383,18 @@ export class AudioEngine {
     const timeUntilLoopPoint = (clip.loopPoint ?? buffer.duration) - (clip.loopStart || 0);
     if (timeUntilLoopPoint > 0) {
       const id = setTimeout(() => {
+        // If a newer playClip has started since this timer was set, abort.
+        if (myToken !== this._playbackToken) {
+          // stale timer; do nothing
+          return;
+        }
         const now2 = ctx.currentTime;
 
         // (1) Section queued?
         if (this.queuedNextSectionName) {
+          // We’re about to jump sections; stop any other pending callbacks.
+          this.clearScheduled();
+
           const targetSection = this.sectionData[this.queuedNextSectionName];
           const nextClipName = targetSection?.firstClip || null;
 

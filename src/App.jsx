@@ -51,6 +51,13 @@ export default function App() {
   // derive playing state
   const isPlaying = /^Playing/.test(status);
 
+  // Mirrors of state for engine callbacks (avoid stale closures)
+  const selectedTrackRef = useRef(null);
+  const playingTrackNameRef = useRef(null);
+  const autoplayRef = useRef(false);
+  const tracksRef = useRef({});
+  const autoplayInFlightRef = useRef(false);
+
   // Autoplay setting (persist)
   const [autoplay, setAutoplay] = useState(() => {
     try { return localStorage.getItem("wizamp_autoplay") === "1"; } catch { return false; }
@@ -65,6 +72,8 @@ export default function App() {
   // If non-null, we will auto-start this track AFTER its preload finishes.
   const autoStartForRef = useRef(null);
 
+  // Mirror the ref into state just so we can show a badge in the UI
+  const [autoStartRequestedFor, setAutoStartRequestedFor] = useState(null);
 
   // Status visibility (persist)
   const [showStatus, setShowStatus] = useState(() => {
@@ -98,37 +107,57 @@ export default function App() {
   if (!engineRef.current) {
     engineRef.current = new AudioEngine({
       onStatus: async (s) => {
+        console.log("[STATUS]", s);
         setStatus(s);
         if (s === "Stopped") {
           setPlayDisabled(false);
           setClipProgress(0);
-          // remember which track just ended, then clear playing marker
-          lastEndedTrackRef.current = playingTrackName || null;
+
+          const playing = playingTrackNameRef.current;
+          const sel = selectedTrackRef.current;
+          console.log("[STOP] was playing:", playing, "selected:", sel);
+          lastEndedTrackRef.current = playing || null;
           setPlayingTrackName(null);
 
           // If Auto-Play is ON, and dropdown points to a *different* track,
           // request auto-start for that track (we will start AFTER preload completes).
-          if (autoplay && selectedTrack && selectedTrack !== lastEndedTrackRef.current) {
-            autoStartForRef.current = selectedTrack;
+          if (autoplayRef.current && sel && sel !== lastEndedTrackRef.current) {
+            autoStartForRef.current = sel;
+            setAutoStartRequestedFor(sel);
+            console.log("[AUTOPLAY] requested for", sel);
+          } else {
+            console.log("[AUTOPLAY] not requested (autoplay:", autoplayRef.current,
+                        "selected:", sel, "lastEnded:", lastEndedTrackRef.current, ")");
+            autoStartForRef.current = null;
+            setAutoStartRequestedFor(null);
           }
         }
       },
+
       onSectionChange: (name) => setCurrentSectionName(name ?? null),
       onQueueChange: (nameOrNull) => setQueuedSectionName(nameOrNull),
       onModeChange: (modeName) => setCurrentModeName(modeName || "base"),
       onModeQueueChange: (nameOrNull) => setQueuedModeName(nameOrNull),
       onReady: () => { setPlayDisabled(false); setClipProgress(0); },  // when engine finished resetting
       onPreloadComplete: async (trackName) => {
+        console.log("[PRELOAD_COMPLETE] engine reports:", trackName,
+                    "autoStartForRef:", autoStartForRef.current);
         // mark which track's assets are now loaded
         setPlayingTrackName(trackName);
         setClipProgress(0);
 
         // If an auto-start was requested for this track, do it now
-        if (autoStartForRef.current === trackName) {
+        if (autoStartForRef.current === trackName && !autoplayInFlightRef.current) {
+          autoplayInFlightRef.current = true;
+          console.log("[AUTOPLAY] all-local-ready barrier start for", trackName);
           await awaitAllClientsReady(trackName); // local no-op; future: wait for all clients
-          const first = tracks[trackName]?.firstSection;
+          const first = tracksRef.current?.[trackName]?.firstSection;
+          console.log("[AUTOPLAY] barrier passed; first section:", first);
           if (first) engine.playSection(first);
           autoStartForRef.current = null; // consume the request
+          setAutoStartRequestedFor(null);
+          console.log("[AUTOPLAY] started and request consumed");
+          autoplayInFlightRef.current = false;
         }
       },
     });
@@ -151,6 +180,13 @@ export default function App() {
   useEffect(() => {
     engine.setFadeOutSeconds?.(fadeOutSeconds);
   }, [engine, fadeOutSeconds]);
+
+  // Keep refs in sync
+  useEffect(() => { selectedTrackRef.current = selectedTrack; }, [selectedTrack]);
+  useEffect(() => { playingTrackNameRef.current = playingTrackName; }, [playingTrackName]);
+  useEffect(() => { autoplayRef.current = autoplay; }, [autoplay]);
+  useEffect(() => { tracksRef.current = tracks; }, [tracks]);
+
 
   // When a track is selected, point UI at its first section
   useEffect(() => {
@@ -246,6 +282,8 @@ export default function App() {
   };
 
   const handleSelectTrack = async (name) => {
+    console.log("[SELECT_TRACK]", name, "isPlaying:", isPlaying,
+                "playingTrackName:", playingTrackName);
     // Only update selection + volume now; actual loading is deferred until STOP.
     setSelectedTrack(name);
     const savedVol = loadSavedTrackVolume(name);
@@ -261,11 +299,13 @@ export default function App() {
 
     setIsLoadingTrack(true);
     try {
+      console.log("[LOAD] begin", name);
       const basePath = tracks[name]?.basePath || `/tracks/${name}`;
       const [clipRes, sectRes] = await Promise.all([
         fetch(`${basePath}/clipData.json`),
         fetch(`${basePath}/sectionData.json`)
       ]);
+      console.log("[LOAD] fetched JSON for", name, "basePath:", basePath);
       const clipJson = await clipRes.json();
       const sectJson = await sectRes.json();
       const nextClips    = clipJson?.clips    || clipJson || {};
@@ -276,28 +316,37 @@ export default function App() {
       engine.setData({ clips: nextClips, sections: nextSections, tracks });
 
       const savedVol = loadSavedTrackVolume(name);
+      console.log("[LOAD] calling engine.preloadTrack", name, "vol:", savedVol);
       await engine.preloadTrack(name, { trackVolume: savedVol, basePath });
 
       setPlayingTrackName(name); // reflect what's actually loaded/ready
       setClipProgress(0); // start progress at 0 for newly loaded track
 
+      console.log("[LOAD] completed preload for", name,
+                  "autoStartForRef:", autoStartForRef.current);
       // If this preload was requested for auto-start, do it now
       if (autoStartForRef.current === name) {
+        console.log("[AUTOPLAY] (redundant path) awaiting barrier for", name);
         await awaitAllClientsReady(name); // local no-op; future: wait for all clients
         const first = tracks[name]?.firstSection;
         if (first) {
+          console.log("[AUTOPLAY] (redundant path) starting first section:", first);
           engine.playSection(first);
         }
         autoStartForRef.current = null; // consume the request
       }
     } finally {
       setIsLoadingTrack(false);
+      console.log("[LOAD] end", name);
     }
   };
 
   // When fully stopped (end of fade or true end), load whichever track is selected.
   useEffect(() => {
     if (!isPlaying && selectedTrack && (!playingTrackName || selectedTrack !== playingTrackName)) {
+      console.log("[EFFECT loadTrackAssets] trigger",
+                  "isPlaying:", isPlaying, "selectedTrack:", selectedTrack,
+                  "playingTrackName:", playingTrackName);
       loadTrackAssets(selectedTrack);
     }
   }, [isPlaying, selectedTrack, playingTrackName]);  // will only run after a real STOP
@@ -538,6 +587,17 @@ export default function App() {
               </button>
         </div>
       </section>
+
+      {autoStartRequestedFor && (
+        <div style={{
+          position: "fixed", left: 20, bottom: showStatus ? 64 : 20,
+          background: "#2a2a2a", color: "white",
+          border: "1px solid #555", borderRadius: 10,
+          padding: "6px 10px", zIndex: 1
+        }}>
+          Autoplay pending… <span style={{ opacity: 0.8 }}>{autoStartRequestedFor}</span>
+        </div>
+      )}
 
       {/* Fixed bottom status bar (left), if enabled */}
       {showStatus && (
