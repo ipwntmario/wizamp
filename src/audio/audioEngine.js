@@ -366,18 +366,25 @@ export class AudioEngine {
     entry.startedAt = now;
     entry.offsetAtStart = clip.loopStart || 0;
 
-    // fade in
-    gainNode.gain.cancelScheduledValues(now);
-    // ✅ always start from silence so we have something to ramp *from*
-    gainNode.gain.setValueAtTime(0, now);
     const targetGain = (typeof this.trackVolume === "number" ? this.trackVolume : 1);
-    if (skipFadeIn) {
-      gainNode.gain.setValueAtTime(targetGain, now);
-      console.log("[FADE-IN]", { skip: opts.skipFadeIn, usePauseFade: opts.usePauseFade})
-    } else {
-      const fadeInDur = usePauseFade ? Math.max(1, this.pauseFadeSeconds) : 0.2;
-      console.log("[FADE-IN]", { skip: opts.skipFadeIn, usePauseFade: opts.usePauseFade, fadeInDur });
+
+    // Always start by cancelling any old automation
+    gainNode.gain.cancelScheduledValues(now);
+
+    /**
+     * Fade policy:
+     * - Resume(simple):    fade-in over pauseFadeSeconds  (opts.usePauseFade === true)
+     * - Resume(complex):   immediate (opts.skipFadeIn === true)
+     * - Normal starts / transitions: immediate (no fade)
+     */
+    if (opts.usePauseFade) {
+      // Resume from pause on a simple track — do a symmetric fade-in
+      gainNode.gain.setValueAtTime(0, now);
+      const fadeInDur = Math.max(1, this.pauseFadeSeconds);
       gainNode.gain.linearRampToValueAtTime(targetGain, now + fadeInDur);
+    } else {
+      // All other paths: **no fade-in**
+      gainNode.gain.setValueAtTime(targetGain, now);
     }
 
     // Record timing for progress + subsequent pauses
