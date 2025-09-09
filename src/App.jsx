@@ -145,6 +145,7 @@ export default function App() {
         // mark which track's assets are now loaded
         setPlayingTrackName(trackName);
         setClipProgress(0);
+        setPlayDisabled(false);
 
         // If an auto-start was requested for this track, do it now
         if (autoStartForRef.current === trackName && !autoplayInFlightRef.current) {
@@ -234,6 +235,8 @@ export default function App() {
 
   // Handlers
   const handlePlay = async () => {
+    if (isLoadingTrack) return;  // <-- early bail
+
     // If we’re idle or stopped and the selected track isn’t loaded, load it now
     const needLoad =
       !isPlaying &&
@@ -555,19 +558,23 @@ export default function App() {
           {/* Play/Pause (largest circle) */}
           <button
             onClick={() => { if (!isPlaying) handlePlay(); /* pause TBD */ }}
-            disabled={playDisabled}
-            title={isPlaying ? "Pause (coming soon)" : "Play"}
+            disabled={playDisabled || isLoadingTrack}
+            title={
+              isLoadingTrack
+                ? "Loading… please wait"
+                : (isPlaying ? "Pause (coming soon)" : "Play")
+            }
             style={{
               width: 52, height: 52, borderRadius: "50%",
               border: "1px solid #555",
-              background: isPlaying ? "#000" : "#0aa",
-              color: isPlaying ? "white" : "black",
+              background: isLoadingTrack ? "#333" : (isPlaying ? "#000" : "#0aa"),
+              color: isLoadingTrack ? "#888" : (isPlaying ? "white" : "black"),
               fontSize: 18,
-              cursor: playDisabled ? "not-allowed" : "pointer",
+              cursor: (playDisabled || isLoadingTrack) ? "not-allowed" : "pointer",
               display: "inline-flex", alignItems: "center", justifyContent: "center",
             }}
             >
-              {isPlaying ? "⏸" : "⏵"}
+              {isLoadingTrack ? "⏳" : (isPlaying ? "⏸" : "⏵")}
             </button>
 
             {/* Stop (always visible; black by default, red if a SIMPLE track is playing) */}
