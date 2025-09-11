@@ -100,6 +100,11 @@ export default function App() {
   // Database modal
   const [dbOpen, setDbOpen] = useState(false);
 
+  // App.jsx (top-level state)
+  const [dbSort, setDbSort] = useState(() => localStorage.getItem("wizamp_dbSort") || "alpha-asc");
+  const [dbDynamicFirst, setDbDynamicFirst] = useState(() => localStorage.getItem("wizamp_dbDynamicFirst") !== "false"); // default true
+  const [dbHideTests, setDbHideTests] = useState(() => localStorage.getItem("wizamp_dbHideTests") === "true");
+
   const [playDisabled, setPlayDisabled] = useState(false);
 
   const [statusOpen, setStatusOpen] = useState(false);  // collapsible status
@@ -201,6 +206,11 @@ export default function App() {
   useEffect(() => { playingTrackNameRef.current = playingTrackName; }, [playingTrackName]);
   useEffect(() => { autoplayRef.current = autoplay; }, [autoplay]);
   useEffect(() => { tracksRef.current = tracks; }, [tracks]);
+
+  // Track select menu persist (optional)
+  useEffect(() => { localStorage.setItem("wizamp_dbSort", dbSort); }, [dbSort]);
+  useEffect(() => { localStorage.setItem("wizamp_dbDynamicFirst", String(dbDynamicFirst)); }, [dbDynamicFirst]);
+  useEffect(() => { localStorage.setItem("wizamp_dbHideTests", String(dbHideTests)); }, [dbHideTests]);
 
 
   // When a track is selected, point UI at its first section
@@ -468,6 +478,9 @@ export default function App() {
             tracks={tracks}
             value={selectedTrack}
             onChange={handleSelectTrack}
+            sortMode={dbSort}
+            dynamicFirst={dbDynamicFirst}
+            hideTests={dbHideTests}
           />
 
           {/* 🔊 Track volume toggle */}
@@ -758,7 +771,14 @@ export default function App() {
         </div>
       )}
 
-      <DatabaseModal open={dbOpen} onClose={() => setDbOpen(false)} tracks={tracks} />
+      <DatabaseModal
+        open={dbOpen}
+        onClose={() => setDbOpen(false)}
+        tracks={tracks}
+        initialSort={dbSort}
+        initialDynamicFirst={dbDynamicFirst}
+        initialHideTests={dbHideTests}
+      />
 
       {/* Per-user volume (local) */}
       <div
