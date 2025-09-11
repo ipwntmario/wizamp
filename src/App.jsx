@@ -21,6 +21,7 @@ import { useMusicData } from "./data/useMusicData";
 import TrackSelector from "./components/TrackSelector";
 import SectionPanel from "./components/SectionPanel";
 import StatusBar from "./components/StatusBar";
+import DatabaseModal from "./components/DatabaseModal";
 
 // Auto-import all PNGs in /assets/icons at build time
 const _iconModules = import.meta.glob("./assets/icons/*.png", { eager: true });
@@ -89,12 +90,15 @@ export default function App() {
   const [currentModeName, setCurrentModeName] = useState("base");
   const [queuedModeName, setQueuedModeName] = useState(null);
 
-  // Setings menu
+  // Settings modal
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fadeOutSeconds, setFadeOutSeconds] = useState(6); // default 4
   const [pauseFadeSeconds, setPauseFadeSeconds] = useState(() => {
     try { return Number(localStorage.getItem("wizamp_pauseFade")) || 1; } catch { return 1; }
   });
+
+  // Database modal
+  const [dbOpen, setDbOpen] = useState(false);
 
   const [playDisabled, setPlayDisabled] = useState(false);
 
@@ -407,15 +411,38 @@ export default function App() {
       padding: 20
       }}>
 
-      {/* Settings Icon */}
-      <div style={{ position: "absolute", top: 16, right: 16 }}>
+      {/* Top-right controls: DB (left) + Settings (right) */}
+      <div style={{ position: "absolute", top: 16, right: 16, display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          aria-label="Database"
+          onClick={() => setDbOpen(true)}
+          style={{
+            width: 32,
+            height: 32,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "transparent",
+            border: "none",
+            fontSize: 20,
+            cursor: "pointer",
+          }}
+          title="Database"
+        >
+          🗄️
+        </button>
         <button
           aria-label="Settings"
           onClick={() => setSettingsOpen(true)}
           style={{
+            width: 32,
+            height: 32,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             background: "transparent",
             border: "none",
-            fontSize: 22,
+            fontSize: 20,
             cursor: "pointer",
           }}
           title="Settings"
@@ -730,6 +757,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <DatabaseModal open={dbOpen} onClose={() => setDbOpen(false)} tracks={tracks} />
 
       {/* Per-user volume (local) */}
       <div
