@@ -11,12 +11,14 @@ export default function DatabaseModal({
   onClose,
   tracks, // { [trackName]: { defaultDisplayName, basePath, simple, test?, ... } }
   // Preferences (optional; if not passed, sensible defaults are used)
-  sortMode = "alpha-asc",         // "alpha-asc" | "alpha-desc" | "original"
+  sortMode = "alpha-asc",     // "alpha-asc" | "alpha-desc"
   dynamicFirst = true,        // dynamic tracks grouped before simple (only for alpha sorts)
   hideTests = false,          // hide test tracks entirely
   onChangeSort,
   onChangeDynamicFirst,
   onChangeHideTests,
+  pinned,                     // Set<string>
+  onTogglePin,      // (name) => void
 }) {
   const [expandedTracks, setExpandedTracks] = useState(() => new Set());
   const [expandedSections, setExpandedSections] = useState(() => new Set()); // keys: `${track}::${sectionKey}`
@@ -24,44 +26,48 @@ export default function DatabaseModal({
   const [loadingTrack, setLoadingTrack] = useState(null);
 
   // --- Sorting (tracks only) ---
+  // group → sorted group → concat
   const sortedTrackNames = useMemo(() => {
     if (!tracks) return [];
-
     const entries = Object.entries(tracks);
 
-    // Split tests from non-tests (tests retain original order at top if not hidden)
-    const testEntries = entries.filter(([name, t]) => isTest(name, t));
-    const nonTestEntries = entries.filter(([name, t]) => !isTest(name, t));
+    // Filter out tests if requested
+    let filtered = hideTests ? entries.filter(([n,t]) => !isTest(n,t)) : entries.slice();
 
-    // Hide tests?
-    const testBlock = hideTests ? [] : testEntries.map(([name]) => name);
+    // Sort comparator (alpha asc/desc)
+    const cmp = (a, b) => {
+      const an = a[1]?.defaultDisplayName || a[0];
+      const bn = b[1]?.defaultDisplayName || b[0];
+      return an.localeCompare(bn);
+    };
+    if (sortMode === "alpha-asc") filtered.sort(cmp);
+    else if (sortMode === "alpha-desc") filtered.sort((a,b) => -cmp(a,b));
 
-    // Sort the non-test block based on sortMode
-    let working = [...nonTestEntries];
-
-    if (sortMode === "alpha-asc" || sortMode === "alpha-desc") {
-      // sort by defaultDisplayName || name
-      const cmp = (a, b) => {
-        const an = a[1]?.defaultDisplayName || a[0];
-        const bn = b[1]?.defaultDisplayName || b[0];
-        return an.localeCompare(bn);
-      };
-      working.sort(cmp);
-      if (sortMode === "alpha-desc") working.reverse();
-
-      // dynamic-first (only for alpha sorts)
-      if (dynamicFirst) {
-        const dyn = working.filter(([_, t]) => isDynamic(t)).map(([name]) => name);
-        const simple = working.filter(([_, t]) => !isDynamic(t)).map(([name]) => name);
-        return [...testBlock, ...dyn, ...simple];
-      }
-
-      return [...testBlock, ...working.map(([name]) => name)];
+    // Partition into four groups
+    const pinnedDyn = [];
+    const pinnedSimple = [];
+    const unpinnedDyn = [];
+    const unpinnedSimple = [];
+    for (const [name, t] of filtered) {
+      const p = pinned?.has(name);
+      const d = isDynamic(t);
+      if (p && d) pinnedDyn.push(name);
+      else if (p && !d) pinnedSimple.push(name);
+      else if (!p && d) unpinnedDyn.push(name);
+      else unpinnedSimple.push(name);
     }
 
-    // "original": keep given order for non-tests
-    return [...testBlock, ...working.map(([name]) => name)];
-  }, [tracks, sortMode, dynamicFirst, hideTests]);
+    // If dynamicFirst is false, within UNPINNED we keep simple before dynamic? (You asked dynamicFirst applies to alpha sorts only.)
+    // We'll honor dynamicFirst for unpinned ordering only:
+    const unpinnedOrdered = dynamicFirst ? [...unpinnedDyn, ...unpinnedSimple]
+                                        : [...unpinnedSimple, ...unpinnedDyn];
+
+    // Pinned always on top, but preserve dynamic first inside the pinned block as well.
+    const pinnedOrdered = dynamicFirst ? [...pinnedDyn, ...pinnedSimple]
+                                      : [...pinnedSimple, ...pinnedDyn];
+
+    return [...pinnedOrdered, ...unpinnedOrdered];
+  }, [tracks, sortMode, dynamicFirst, hideTests, pinned]);
 
   const fetchSectionsIfNeeded = async (trackName) => {
     if (sectionsByTrack[trackName]) return;
@@ -175,7 +181,6 @@ export default function DatabaseModal({
             >
               <option value="alpha-asc">alphabetical (ascending)</option>
               <option value="alpha-desc">alphabetical (descending)</option>
-              <option value="original">original</option>
             </select>
           </label>
 
@@ -239,25 +244,55 @@ export default function DatabaseModal({
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "24px 1fr",
+                      gridTemplateColumns: "24px 24px 1fr", // pin, expand, label
                       padding: "6px 12px",
                       borderBottom: "1px solid #3a3a3a",
                       alignItems: "center"
                     }}
                   >
+                    {/* 📌 pin button (blank when not pinned) */}
+                    <button
+                      onClick={() => onTogglePin?.(trackName)}
+                      style={{
+                        width: 20, height: 20,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "transparent",
+                        border: "1px solid #666",          // keep subtle square
+                        color: "white",
+                        borderRadius: 4,
+                        fontSize: 12, lineHeight: 1, padding: 0,
+                        cursor: "pointer",
+                        opacity: 0.95
+                      }}
+                      title={pinned?.has(trackName) ? "Unpin" : "Pin"}
+                    >
+                      {pinned?.has(trackName) ? "📌" : ""}  {/* ← only show icon when pinned */}
+                    </button>
+
+                    {/* +/- expand — borderless now */}
                     <button
                       onClick={() => toggleTrack(trackName)}
                       style={{
-                        width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center",
-                        background: "transparent", border: "1px solid #666", color: "white",
-                        borderRadius: 4, fontSize: 12, lineHeight: 1, padding: 0, cursor: "pointer"
+                        width: 20, height: 20,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "transparent",
+                        border: "none",                     // ← borderless
+                        color: "white",
+                        borderRadius: 4,
+                        fontSize: 12, lineHeight: 1, padding: 0,
+                        cursor: "pointer"
                       }}
                       title={expanded ? "Collapse" : "Expand"}
                     >
                       {expanded ? "−" : "+"}
                     </button>
+
+                    {/* label with 📌 (pinned), 🚩 (test), 🔷 (dynamic) */}
                     <div style={{ fontWeight: 700 }}>
-                      {prefix}{label}
+                      {pinned?.has(trackName) ? "📌 " : ""}  {/* ← marker changed to 📌 */}
+                      {isTest(trackName, t) ? "🚩 " : ""}
+                      {isDynamic(t) ? "🔷 " : ""}
+                      {t?.defaultDisplayName || trackName}
                     </div>
                   </div>
 

@@ -105,6 +105,26 @@ export default function App() {
   const [dbDynamicFirst, setDbDynamicFirst] = useState(() => localStorage.getItem("wizamp_dbDynamicFirst") !== "false"); // default true
   const [dbHideTests, setDbHideTests] = useState(() => localStorage.getItem("wizamp_dbHideTests") === "true");
 
+  // Pinned tracks (persisted as array of names)
+  const [pinned, setPinned] = useState(() => {
+    try {
+      const raw = localStorage.getItem("wizamp_pinned");
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch {
+      return new Set();
+    }
+  });
+
+  const togglePin = (name) => {
+    setPinned(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
   const [playDisabled, setPlayDisabled] = useState(false);
 
   const [statusOpen, setStatusOpen] = useState(false);  // collapsible status
@@ -211,6 +231,13 @@ export default function App() {
   useEffect(() => { localStorage.setItem("wizamp_dbSort", dbSort); }, [dbSort]);
   useEffect(() => { localStorage.setItem("wizamp_dbDynamicFirst", String(dbDynamicFirst)); }, [dbDynamicFirst]);
   useEffect(() => { localStorage.setItem("wizamp_dbHideTests", String(dbHideTests)); }, [dbHideTests]);
+
+  // Pinned effect
+  useEffect(() => {
+    try {
+      localStorage.setItem("wizamp_pinned", JSON.stringify(Array.from(pinned)));
+    } catch {}
+  }, [pinned]);
 
 
   // When a track is selected, point UI at its first section
@@ -481,6 +508,7 @@ export default function App() {
             sortMode={dbSort}
             dynamicFirst={dbDynamicFirst}
             hideTests={dbHideTests}
+            pinned={pinned}
           />
 
           {/* 🔊 Track volume toggle */}
@@ -538,7 +566,7 @@ export default function App() {
       {/* Now Playing (shows what's actually loaded/ready) */}
       {playingTrackName && (
         <div style={{ marginTop: -8, marginBottom: 12, display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span style={{ color: "#aaa", fontSize: 16, fontWeight: 600 }}>Track:</span>
+          <span style={{ color: "#aaa", fontSize: 14, fontWeight: 100 }}>Track:</span>
           <span style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>
             {tracks[playingTrackName]?.defaultDisplayName || playingTrackName}
           </span>
@@ -550,7 +578,7 @@ export default function App() {
         <section style={{ marginBottom: 16 }}>
           {isDynamicPlayingTrack && (
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-              <span style={{ color: "#aaa", fontSize: 14, fontWeight: 600 }}>Section:</span>
+              <span style={{ color: "#aaa", fontSize: 14, fontWeight: 100 }}>Section:</span>
               <span style={{ color: "#fff", fontSize: 18, fontWeight: 700 }}>
                 {sections[currentSectionName]?.defaultDisplayName ?? currentSectionName}
               </span>
@@ -781,6 +809,8 @@ export default function App() {
         onChangeSort={setDbSort}
         onChangeDynamicFirst={setDbDynamicFirst}
         onChangeHideTests={setDbHideTests}
+        pinned={pinned}
+        onTogglePin={togglePin}
       />
 
       {/* Per-user volume (local) */}
