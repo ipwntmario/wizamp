@@ -775,9 +775,12 @@ export default function App() {
         open={dbOpen}
         onClose={() => setDbOpen(false)}
         tracks={tracks}
-        initialSort={dbSort}
-        initialDynamicFirst={dbDynamicFirst}
-        initialHideTests={dbHideTests}
+        sortMode={dbSort}
+        dynamicFirst={dbDynamicFirst}
+        hideTests={dbHideTests}
+        onChangeSort={setDbSort}
+        onChangeDynamicFirst={setDbDynamicFirst}
+        onChangeHideTests={setDbHideTests}
       />
 
       {/* Per-user volume (local) */}

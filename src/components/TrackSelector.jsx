@@ -53,7 +53,7 @@ export default function TrackSelector({
       {orderedNames.map((name) => {
         const t = tracks[name];
         const labelBase = t?.defaultDisplayName || name;
-        const prefix = `${isTest(name, t) ? "🚩 " : ""}${isDynamic(t) ? "🔷 " : ""}`;
+        const prefix = `${isTest(name, t) ? "🧪 " : ""}${isDynamic(t) ? "🔷 " : ""}`;
         return (
           <option key={name} value={name}>
             {prefix}{labelBase}

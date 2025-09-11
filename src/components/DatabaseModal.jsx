@@ -11,19 +11,17 @@ export default function DatabaseModal({
   onClose,
   tracks, // { [trackName]: { defaultDisplayName, basePath, simple, test?, ... } }
   // Preferences (optional; if not passed, sensible defaults are used)
-  initialSort = "alpha-asc",         // "alpha-asc" | "alpha-desc" | "original"
-  initialDynamicFirst = true,        // dynamic tracks grouped before simple (only for alpha sorts)
-  initialHideTests = false,          // hide test tracks entirely
+  sortMode = "alpha-asc",         // "alpha-asc" | "alpha-desc" | "original"
+  dynamicFirst = true,        // dynamic tracks grouped before simple (only for alpha sorts)
+  hideTests = false,          // hide test tracks entirely
+  onChangeSort,
+  onChangeDynamicFirst,
+  onChangeHideTests,
 }) {
   const [expandedTracks, setExpandedTracks] = useState(() => new Set());
   const [expandedSections, setExpandedSections] = useState(() => new Set()); // keys: `${track}::${sectionKey}`
   const [sectionsByTrack, setSectionsByTrack] = useState({});               // cache: { trackName: { sections } }
   const [loadingTrack, setLoadingTrack] = useState(null);
-
-  // Controls
-  const [sortMode, setSortMode] = useState(initialSort);
-  const [dynamicFirst, setDynamicFirst] = useState(initialDynamicFirst);
-  const [hideTests, setHideTests] = useState(initialHideTests);
 
   // --- Sorting (tracks only) ---
   const sortedTrackNames = useMemo(() => {
@@ -172,7 +170,7 @@ export default function DatabaseModal({
             <span style={{ color: "#bbb" }}>Sort:</span>
             <select
               value={sortMode}
-              onChange={(e) => setSortMode(e.target.value)}
+              onChange={(e) => onChangeSort?.(e.target.value)}
               style={{ padding: "4px 6px", borderRadius: 6, background: "#222", color: "white", border: "1px solid #555" }}
             >
               <option value="alpha-asc">alphabetical (ascending)</option>
@@ -185,7 +183,7 @@ export default function DatabaseModal({
             <input
               type="checkbox"
               checked={dynamicFirst}
-              onChange={(e) => setDynamicFirst(e.target.checked)}
+              onChange={(e) => onChangeDynamicFirst?.(e.target.checked)}
               disabled={!(sortMode === "alpha-asc" || sortMode === "alpha-desc")}
             />
             <span style={{ color: "#bbb" }}>keep dynamic on top</span>
@@ -195,7 +193,7 @@ export default function DatabaseModal({
             <input
               type="checkbox"
               checked={hideTests}
-              onChange={(e) => setHideTests(e.target.checked)}
+              onChange={(e) => onChangeHideTests?.(e.target.checked)}
             />
             <span style={{ color: "#bbb" }}>hide test tracks</span>
           </label>
@@ -233,7 +231,7 @@ export default function DatabaseModal({
               const dyn = isDynamic(t);
               const test = isTest(trackName, t);
               const label = `${dyn ? "🔷 " : ""}${t?.defaultDisplayName || trackName}`;
-              const prefix = test ? "🚩 " : "";
+              const prefix = test ? "🧪 " : "";
 
               return (
                 <div key={trackName}>
