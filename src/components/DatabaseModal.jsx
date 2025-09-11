@@ -270,7 +270,8 @@ export default function DatabaseModal({
                       {sections && Object.entries(sections).map(([sectionKey, s]) => {
                         const secKey = `${trackName}::${sectionKey}`;
                         const secExpanded = expandedSections.has(secKey);
-                        const buttonLabel = s?.defaultDisplayName ?? sectionKey; // "button name"
+                        const titleLabel  = s?.defaultDisplayName ?? sectionKey;
+                        const buttonLabel = s?.defaultButtonName; // "button name"
                         const sectionGray = t?.simple === true;
 
                         return (
@@ -296,9 +297,13 @@ export default function DatabaseModal({
                                 {secExpanded ? "−" : "+"}
                               </button>
                               <div>
-                                <span style={{ fontWeight: 600 }}>{sectionKey}</span>
-                                <span style={{ color: "#9a9a9a" }}>{", button: "}</span>
-                                <span>{buttonLabel}</span>
+                                <span style={{ fontWeight: 600 }}>{titleLabel}</span>
+                                {buttonLabel && (
+                                    <>
+                                    <span style={{ color: "#9a9a9a" }}>{", button: "}</span>
+                                    <span>{buttonLabel}</span>
+                                    </>
+                                )}
                               </div>
                             </div>
 

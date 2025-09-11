@@ -24,6 +24,11 @@ export default function SectionPanel({
   const modes = ["base", ...extraModes]; // base always implied
   const showModes = modes.length > 1 && typeof onToggleQueuedMode === "function";
 
+  const getSectionButtonLabel = (name) => {
+    const s = sections?.[name];
+    return s?.defaultButtonName ?? s?.defaultDisplayName ?? name;
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Section transition buttons */}
@@ -69,14 +74,14 @@ export default function SectionPanel({
                 }}
                 title={sections[name]?.defaultDisplayName ?? name}
               >
-                {sections[name]?.defaultDisplayName ?? name}
+                {getSectionButtonLabel(name)}
               </button>
             );
           })}
         </div>
       )}
 
-            {/* Modes row (if multiple) */}
+      {/* Modes row (if multiple) */}
       {showModes && (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           {modes.map((mode) => {
