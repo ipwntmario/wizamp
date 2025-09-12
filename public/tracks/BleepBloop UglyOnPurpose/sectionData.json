@@ -6,13 +6,13 @@
       "nextSection": "Main",
       "type": "auto"
     },
-    "BleepBloopTEST_main": {
+    "Main": {
       "defaultDisplayName": "Main",
       "firstClip": "Main_a",
       "nextSection": "End",
       "type": ""
     },
-    "BleepBloopTEST_end": {
+    "End": {
       "defaultDisplayName": "End",
       "firstClip": "End",
       "type": "end"

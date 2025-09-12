@@ -1,6 +1,6 @@
 {
   "clips": {
-    "IntroTEST": {
+    "Intro": {
       "file": {
         "base": "IntroTEST.ogg"
       },
@@ -10,7 +10,7 @@
         "IntroTEST"
       ]
     },
-    "Main_aTEST": {
+    "Main_a": {
       "file": {
         "base": "Main_aTEST.ogg"
       },

@@ -51,6 +51,10 @@ export class AudioEngine {
 
     // cache section->availableModes (includes "base")
     this.sectionModes = new Map();
+
+    // stop-state
+    this._stopPendingUntil = 0;     // audio time when the global stop fade ends (0 = none)
+    this._stopFinishTimer = null;   // timeout id for finishing stop
   }
 
   get isPlaying() {
@@ -76,7 +80,13 @@ export class AudioEngine {
     const val = Math.max(0, Math.min(1, Number(v) || 0));
     this.userGain = val;
     if (this.masterGain) {
-      this.masterGain.gain.setValueAtTime(val, ctx.currentTime);
+      // If a stop fade is in progress, don't stomp the ramp.
+      const now = ctx.currentTime;
+      if (this._stopPendingUntil && now < this._stopPendingUntil) {
+        // defer applying; master is ramping to 0
+      } else {
+        this.masterGain.gain.setValueAtTime(val, now);
+      }
     }
   }
 
@@ -222,44 +232,71 @@ export class AudioEngine {
   // ----- stop -----
   stopTrack(withFade = true) {
     if (!this.audioCtx) return;
-    this.clearScheduled();
 
-    const fade = Math.max(0, Number(this.fadeOutSeconds ?? 0));
-    const now = this.audioCtx.currentTime;
+    const ctx = this.audioCtx;
+    const now = ctx.currentTime;
+    const fade = withFade ? Math.max(0, Number(this.fadeOutSeconds ?? 0)) : 0;
 
-    const finish = () => {
+    // If a stop is already pending, extend or keep the earliest finish
+    if (this._stopFinishTimer) {
+      clearTimeout(this._stopFinishTimer);
+      this._stopFinishTimer = null;
+    }
+
+    if (fade > 0) {
+      // Let all existing transitions continue. Just fade the MASTER to 0.
+      try {
+        const g = this.masterGain.gain;
+        g.cancelScheduledValues(now);
+        // start from current master value (likely == userGain)
+        g.setValueAtTime(g.value, now);
+        g.linearRampToValueAtTime(0, now + fade);
+      } catch {}
+
+      this._stopPendingUntil = now + fade;
+
+      this._stopFinishTimer = setTimeout(() => {
+        // Finalize stop
+        Object.values(this.activeClips).forEach(({ source }) => {
+          try { source && source.stop(); } catch {}
+        });
+        // Now that we’re truly stopped, kill any lingering timeouts (future transitions)
+        this.clearScheduled();
+
+        this.activeClips = {};
+        this.lastPlayingClipName = null;
+        this._isPreloaded = false;
+        this.isPaused = false;
+        this.pausedInfo = null;
+
+        // Restore master to userGain for the next start
+        try {
+          this.masterGain.gain.cancelScheduledValues(ctx.currentTime);
+          this.masterGain.gain.setValueAtTime(this.userGain, ctx.currentTime);
+        } catch {}
+
+        this._stopPendingUntil = 0;
+        this._stopFinishTimer = null;
+        this.onStatus?.("Stopped");
+      }, fade * 1000 + 50);
+    } else {
+      // Instant stop: stop sources and clear schedules
       Object.values(this.activeClips).forEach(({ source }) => {
-        try { source.stop(); } catch {}
+        try { source && source.stop(); } catch {}
       });
+      this.clearScheduled();
       this.activeClips = {};
       this.lastPlayingClipName = null;
       this._isPreloaded = false;
+      this.isPaused = false;
+      this.pausedInfo = null;
+      try {
+        this.masterGain.gain.cancelScheduledValues(now);
+        this.masterGain.gain.setValueAtTime(this.userGain, now);
+      } catch {}
+      this._stopPendingUntil = 0;
+      this._stopFinishTimer = null;
       this.onStatus?.("Stopped");
-    };
-
-    if (withFade && fade > 0) {
-      Object.values(this.activeClips).forEach(({ gainNode }) => {
-        if (!gainNode) return;
-        try {
-          gainNode.gain.cancelScheduledValues(now);
-          gainNode.gain.setValueAtTime(gainNode.gain.value, now);
-          gainNode.gain.linearRampToValueAtTime(0, now + fade);
-        } catch {}
-      });
-      const id = setTimeout(finish, fade * 1000 + 60);
-      this.scheduledTimeouts.push(id);
-    } else {
-      // instant
-      Object.values(this.activeClips).forEach(({ source, gainNode }) => {
-        try {
-          if (gainNode) {
-            gainNode.gain.cancelScheduledValues(now);
-            gainNode.gain.setValueAtTime(0, now);
-          }
-        } catch {}
-        try { source && source.stop(); } catch {}
-      });
-      finish();
     }
   }
 
