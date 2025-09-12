@@ -169,11 +169,13 @@ export default function App() {
   };
 
   const getSectionButton = (trackName, sectionKey) => {
-    // override > defaultButtonName > defaultDisplayName > key
-    const override = names?.sections?.[trackName]?.[sectionKey]?.buttonName;
-    if (override != null && override !== "") return override;
+    // order: explicit button override → defaultButtonName → effective section title (renames) → key
+    const overrideBtn = names?.sections?.[trackName]?.[sectionKey]?.buttonName;
+    if (overrideBtn != null && overrideBtn !== "") return overrideBtn;
     const s = sections?.[sectionKey];
-    return s?.defaultButtonName ?? s?.defaultDisplayName ?? sectionKey;
+    if (s?.defaultButtonName) return s.defaultButtonName;
+    // fall back to the *renamed* section title if present
+    return getSectionTitle(trackName, sectionKey) ?? sectionKey;
   };
 
   const getBaseModeName = (trackName, sectionKey) => {

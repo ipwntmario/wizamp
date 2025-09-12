@@ -8,25 +8,25 @@ export default function SectionPanel({
   onToggleQueuedSection,
   largeButtons = false,
 
-  // NEW: modes
+  // modes
   currentModeName = "base",
   queuedModeName = null,
-  onToggleQueuedMode,
+  onToggleQueuedMode = () => {},   // <-- default no-op so modes row can render
   getBaseModeLabel = () => "base",
-  // NEW: rename-aware helpers from App (all optional)
+
+  // rename-aware helpers from App (all optional)
   getSectionTitle,               // (sectionKey) => string
   getSectionButtonLabel,         // (sectionKey) => string
-  getModeLabel,                  // (sectionKey, "base"|modeName) => string
+  getModeLabel,                  // (sectionKey, "__base__"|modeName) => string
 }) {
   const current = sections[currentSectionName];
   const nextSections = toArray(current?.nextSection);
-
   if (!current) return null;
 
   // ----- MODES ROW -----
   const extraModes = toArray(current?.modes);
   const modes = ["base", ...extraModes]; // base always implied
-  const showModes = modes.length > 1 && typeof onToggleQueuedMode === "function";
+  const showModes = modes.length > 1;    // <-- no longer depends on handler type
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -54,6 +54,22 @@ export default function SectionPanel({
               ? { padding: "10px 20px", fontSize: 16 }
               : { padding: "8px 14px", fontSize: 14 };
 
+            // Title tooltip (rename-aware if helper provided)
+            const titleText = getSectionTitle
+              ? getSectionTitle(name)
+              : (sections[name]?.defaultDisplayName ?? name);
+
+            // Visible button label:
+            // 1) App-provided override helper (already rename-aware)
+            // 2) defaultButtonName if present
+            // 3) rename-aware section title (so a renamed section shows on the button)
+            // 4) fallback to raw key
+            const label =
+              (getSectionButtonLabel && getSectionButtonLabel(name)) ??
+              sections?.[name]?.defaultButtonName ??
+              (getSectionTitle ? getSectionTitle(name) : (sections?.[name]?.defaultDisplayName ?? name)) ??
+              name;
+
             return (
               <button
                 key={name}
@@ -71,17 +87,9 @@ export default function SectionPanel({
                   background, color, opacity,
                   minWidth: 120
                 }}
-                title={
-                  getSectionTitle
-                    ? getSectionTitle(name)
-                    : (sections[name]?.defaultDisplayName ?? name)
-                }
+                title={titleText}
               >
-                {getSectionButtonLabel
-                  ? getSectionButtonLabel(name)
-                  : (sections?.[name]?.defaultButtonName
-                    ?? sections?.[name]?.defaultDisplayName
-                    ?? name)}
+                {label}
               </button>
             );
           })}
@@ -103,8 +111,8 @@ export default function SectionPanel({
             const label = getModeLabel
               ? getModeLabel(currentSectionName, mode === "base" ? "__base__" : mode)
               : (mode === "base"
-                ? (getBaseModeLabel(currentSectionName) || "base")
-                : mode);
+                  ? (getBaseModeLabel(currentSectionName) || "base")
+                  : mode);
 
             return (
               <button
