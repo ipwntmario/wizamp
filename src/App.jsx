@@ -565,6 +565,16 @@ export default function App() {
             pinned={pinned}
             names={names}                 // NEW
           />
+        </div>
+      </section>
+
+      {/* Now Playing (shows what's actually loaded/ready) */}
+      {playingTrackName && (
+        <div style={{ marginTop: -8, marginBottom: 12, display: "flex", alignItems: "baseline", gap: 8 }}>
+          <span style={{ color: "#aaa", fontSize: 14, fontWeight: 100 }}>Track:</span>
+          <span style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>
+            {getTrackTitle(playingTrackName)}
+          </span>
 
           {/* 🔊 Track volume toggle */}
           {selectedTrack && (
@@ -574,7 +584,7 @@ export default function App() {
                 onClick={() => setTrackVolUIOpen(o => !o)}
                 style={{
                   background: "transparent",
-                  border: "1px solid #555",
+                  border: "none",
                   color: "white",
                   borderRadius: 8,
                   width: 36, height: 36,                 // square 🔲
@@ -585,7 +595,10 @@ export default function App() {
                 }}
                 title="Track volume (set for all players)"
               >
-                🔊
+                {trackVolume === 1
+                  ? "🔊"
+                  : "🔈"
+                }
               </button>
 
               {trackVolUIOpen && (
@@ -615,16 +628,6 @@ export default function App() {
               )}
             </div>
           )}
-        </div>
-      </section>
-
-      {/* Now Playing (shows what's actually loaded/ready) */}
-      {playingTrackName && (
-        <div style={{ marginTop: -8, marginBottom: 12, display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span style={{ color: "#aaa", fontSize: 14, fontWeight: 100 }}>Track:</span>
-          <span style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>
-            {getTrackTitle(playingTrackName)}
-          </span>
         </div>
       )}
 
@@ -678,8 +681,8 @@ export default function App() {
 
       {/* Clip Information (progress bar from 0 to loopPoint) */}
       <section style={{ marginBottom: 16 }}>
-        <div style={{ height: 10, background: "#444", borderRadius: 6, overflow: "hidden" }} aria-label="Clip position">
-          <div style={{ width: `${Math.round(clipProgress * 100)}%`, height: "100%", background: "#dac189", transition: "width 80ms linear" }} />
+        <div style={{ height: 10, background: "#363119", borderRadius: 6, overflow: "hidden" }} aria-label="Clip position">
+          <div style={{ width: `${Math.round(clipProgress * 100)}%`, height: "100%", background: "#E0C766", transition: "width 80ms linear" }} />
         </div>
       </section>
 
@@ -693,7 +696,7 @@ export default function App() {
             aria-pressed={autoplay}
             style={{
               width: 36, height: 36, borderRadius: "50%",
-              border: "1px solid #555", background: autoplay ? "#2f6b76" : "transparent",
+              border: "1px solid #5C5C50", background: autoplay ? "#9C9160" : "#363119",
               color: "white", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center"
             }}
           >
@@ -722,9 +725,9 @@ export default function App() {
             style={{
               width: 52, height: 52, borderRadius: "50%",
               border: "1px solid #555",
-              background: isLoadingTrack ? "#333"
-                        : (isPlaying ? "#000"
-                        : (isPaused ? "#0aa" : "#0aa")),
+              background: isLoadingTrack ? "#5C5C50"
+                        : (isPlaying ? "#363119"
+                        : (isPaused ? "#E0C766" : "#E0C766")),
               color: isLoadingTrack ? "#888" : (isPlaying ? "white" : "black"),
               fontSize: 18,
               cursor: (playDisabled || isLoadingTrack) ? "not-allowed" : "pointer",
@@ -741,7 +744,7 @@ export default function App() {
               style={{
                 width: 40, height: 40, borderRadius: "50%",
                 border: "1px solid #555",
-                background: (isPlaying && tracks[playingTrackName]?.simple === true) ? "#ad2f49" : "#000",
+                background: (isPlaying && tracks[playingTrackName]?.simple === true) ? "#B34745" : "#363119",
                 color: "white",
                 cursor: isPlaying ? "pointer" : "default",
                 display: "inline-flex", alignItems: "center", justifyContent: "center"

@@ -373,7 +373,7 @@ export default function DatabaseModal({
                       {expanded ? "−" : "+"}
                     </button>
 
-                    {/* label with 📌 (pinned), 🚩 (test), 🔷 (dynamic) */}
+                    {/* label with 📌 (pinned), 🧪 (test), 🔷 (dynamic) */}
                     <div
                       style={{ fontWeight: 700, cursor: "pointer", padding: "2px 0" }}
                       onClick={() => toggleTrack(trackName)}
@@ -381,7 +381,7 @@ export default function DatabaseModal({
                       title="Click to expand/collapse • Double-click to rename"
                     >
                       {pinned?.has(trackName) ? "📌 " : ""}
-                      {test ? "🚩 " : ""}
+                      {test ? "🧪 " : ""}
                       {dyn ? "🔷 " : ""}
                       {titleForTrack(trackName, t)}
                     </div>

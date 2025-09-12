@@ -64,7 +64,7 @@ export default function TrackSelector({
         const t = tracks[name];
         const label =
           `${pinned?.has(name) ? "📌 " : ""}` +
-          `${t?.test ? "🚩 " : ""}` +
+          `${t?.test ? "🧪 " : ""}` +
           `${t?.simple === false ? "🔷 " : ""}` +
           `${titleFor(name, t)}`;
         return (

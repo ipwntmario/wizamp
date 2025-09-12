@@ -40,15 +40,19 @@ export default function SectionPanel({
             const isEnd = targetSection?.type === "end";
 
             // Base styles
-            let background = "#0b4a74";
+            let background = "#3B3F6B";
             let color = "white";
             let border = "1px solid #555";
             let opacity = 1;
 
-            if (isEnd) background = "#ad2f49"; // red end sections
-            if (isQueued && !isAutoLocked) { background = "#ffe2a0"; color = "black"; }
-            if (isAutoLocked && !isQueued) { background = "#696969"; opacity = 0.9; }
-            if (isAutoLocked && isQueued) { background = "#988d61"; opacity = 0.9; }
+            if (!isEnd && isQueued && !isAutoLocked) { background = "#4E5588"; }
+            if (!isEnd && !isQueued && isAutoLocked) { background = "#6B6C72"; opacity = 0.9; }
+            if (!isEnd && isQueued && isAutoLocked) { background = "#5C5C77"; opacity = 0.9; }
+
+            if (isEnd && !isQueued && !isAutoLocked) { background = "#B34745"; }
+            if (isEnd && isQueued && !isAutoLocked) { background = "#C86462"; }
+            if (isEnd && !isQueued && isAutoLocked) { background = "#705C5C"; opacity = 0.9; }
+            if (isEnd && isQueued && isAutoLocked) { background = "#806060"; opacity = 0.9; }
 
             const sizeStyle = largeButtons
               ? { padding: "10px 20px", fontSize: 16 }
@@ -103,10 +107,10 @@ export default function SectionPanel({
             const isActive = currentModeName === mode;
             const isQueued = queuedModeName === mode && !isActive;
 
-            let background = "#6d528c"; // default
+            let background = "#8A4F9F"; // default
             let color = "white";
-            if (isQueued) { background = "#d299ba"; color = "black"; }
-            if (isActive) { background = "white"; color = "black"; }
+            if (isQueued) { background = "#9E6FB4"; color = "black"; }
+            if (isActive) { background = "#E0C8E9"; color = "black"; }
 
             const label = getModeLabel
               ? getModeLabel(currentSectionName, mode === "base" ? "__base__" : mode)
