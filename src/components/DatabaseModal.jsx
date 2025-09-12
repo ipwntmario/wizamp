@@ -1,4 +1,3 @@
-// src/components/DatabaseModal.jsx
 import { useMemo, useState } from "react";
 
 /** Helper: consider a track "dynamic" when simple === false */
@@ -10,20 +9,26 @@ export default function DatabaseModal({
   open,
   onClose,
   tracks, // { [trackName]: { defaultDisplayName, basePath, simple, test?, ... } }
-  // Preferences (optional; if not passed, sensible defaults are used)
+  // Controlled prefs
   sortMode = "alpha-asc",     // "alpha-asc" | "alpha-desc"
-  dynamicFirst = true,        // dynamic tracks grouped before simple (only for alpha sorts)
-  hideTests = false,          // hide test tracks entirely
+  dynamicFirst = true,
+  hideTests = false,
   onChangeSort,
   onChangeDynamicFirst,
   onChangeHideTests,
   pinned,                     // Set<string>
-  onTogglePin,      // (name) => void
+  onTogglePin,                // (name) => void
 }) {
   const [expandedTracks, setExpandedTracks] = useState(() => new Set());
   const [expandedSections, setExpandedSections] = useState(() => new Set()); // keys: `${track}::${sectionKey}`
   const [sectionsByTrack, setSectionsByTrack] = useState({});               // cache: { trackName: { sections } }
   const [loadingTrack, setLoadingTrack] = useState(null);
+
+  // Rename modal state
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState(null); // { type: 'track'|'section'|'mode', trackName, sectionKey?, modeName?, isBase? }
+  const [renameFields, setRenameFields] = useState({});   // { name, button } depends on type
+  const [renameDefaults, setRenameDefaults] = useState({}); // { nameDefault, buttonDefault }
 
   // --- Sorting (tracks only) ---
   // group → sorted group → concat
@@ -57,14 +62,11 @@ export default function DatabaseModal({
       else unpinnedSimple.push(name);
     }
 
-    // If dynamicFirst is false, within UNPINNED we keep simple before dynamic? (You asked dynamicFirst applies to alpha sorts only.)
-    // We'll honor dynamicFirst for unpinned ordering only:
+    // Dynamic-first grouping inside pinned & unpinned
     const unpinnedOrdered = dynamicFirst ? [...unpinnedDyn, ...unpinnedSimple]
-                                        : [...unpinnedSimple, ...unpinnedDyn];
-
-    // Pinned always on top, but preserve dynamic first inside the pinned block as well.
-    const pinnedOrdered = dynamicFirst ? [...pinnedDyn, ...pinnedSimple]
-                                      : [...pinnedSimple, ...pinnedDyn];
+                                         : [...unpinnedSimple, ...unpinnedDyn];
+    const pinnedOrdered   = dynamicFirst ? [...pinnedDyn, ...pinnedSimple]
+                                         : [...pinnedSimple, ...pinnedDyn];
 
     return [...pinnedOrdered, ...unpinnedOrdered];
   }, [tracks, sortMode, dynamicFirst, hideTests, pinned]);
@@ -127,6 +129,53 @@ export default function DatabaseModal({
     setExpandedTracks(new Set());
     setExpandedSections(new Set());
   };
+
+  // --- Rename helpers ---
+  const openRenameForTrack = (trackName) => {
+    const t = tracks[trackName];
+    const nameDefault = t?.defaultDisplayName || trackName;
+    setRenameTarget({ type: "track", trackName });
+    setRenameDefaults({ nameDefault });
+    setRenameFields({ name: nameDefault });
+    setRenameOpen(true);
+  };
+
+  const openRenameForSection = (trackName, sectionKey) => {
+    const s = sectionsByTrack[trackName]?.[sectionKey] || {};
+    const nameDefault = s?.defaultDisplayName || sectionKey;
+    const buttonDefault = s?.defaultButtonName || "";
+    setRenameTarget({ type: "section", trackName, sectionKey });
+    setRenameDefaults({ nameDefault, buttonDefault });
+    setRenameFields({ name: nameDefault, button: buttonDefault });
+    setRenameOpen(true);
+  };
+
+  const openRenameForMode = (trackName, sectionKey, modeName, isBase) => {
+    const s = sectionsByTrack[trackName]?.[sectionKey] || {};
+    const nameDefault = isBase ? (s?.defaultBaseModeName || "base") : modeName;
+    setRenameTarget({ type: "mode", trackName, sectionKey, modeName, isBase: !!isBase });
+    setRenameDefaults({ nameDefault });
+    setRenameFields({ name: nameDefault });
+    setRenameOpen(true);
+  };
+
+  const closeRename = () => {
+    setRenameOpen(false);
+    setRenameTarget(null);
+    setRenameFields({});
+    setRenameDefaults({});
+  };
+
+  const resetFieldToDefault = (field) => {
+    if (!renameDefaults) return;
+    setRenameFields((prev) => ({
+      ...prev,
+      [field]: renameDefaults[field + "Default"] ?? (field === "button" ? "" : "")
+    }));
+  };
+
+  const nameChanged = renameFields.name !== renameDefaults.nameDefault;
+  const buttonChanged = (renameTarget?.type === "section") && (renameFields.button !== (renameDefaults.buttonDefault ?? ""));
 
   if (!open) return null;
 
@@ -235,8 +284,6 @@ export default function DatabaseModal({
               const sections = sectionsByTrack[trackName];
               const dyn = isDynamic(t);
               const test = isTest(trackName, t);
-              const label = `${dyn ? "🔷 " : ""}${t?.defaultDisplayName || trackName}`;
-              const prefix = test ? "🧪 " : "";
 
               return (
                 <div key={trackName}>
@@ -247,7 +294,8 @@ export default function DatabaseModal({
                       gridTemplateColumns: "24px 24px 1fr", // pin, expand, label
                       padding: "6px 12px",
                       borderBottom: "1px solid #3a3a3a",
-                      alignItems: "center"
+                      alignItems: "center",
+                      userSelect: "none"
                     }}
                   >
                     {/* 📌 pin button (blank when not pinned) */}
@@ -257,7 +305,7 @@ export default function DatabaseModal({
                         width: 20, height: 20,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         background: "transparent",
-                        border: "1px solid #666",          // keep subtle square
+                        border: "1px solid #666",          // subtle square
                         color: "white",
                         borderRadius: 4,
                         fontSize: 12, lineHeight: 1, padding: 0,
@@ -266,17 +314,17 @@ export default function DatabaseModal({
                       }}
                       title={pinned?.has(trackName) ? "Unpin" : "Pin"}
                     >
-                      {pinned?.has(trackName) ? "📌" : ""}  {/* ← only show icon when pinned */}
+                      {pinned?.has(trackName) ? "📌" : ""}
                     </button>
 
-                    {/* +/- expand — borderless now */}
+                    {/* +/- expand — borderless */}
                     <button
                       onClick={() => toggleTrack(trackName)}
                       style={{
                         width: 20, height: 20,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         background: "transparent",
-                        border: "none",                     // ← borderless
+                        border: "none",
                         color: "white",
                         borderRadius: 4,
                         fontSize: 12, lineHeight: 1, padding: 0,
@@ -288,10 +336,15 @@ export default function DatabaseModal({
                     </button>
 
                     {/* label with 📌 (pinned), 🚩 (test), 🔷 (dynamic) */}
-                    <div style={{ fontWeight: 700 }}>
-                      {pinned?.has(trackName) ? "📌 " : ""}  {/* ← marker changed to 📌 */}
-                      {isTest(trackName, t) ? "🚩 " : ""}
-                      {isDynamic(t) ? "🔷 " : ""}
+                    <div
+                      style={{ fontWeight: 700, cursor: "pointer", padding: "2px 0" }}
+                      onClick={() => toggleTrack(trackName)}
+                      onDoubleClick={() => openRenameForTrack(trackName)}
+                      title="Click to expand/collapse • Double-click to rename"
+                    >
+                      {pinned?.has(trackName) ? "📌 " : ""}
+                      {test ? "🚩 " : ""}
+                      {dyn ? "🔷 " : ""}
                       {t?.defaultDisplayName || trackName}
                     </div>
                   </div>
@@ -306,47 +359,71 @@ export default function DatabaseModal({
                         const secKey = `${trackName}::${sectionKey}`;
                         const secExpanded = expandedSections.has(secKey);
                         const titleLabel  = s?.defaultDisplayName ?? sectionKey;
-                        const buttonLabel = s?.defaultButtonName; // "button name"
+                        const buttonLabel = s?.defaultButtonName; // optional
                         const sectionGray = t?.simple === true;
 
                         return (
                           <div key={sectionKey}>
+                            {/* Section row: ↳ • +/- • label */}
                             <div
                               style={{
-                                display: "grid", gridTemplateColumns: "24px 1fr",
+                                display: "grid",
+                                gridTemplateColumns: "24px 24px 1fr", // arrow, expand, label
                                 padding: "6px 12px 6px 36px",
                                 borderBottom: "1px dashed #3a3a3a",
                                 alignItems: "center",
-                                color: sectionGray ? "#9a9a9a" : "inherit"
+                                color: sectionGray ? "#9a9a9a" : "inherit",
+                                userSelect: "none"
                               }}
                             >
+                              {/* ↳ to show hierarchy */}
+                              <div style={{ textAlign: "center", opacity: 0.9 }}>
+                                {/* ↳ */}
+                              </div>
+
+                              {/* expand */}
                               <button
                                 onClick={() => toggleSection(trackName, sectionKey)}
                                 style={{
-                                  width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center",
-                                  background: "transparent", border: "1px solid #666", color: "white",
-                                  borderRadius: 4, fontSize: 12, lineHeight: 1, padding: 0, cursor: "pointer"
+                                  width: 20, height: 20,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  background: "transparent",
+                                  border: "none",
+                                  color: "white",
+                                  borderRadius: 4,
+                                  fontSize: 12, lineHeight: 1, padding: 0,
+                                  cursor: "pointer"
                                 }}
                                 title={secExpanded ? "Collapse" : "Expand"}
                               >
                                 {secExpanded ? "−" : "+"}
                               </button>
-                              <div>
-                                <span style={{ fontWeight: 600 }}>{titleLabel}</span>
+
+                              {/* label (click/ dblclick) */}
+                              <div
+                                style={{ cursor: "pointer", padding: "2px 0" }}
+                                onClick={() => toggleSection(trackName, sectionKey)}
+                                onDoubleClick={() => openRenameForSection(trackName, sectionKey)}
+                                title="Click to expand/collapse • Double-click to rename"
+                              >
+                                <span style={{ fontWeight: 100 }}>{titleLabel}</span>
                                 {buttonLabel && (
-                                    <>
+                                  <>
                                     <span style={{ color: "#9a9a9a" }}>{", button: "}</span>
                                     <span>{buttonLabel}</span>
-                                    </>
+                                  </>
                                 )}
                               </div>
                             </div>
 
-                            {/* Modes */}
+                            {/* Modes list (aligned) */}
                             {secExpanded && (
-                              <div style={{ paddingLeft: 60 }}>
-                                {renderModesRow(s)}
-                              </div>
+                              <ModeRows
+                                trackName={trackName}
+                                sectionKey={sectionKey}
+                                section={s}
+                                onRenameMode={openRenameForMode}
+                              />
                             )}
                           </div>
                         );
@@ -365,43 +442,248 @@ export default function DatabaseModal({
           </div>
         </div>
       </div>
+
+      {/* Rename modal (UI only; no persistence yet) */}
+      {renameOpen && (
+        <RenameModal
+          target={renameTarget}
+          fields={renameFields}
+          defaults={renameDefaults}
+          onChangeFields={setRenameFields}
+          onResetField={resetFieldToDefault}
+          onClose={closeRename}
+          onSave={() => {
+            // UI only for now
+            console.log("[RENAME save]", renameTarget, renameFields);
+            closeRename();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function renderModesRow(section) {
+function ModeRows({ trackName, sectionKey, section, onRenameMode }) {
   const raw = section?.modes;
   const modes = Array.isArray(raw) ? raw : (raw ? [raw] : []);
   const hasOnlyBase = modes.length === 0;
-
   const baseLabel = section?.defaultBaseModeName || "base";
-  const baseIsGray = hasOnlyBase;
-  const chip = {
-    display: "inline-block",
-    padding: "2px 8px",
-    borderRadius: 999,
-    border: "1px solid #666",
-    marginRight: 8,
-    marginTop: 6,
-    fontSize: 12,
-  };
+
+  // Base mode row first
+  const rows = [
+    {
+      key: "__base__",
+      label: hasOnlyBase ? "base" : `${baseLabel} `,
+      isBase: true,
+      // gray out if only base exists
+      dim: hasOnlyBase
+    },
+    ...modes.map((m) => ({ key: m, label: m, isBase: false, dim: false }))
+  ];
 
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, padding: "2px 0 8px 0" }}>
-      <span
-        style={{
-          ...chip,
-          color: baseIsGray ? "#9a9a9a" : "white",
-          borderColor: baseIsGray ? "#555" : "#888",
-        }}
-        title="Base mode"
-      >
-        {hasOnlyBase ? "base" : `${baseLabel} `}
-        {!hasOnlyBase && <span style={{ color: "#9a9a9a" }}>(base)</span>}
-      </span>
-      {modes.map((m) => (
-        <span key={m} style={{ ...chip }}>{m}</span>
+    <div>
+      {rows.map((r, idx) => (
+        <div
+          key={r.key}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "24px 24px 1fr", // arrow, (no expand), label
+            padding: "6px 12px 6px 52px", // indent a bit more than section
+            borderBottom: idx === rows.length - 1 ? "none" : "1px solid #2a2a2a",
+            alignItems: "center",
+            userSelect: "none"
+          }}
+        >
+          {/* ↳ for hierarchy */}
+          <div style={{ textAlign: "center", opacity: 0.9 }}>
+            {/* ↳ */}
+          </div>
+          {/* empty cell to align with expand button column */}
+          <div />
+          {/* label (dblclick to rename) */}
+          <div
+            style={{ cursor: "pointer", color: r.dim ? "#9a9a9a" : "white" }}
+            onDoubleClick={() => onRenameMode(trackName, sectionKey, r.key === "__base__" ? "base" : r.key, r.isBase)}
+            title="Double-click to rename"
+          >
+            {r.isBase && !hasOnlyBase ? (
+              <>
+                {r.label}<span style={{ color: "#9a9a9a" }}>(base)</span>
+              </>
+            ) : (
+              r.label
+            )}
+          </div>
+        </div>
       ))}
+    </div>
+  );
+}
+
+function RenameModal({ target, fields, defaults, onChangeFields, onResetField, onClose, onSave }) {
+  if (!target) return null;
+
+  const commonInputStyle = {
+    flex: 1,
+    padding: "6px 8px",
+    borderRadius: 6,
+    border: "1px solid #555",
+    background: "#222",
+    color: "white",
+  };
+  const rowStyle = { display: "flex", alignItems: "center", gap: 8, marginTop: 10 };
+
+  const renderTrackForm = () => (
+    <>
+      <div style={rowStyle}>
+        <label style={{ width: 80 }}>name:</label>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+          <input
+            type="text"
+            value={fields.name ?? ""}
+            onChange={(e) => onChangeFields((prev) => ({ ...prev, name: e.target.value }))}
+            style={commonInputStyle}
+          />
+          {fields.name !== defaults.nameDefault && (
+            <button
+              onClick={() => onResetField("name")}
+              style={{ border: "1px solid #555", background: "transparent", color: "white", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}
+            >
+              reset to default
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  const renderSectionForm = () => (
+    <>
+      <div style={rowStyle}>
+        <label style={{ width: 80 }}>name:</label>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+          <input
+            type="text"
+            value={fields.name ?? ""}
+            onChange={(e) => onChangeFields((prev) => ({ ...prev, name: e.target.value }))}
+            style={commonInputStyle}
+          />
+          {fields.name !== defaults.nameDefault && (
+            <button
+              onClick={() => onResetField("name")}
+              style={{ border: "1px solid #555", background: "transparent", color: "white", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}
+            >
+              reset to default
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div style={rowStyle}>
+        <label style={{ width: 80 }}>button:</label>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+          <input
+            type="text"
+            value={fields.button ?? ""}
+            onChange={(e) => onChangeFields((prev) => ({ ...prev, button: e.target.value }))}
+            style={commonInputStyle}
+            placeholder="Same as its name"
+          />
+          {/* Show reset only if different from default (including empty default) */}
+          {fields.button !== (defaults.buttonDefault ?? "") && (
+            <button
+              onClick={() => onResetField("button")}
+              style={{ border: "1px solid #555", background: "transparent", color: "white", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}
+            >
+              reset to default
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  const renderModeForm = () => (
+    <>
+      <div style={rowStyle}>
+        <label style={{ width: 80 }}>name:</label>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+          <input
+            type="text"
+            value={fields.name ?? ""}
+            onChange={(e) => onChangeFields((prev) => ({ ...prev, name: e.target.value }))}
+            style={commonInputStyle}
+          />
+          {fields.name !== defaults.nameDefault && (
+            <button
+              onClick={() => onResetField("name")}
+              style={{ border: "1px solid #555", background: "transparent", color: "white", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}
+            >
+              reset to default
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  const title =
+    target.type === "track"  ? `Rename Track: ${target.trackName}` :
+    target.type === "section"? `Rename Section: ${target.sectionKey}` :
+    target.type === "mode"   ? `Rename Mode: ${target.isBase ? "base" : target.modeName}` :
+    "Rename";
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 10000
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 520, background: "#2b2b2b", color: "white",
+          borderRadius: 12, padding: 16, boxShadow: "0 10px 30px rgba(0,0,0,0.35)"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h3 style={{ margin: 0, fontSize: 16 }}>{title}</h3>
+          <button
+            onClick={onClose}
+            style={{ background: "transparent", border: "none", color: "white", fontSize: 18, cursor: "pointer" }}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* FORM */}
+        <div style={{ marginTop: 12 }}>
+          {target.type === "track"   && renderTrackForm()}
+          {target.type === "section" && renderSectionForm()}
+          {target.type === "mode"    && renderModeForm()}
+        </div>
+
+        {/* ACTIONS */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+          <button
+            onClick={onClose}
+            style={{ border: "1px solid #555", background: "transparent", color: "white", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
+          >
+            cancel
+          </button>
+          <button
+            onClick={onSave}
+            style={{ border: "none", background: "#0aa", color: "#002", fontWeight: 700, borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
+          >
+            save
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
