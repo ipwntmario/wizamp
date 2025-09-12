@@ -659,6 +659,19 @@ export default function App() {
               modeNameOrBase === "__base__"
                 ? getBaseModeName(playingTrackName || selectedTrack, sectionKey)
                 : getModeLabel(playingTrackName || selectedTrack, sectionKey, modeNameOrBase)}
+            currentModeName={currentModeName}     // "base" or a mode name
+            queuedModeName={queuedModeName}       // null or a mode name
+            onToggleQueuedMode={(nameOrNull) => {
+              // queue or clear in UI
+              setQueuedModeName(nameOrNull);
+
+              // tell the engine, if available
+              if (nameOrNull) {
+                engine.queueModeTransition?.(nameOrNull);  // e.g., "base" or "keychange"
+              } else {
+                engine.clearQueuedMode?.();
+              }
+            }}
           />
       </section>
       )}

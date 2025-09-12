@@ -153,9 +153,11 @@ export default function DatabaseModal({
   const openRenameForTrack = (trackName) => {
     const t = tracks[trackName];
     const nameDefault = t?.defaultDisplayName || trackName;
+    // current = override OR default
+    const nameCurrent = names?.tracks?.[trackName]?.displayName ?? nameDefault;
     setRenameTarget({ type: "track", trackName });
     setRenameDefaults({ nameDefault });
-    setRenameFields({ name: nameDefault });
+    setRenameFields({ name: nameCurrent });
     setRenameOpen(true);
     setRenameTarget({ type: "track", trackName, defaults: { nameDefault }});
   };
@@ -164,9 +166,13 @@ export default function DatabaseModal({
     const s = sectionsByTrack[trackName]?.[sectionKey] || {};
     const nameDefault = s?.defaultDisplayName || sectionKey;
     const buttonDefault = s?.defaultButtonName || "";
+    // current = overrides OR defaults
+    const secOverrides = names?.sections?.[trackName]?.[sectionKey] || {};
+    const nameCurrent   = secOverrides.displayName ?? nameDefault;
+    const buttonCurrent = (secOverrides.buttonName != null ? secOverrides.buttonName : buttonDefault);
     setRenameTarget({ type: "section", trackName, sectionKey });
     setRenameDefaults({ nameDefault, buttonDefault });
-    setRenameFields({ name: nameDefault, button: buttonDefault });
+    setRenameFields({ name: nameCurrent, button: buttonCurrent });
     setRenameTarget({ type: "section", trackName, sectionKey, defaults: { nameDefault, buttonDefault }});
     setRenameOpen(true);
   };
@@ -174,9 +180,13 @@ export default function DatabaseModal({
   const openRenameForMode = (trackName, sectionKey, modeName, isBase) => {
     const s = sectionsByTrack[trackName]?.[sectionKey] || {};
     const nameDefault = isBase ? (s?.defaultBaseModeName || "base") : modeName;
+    // current = override OR default
+    const nameCurrent = isBase
+      ? (names?.sections?.[trackName]?.[sectionKey]?.baseModeName ?? nameDefault)
+      : (names?.modes?.[trackName]?.[sectionKey]?.[modeName]?.displayName ?? nameDefault);
     setRenameTarget({ type: "mode", trackName, sectionKey, modeName, isBase: !!isBase });
     setRenameDefaults({ nameDefault });
-    setRenameFields({ name: nameDefault });
+    setRenameFields({ name: nameCurrent });
     setRenameTarget({ type: "mode", trackName, sectionKey, modeName, isBase: !!isBase, defaults: { nameDefault }});
     setRenameOpen(true);
   };
