@@ -131,6 +131,50 @@ export class AudioEngine {
     this._isPreloaded = false;
   }
 
+  /**
+   * Hard stop used at a track's true end (end-section, last clip).
+   * - No fade
+   * - Stop sources now, clear timers
+   * - Reset flags & restore master to user volume
+   */
+  _hardStopAtEnd() {
+    if (!this.audioCtx) return;
+    const ctx = this.audioCtx;
+
+    // If a soft-stop fade was armed for any reason, cancel it.
+    if (this._stopFinishTimer) {
+      clearTimeout(this._stopFinishTimer);
+      this._stopFinishTimer = null;
+    }
+    this._stopPendingUntil = 0;
+
+    // Stop all clip sources immediately
+    try {
+      Object.values(this.activeClips).forEach(({ source }) => {
+        try { source && source.stop(); } catch {}
+      });
+    } catch {}
+
+    // Prevent any additional scheduled transitions from firing
+    this.clearScheduled();
+
+    // Reset engine state
+    this.activeClips = {};
+    this.lastPlayingClipName = null;
+    this._isPreloaded = false;
+    this.isPaused = false;
+    this.pausedInfo = null;
+
+    // Put master back at user volume (so the next Play starts at the right level)
+    try {
+      const now = ctx.currentTime;
+      this.masterGain.gain.cancelScheduledValues(now);
+      this.masterGain.gain.setValueAtTime(this.userGain ?? 1, now);
+    } catch {}
+
+    this.onStatus?.("Stopped");
+  }
+
   setCurrentSection(name) {
     this.currentSectionName = name || null;
     this.onSectionChange?.(this.currentSectionName);
@@ -535,7 +579,7 @@ export class AudioEngine {
     const section = this.sectionData[this.currentSectionName];
     if (!hasNextInClip && section?.type === "end") {
       const tail = (clip.clipEnd ?? buffer.duration) - (clip.loopStart || 0);
-      const id2 = setTimeout(() => this.stopTrack(true), tail * 1000 + 60);
+      const id2 = setTimeout(() => this._hardStopAtEnd(), tail * 1000);
       this.scheduledTimeouts.push(id2);
     }
   }
