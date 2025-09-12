@@ -22,6 +22,7 @@ import TrackSelector from "./components/TrackSelector";
 import SectionPanel from "./components/SectionPanel";
 import StatusBar from "./components/StatusBar";
 import DatabaseModal from "./components/DatabaseModal";
+import SettingsModal from "./components/SettingsModal";
 
 // Auto-import all PNGs in /assets/icons at build time
 const _iconModules = import.meta.glob("./assets/icons/*.png", { eager: true });
@@ -760,95 +761,21 @@ export default function App() {
       )}
 
       {/* Settings modal */}
-      {settingsOpen && (
-        <div
-          onClick={() => setSettingsOpen(false)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: 360, background: "#2d2d2d", color: "white", borderRadius: 12, padding: 16, boxShadow: "0 10px 30px rgba(0,0,0,0.25)" }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>Settings</h2>
-              <button onClick={() => setSettingsOpen(false)} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "white" }} aria-label="Close">✕</button>
-            </div>
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        fadeOutSeconds={fadeOutSeconds}
+        setFadeOutSeconds={setFadeOutSeconds}
+        pauseFadeSeconds={pauseFadeSeconds}
+        setPauseFadeSeconds={setPauseFadeSeconds}
+        showStatus={showStatus}
+        setShowStatus={setShowStatus}
+        appIconName={appIconName}
+        setAppIconName={setAppIconName}
+        allIconNames={allIconNames}
+      />
 
-            <div style={{ marginTop: 16 }}>
-              <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
-                Fade-out on Stop
-              </label>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="number" min={0} max={30} step={0.1}
-                  value={fadeOutSeconds}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (Number.isFinite(v)) {
-                      const clamped = Math.max(0, Math.min(30, v));
-                      setFadeOutSeconds(clamped);
-                    }
-                  }}
-                  style={{ width: 90, padding: "6px 8px" }}
-                />
-                <span>seconds of fade-out when Stop is pressed</span>
-              </div>
-              <div style={{ marginTop: 12, fontSize: 12, color: "#bbb" }}>(0 = instantaneous, max 30s)</div>
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
-                Pause fade
-              </label>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="number" min={1} max={30} step={0.1}
-                  value={pauseFadeSeconds}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (Number.isFinite(v)) {
-                      const clamped = Math.max(1, Math.min(30, v));
-                      setPauseFadeSeconds(clamped);
-                    }
-                  }}
-                  style={{ width: 90, padding: "6px 8px" }}
-                />
-                <span>seconds to fade when Pausing</span>
-              </div>
-              <div style={{ marginTop: 12, fontSize: 12, color: "#bbb" }}>(1–30s)</div>
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={showStatus}
-                  onChange={(e) => setShowStatus(e.target.checked)}
-                  />
-                  <span>Show status bar</span>
-              </label>
-            </div>
-
-            <div>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span>App icon:</span>
-                <select
-                  value={appIconName}
-                  onChange={(e) => setAppIconName(e.target.value)}
-                  style={{ padding: "4px", borderRadius: 6 }}
-                >
-                  {allIconNames.map((file) => (
-                    <option key={file} value={file}>
-                      {file}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Database modal */}
       <DatabaseModal
         open={dbOpen}
         onClose={() => setDbOpen(false)}

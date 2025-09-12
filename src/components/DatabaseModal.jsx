@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 /** Helper: consider a track "dynamic" when simple === false */
 const isDynamic = (t) => t?.simple === false;
@@ -35,6 +35,22 @@ export default function DatabaseModal({
   // Rename reading
   const titleForTrack = (name, t) =>
     names?.tracks?.[name]?.displayName ?? t?.defaultDisplayName ?? name;
+
+  // Clicking outside of modal functionality
+  const overlayRef = useRef(null);
+  const overlayMouseDownRef = useRef(false);
+
+  const handleOverlayMouseDown = (e) => {
+    // only arm close if the press started on the overlay itself
+    overlayMouseDownRef.current = (e.target === overlayRef.current);
+  };
+  const handleOverlayMouseUp = (e) => {
+    // close only if both down and up happened on the overlay
+    if (e.target === overlayRef.current && overlayMouseDownRef.current) {
+      onClose?.();
+    }
+    overlayMouseDownRef.current = false;
+  };
 
   // --- Sorting (tracks only) ---
   // group → sorted group → concat
@@ -187,17 +203,23 @@ export default function DatabaseModal({
 
   return (
     <div
-      onClick={onClose}
+      ref={overlayRef}
+      onMouseDown={handleOverlayMouseDown}
+      onMouseUp={handleOverlayMouseUp}
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 9999
+        display: "flex",
+        alignItems: "flex-start",   // anchor at top
+        justifyContent: "center",   // comfy breathing room at top
+        paddingTop: "6vh",
+        zIndex: 9999,
+        overflowY: "auto"           // allow page to scroll if needed
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 720, maxHeight: "80vh",
+          width: 720, maxHeight: "84vh",
           background: "#2d2d2d", color: "white",
           borderRadius: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
           display: "flex", flexDirection: "column"
@@ -456,7 +478,7 @@ export default function DatabaseModal({
         </div>
       </div>
 
-      {/* Rename modal (UI only; no persistence yet) */}
+      {/* Rename modal */}
       {renameOpen && (
         <RenameModal
           target={renameTarget}
@@ -542,6 +564,13 @@ function ModeRows({ trackName, sectionKey, section, onRenameMode, names }) {
 }
 
 function RenameModal({ target, fields, defaults, onChangeFields, onResetField, onClose, onSave }) {
+  const overlayRef = useRef(null);
+  const overlayMouseDownRef = useRef(false);
+  const handleOverlayMouseDown = (e) => { overlayMouseDownRef.current = (e.target === overlayRef.current); };
+  const handleOverlayMouseUp   = (e) => {
+    if (e.target === overlayRef.current && overlayMouseDownRef.current) onClose?.();
+    overlayMouseDownRef.current = false;
+  };
   if (!target) return null;
 
   const commonInputStyle = {
@@ -656,7 +685,9 @@ function RenameModal({ target, fields, defaults, onChangeFields, onResetField, o
 
   return (
     <div
-      onClick={onClose}
+      ref={overlayRef}
+      onMouseDown={handleOverlayMouseDown}
+      onMouseUp={handleOverlayMouseUp}
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
         display: "flex", alignItems: "center", justifyContent: "center",
