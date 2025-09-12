@@ -13,6 +13,10 @@ export default function SectionPanel({
   queuedModeName = null,
   onToggleQueuedMode,
   getBaseModeLabel = () => "base",
+  // NEW: rename-aware helpers from App (all optional)
+  getSectionTitle,               // (sectionKey) => string
+  getSectionButtonLabel,         // (sectionKey) => string
+  getModeLabel,                  // (sectionKey, "base"|modeName) => string
 }) {
   const current = sections[currentSectionName];
   const nextSections = toArray(current?.nextSection);
@@ -23,11 +27,6 @@ export default function SectionPanel({
   const extraModes = toArray(current?.modes);
   const modes = ["base", ...extraModes]; // base always implied
   const showModes = modes.length > 1 && typeof onToggleQueuedMode === "function";
-
-  const getSectionButtonLabel = (name) => {
-    const s = sections?.[name];
-    return s?.defaultButtonName ?? s?.defaultDisplayName ?? name;
-  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -72,9 +71,17 @@ export default function SectionPanel({
                   background, color, opacity,
                   minWidth: 120
                 }}
-                title={sections[name]?.defaultDisplayName ?? name}
+                title={
+                  getSectionTitle
+                    ? getSectionTitle(name)
+                    : (sections[name]?.defaultDisplayName ?? name)
+                }
               >
-                {getSectionButtonLabel(name)}
+                {getSectionButtonLabel
+                  ? getSectionButtonLabel(name)
+                  : (sections?.[name]?.defaultButtonName
+                    ?? sections?.[name]?.defaultDisplayName
+                    ?? name)}
               </button>
             );
           })}
@@ -93,7 +100,11 @@ export default function SectionPanel({
             if (isQueued) { background = "#d299ba"; color = "black"; }
             if (isActive) { background = "white"; color = "black"; }
 
-            const label = mode === "base" ? (getBaseModeLabel(currentSectionName) || "base") : mode;
+            const label = getModeLabel
+              ? getModeLabel(currentSectionName, mode === "base" ? "__base__" : mode)
+              : (mode === "base"
+                ? (getBaseModeLabel(currentSectionName) || "base")
+                : mode);
 
             return (
               <button

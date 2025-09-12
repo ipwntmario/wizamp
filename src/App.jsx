@@ -136,6 +136,57 @@ export default function App() {
   const [userVolume, setUserVolume] = useState(1);   // 0..1 (local)
   const [userMuted, setUserMuted] = useState(false);
 
+  // Rename registry (persisted)
+  // Shape:
+  // names = {
+  //   tracks:   { [trackName]: { displayName?: string } },
+  //   sections: { [trackName]: { [sectionKey]: { displayName?: string, buttonName?: string, baseModeName?: string } } },
+  //   modes:    { [trackName]: { [sectionKey]: { [modeName]: { displayName?: string } } } }
+  //   // base mode uses key "__base__" in modes OR sections.baseModeName
+  // }
+  const [names, setNames] = useState(() => {
+    try {
+      const raw = localStorage.getItem("wizamp_names");
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wizamp_names", JSON.stringify(names)); } catch {}
+  }, [names]);
+
+  // Helpers to read effective labels with overrides
+  const getTrackTitle = (trackName) => {
+    return names?.tracks?.[trackName]?.displayName
+        ?? tracks?.[trackName]?.defaultDisplayName
+        ?? trackName;
+  };
+
+  const getSectionTitle = (trackName, sectionKey) => {
+    return names?.sections?.[trackName]?.[sectionKey]?.displayName
+        ?? sections?.[sectionKey]?.defaultDisplayName
+        ?? sectionKey;
+  };
+
+  const getSectionButton = (trackName, sectionKey) => {
+    // override > defaultButtonName > defaultDisplayName > key
+    const override = names?.sections?.[trackName]?.[sectionKey]?.buttonName;
+    if (override != null && override !== "") return override;
+    const s = sections?.[sectionKey];
+    return s?.defaultButtonName ?? s?.defaultDisplayName ?? sectionKey;
+  };
+
+  const getBaseModeName = (trackName, sectionKey) => {
+    return names?.sections?.[trackName]?.[sectionKey]?.baseModeName
+        ?? sections?.[sectionKey]?.defaultBaseModeName
+        ?? "base";
+  };
+
+  const getModeLabel = (trackName, sectionKey, modeName) => {
+    if (modeName === "__base__") return getBaseModeName(trackName, sectionKey);
+    return names?.modes?.[trackName]?.[sectionKey]?.[modeName]?.displayName
+        ?? modeName;
+  };
+
   // Create engine once
   const engineRef = useRef(null);
   if (!engineRef.current) {
@@ -509,6 +560,7 @@ export default function App() {
             dynamicFirst={dbDynamicFirst}
             hideTests={dbHideTests}
             pinned={pinned}
+            names={names}                 // NEW
           />
 
           {/* 🔊 Track volume toggle */}
@@ -568,7 +620,7 @@ export default function App() {
         <div style={{ marginTop: -8, marginBottom: 12, display: "flex", alignItems: "baseline", gap: 8 }}>
           <span style={{ color: "#aaa", fontSize: 14, fontWeight: 100 }}>Track:</span>
           <span style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>
-            {tracks[playingTrackName]?.defaultDisplayName || playingTrackName}
+            {getTrackTitle(playingTrackName)}
           </span>
         </div>
       )}
@@ -580,7 +632,7 @@ export default function App() {
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
               <span style={{ color: "#aaa", fontSize: 14, fontWeight: 100 }}>Section:</span>
               <span style={{ color: "#fff", fontSize: 18, fontWeight: 700 }}>
-                {sections[currentSectionName]?.defaultDisplayName ?? currentSectionName}
+                {currentSectionName ? getSectionTitle(playingTrackName || selectedTrack, currentSectionName) : null}
               </span>
             </div>
           )}
@@ -589,23 +641,21 @@ export default function App() {
             currentSectionName={currentSectionName}
             queuedSectionName={queuedSectionName}
             autoLockedTargets={autoLockedTargets}
-            // Modes:
-            currentModeName={currentModeName}
-            queuedModeName={queuedModeName}
-            onToggleQueuedMode={(modeOrNull) => {
-              if (modeOrNull) engine.queueModeTransition?.(modeOrNull);
-              else engine.clearQueuedMode?.();
-            }}
-            // base mode display name override (label)
-            getBaseModeLabel={(sectionName) =>
-              sections[sectionName]?.defaultBaseModeName || "base"
-            }
             onToggleQueuedSection={(nameOrNull) => {
               setQueuedSectionName(nameOrNull);
               if (nameOrNull) engine.queueSectionTransition(nameOrNull);
               else engine.clearQueuedSection();
             }}
             largeButtons
+            // NEW name resolvers
+            getSectionTitle={(sectionKey) =>
+              getSectionTitle(playingTrackName || selectedTrack, sectionKey)}
+            getSectionButtonLabel={(sectionKey) =>
+              getSectionButton(playingTrackName || selectedTrack, sectionKey)}
+            getModeLabel={(sectionKey, modeNameOrBase) =>
+              modeNameOrBase === "__base__"
+                ? getBaseModeName(playingTrackName || selectedTrack, sectionKey)
+                : getModeLabel(playingTrackName || selectedTrack, sectionKey, modeNameOrBase)}
           />
       </section>
       )}
@@ -811,6 +861,73 @@ export default function App() {
         onChangeHideTests={setDbHideTests}
         pinned={pinned}
         onTogglePin={togglePin}
+        names={names}                 // NEW
+        onApplyRename={(target, fields) => {   // NEW save handler
+          setNames(prev => {
+            const next = structuredClone(prev ?? {});
+            if (target.type === "track") {
+              next.tracks ||= {};
+              next.tracks[target.trackName] ||= {};
+              // store override or remove if equal to default
+              const def = tracks?.[target.trackName]?.defaultDisplayName ?? target.trackName;
+              if (!fields.name || fields.name === def) {
+                if (next.tracks[target.trackName]) delete next.tracks[target.trackName].displayName;
+              } else {
+                next.tracks[target.trackName].displayName = fields.name;
+              }
+            } else if (target.type === "section") {
+              next.sections ||= {};
+              next.sections[target.trackName] ||= {};
+              next.sections[target.trackName][target.sectionKey] ||= {};
+              const s = /* original section obj */ (() => {
+                // Sections live per-track; in DB modal we fetch sectionData by track
+                // but app also has a master 'sections' map; for defaults use DB modal-provided fields
+                return null; // we’ll rely on defaults passed in fields.defaults
+              })();
+
+              const defName = target.defaults?.nameDefault ?? target.sectionKey;
+              const defButton = target.defaults?.buttonDefault ?? "";
+
+              // displayName
+              if (!fields.name || fields.name === defName) {
+                delete next.sections[target.trackName][target.sectionKey].displayName;
+              } else {
+                next.sections[target.trackName][target.sectionKey].displayName = fields.name;
+              }
+              // buttonName
+              const btn = fields.button ?? "";
+              if (btn === defButton || btn === "") {
+                delete next.sections[target.trackName][target.sectionKey].buttonName;
+              } else {
+                next.sections[target.trackName][target.sectionKey].buttonName = btn;
+              }
+            } else if (target.type === "mode") {
+              if (target.isBase) {
+                next.sections ||= {};
+                next.sections[target.trackName] ||= {};
+                next.sections[target.trackName][target.sectionKey] ||= {};
+                const defBase = target.defaults?.nameDefault ?? "base";
+                if (!fields.name || fields.name === defBase) {
+                  delete next.sections[target.trackName][target.sectionKey].baseModeName;
+                } else {
+                  next.sections[target.trackName][target.sectionKey].baseModeName = fields.name;
+                }
+              } else {
+                next.modes ||= {};
+                next.modes[target.trackName] ||= {};
+                next.modes[target.trackName][target.sectionKey] ||= {};
+                next.modes[target.trackName][target.sectionKey][target.modeName] ||= {};
+                const defMode = target.defaults?.nameDefault ?? target.modeName;
+                if (!fields.name || fields.name === defMode) {
+                  delete next.modes[target.trackName][target.sectionKey][target.modeName].displayName;
+                } else {
+                  next.modes[target.trackName][target.sectionKey][target.modeName].displayName = fields.name;
+                }
+              }
+            }
+            return next;
+          });
+        }}
       />
 
       {/* Per-user volume (local) */}

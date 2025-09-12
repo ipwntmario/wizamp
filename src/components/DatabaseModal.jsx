@@ -18,6 +18,8 @@ export default function DatabaseModal({
   onChangeHideTests,
   pinned,                     // Set<string>
   onTogglePin,                // (name) => void
+  onApplyRename,
+  names,
 }) {
   const [expandedTracks, setExpandedTracks] = useState(() => new Set());
   const [expandedSections, setExpandedSections] = useState(() => new Set()); // keys: `${track}::${sectionKey}`
@@ -30,46 +32,47 @@ export default function DatabaseModal({
   const [renameFields, setRenameFields] = useState({});   // { name, button } depends on type
   const [renameDefaults, setRenameDefaults] = useState({}); // { nameDefault, buttonDefault }
 
+  // Rename reading
+  const titleForTrack = (name, t) =>
+    names?.tracks?.[name]?.displayName ?? t?.defaultDisplayName ?? name;
+
   // --- Sorting (tracks only) ---
   // group → sorted group → concat
   const sortedTrackNames = useMemo(() => {
     if (!tracks) return [];
     const entries = Object.entries(tracks);
 
-    // Filter out tests if requested
-    let filtered = hideTests ? entries.filter(([n,t]) => !isTest(n,t)) : entries.slice();
+    // Filter out tests if requested, but keep pinned ones visible
+    const filtered = entries.filter(([n, t]) =>
+      hideTests ? (!t?.test || pinned?.has(n)) : true
+    );
 
-    // Sort comparator (alpha asc/desc)
-    const cmp = (a, b) => {
-      const an = a[1]?.defaultDisplayName || a[0];
-      const bn = b[1]?.defaultDisplayName || b[0];
-      return an.localeCompare(bn);
-    };
+    // Sort comparator (alpha asc/desc) using override-aware titles
+    const cmp = (a, b) =>
+      titleForTrack(a[0], a[1]).localeCompare(titleForTrack(b[0], b[1]));
+
     if (sortMode === "alpha-asc") filtered.sort(cmp);
-    else if (sortMode === "alpha-desc") filtered.sort((a,b) => -cmp(a,b));
+    else if (sortMode === "alpha-desc") filtered.sort((a, b) => -cmp(a, b));
 
-    // Partition into four groups
-    const pinnedDyn = [];
-    const pinnedSimple = [];
-    const unpinnedDyn = [];
-    const unpinnedSimple = [];
+    // Partition
+    const pinnedDyn = [], pinnedSimple = [], unpinnedDyn = [], unpinnedSimple = [];
     for (const [name, t] of filtered) {
       const p = pinned?.has(name);
-      const d = isDynamic(t);
+      const d = t?.simple === false;
       if (p && d) pinnedDyn.push(name);
       else if (p && !d) pinnedSimple.push(name);
       else if (!p && d) unpinnedDyn.push(name);
       else unpinnedSimple.push(name);
     }
 
-    // Dynamic-first grouping inside pinned & unpinned
+    // Group ordering
     const unpinnedOrdered = dynamicFirst ? [...unpinnedDyn, ...unpinnedSimple]
-                                         : [...unpinnedSimple, ...unpinnedDyn];
+                                        : [...unpinnedSimple, ...unpinnedDyn];
     const pinnedOrdered   = dynamicFirst ? [...pinnedDyn, ...pinnedSimple]
-                                         : [...pinnedSimple, ...pinnedDyn];
+                                        : [...pinnedSimple, ...pinnedDyn];
 
     return [...pinnedOrdered, ...unpinnedOrdered];
-  }, [tracks, sortMode, dynamicFirst, hideTests, pinned]);
+  }, [tracks, sortMode, dynamicFirst, hideTests, pinned, names]);
 
   const fetchSectionsIfNeeded = async (trackName) => {
     if (sectionsByTrack[trackName]) return;
@@ -138,6 +141,7 @@ export default function DatabaseModal({
     setRenameDefaults({ nameDefault });
     setRenameFields({ name: nameDefault });
     setRenameOpen(true);
+    setRenameTarget({ type: "track", trackName, defaults: { nameDefault }});
   };
 
   const openRenameForSection = (trackName, sectionKey) => {
@@ -147,6 +151,7 @@ export default function DatabaseModal({
     setRenameTarget({ type: "section", trackName, sectionKey });
     setRenameDefaults({ nameDefault, buttonDefault });
     setRenameFields({ name: nameDefault, button: buttonDefault });
+    setRenameTarget({ type: "section", trackName, sectionKey, defaults: { nameDefault, buttonDefault }});
     setRenameOpen(true);
   };
 
@@ -156,6 +161,7 @@ export default function DatabaseModal({
     setRenameTarget({ type: "mode", trackName, sectionKey, modeName, isBase: !!isBase });
     setRenameDefaults({ nameDefault });
     setRenameFields({ name: nameDefault });
+    setRenameTarget({ type: "mode", trackName, sectionKey, modeName, isBase: !!isBase, defaults: { nameDefault }});
     setRenameOpen(true);
   };
 
@@ -345,7 +351,7 @@ export default function DatabaseModal({
                       {pinned?.has(trackName) ? "📌 " : ""}
                       {test ? "🚩 " : ""}
                       {dyn ? "🔷 " : ""}
-                      {t?.defaultDisplayName || trackName}
+                      {titleForTrack(trackName, t)}
                     </div>
                   </div>
 
@@ -358,8 +364,14 @@ export default function DatabaseModal({
                       {sections && Object.entries(sections).map(([sectionKey, s]) => {
                         const secKey = `${trackName}::${sectionKey}`;
                         const secExpanded = expandedSections.has(secKey);
-                        const titleLabel  = s?.defaultDisplayName ?? sectionKey;
-                        const buttonLabel = s?.defaultButtonName; // optional
+                        const titleLabel  =
+                          names?.sections?.[trackName]?.[sectionKey]?.displayName
+                          ?? s?.defaultDisplayName
+                          ?? sectionKey;
+                        const buttonLabelOverride = names?.sections?.[trackName]?.[sectionKey]?.buttonName;
+                        const buttonLabel = buttonLabelOverride != null && buttonLabelOverride !== ""
+                          ? buttonLabelOverride
+                          : (s?.defaultButtonName ?? undefined);
                         const sectionGray = t?.simple === true;
 
                         return (
@@ -423,6 +435,7 @@ export default function DatabaseModal({
                                 sectionKey={sectionKey}
                                 section={s}
                                 onRenameMode={openRenameForMode}
+                                names={names}
                               />
                             )}
                           </div>
@@ -454,7 +467,7 @@ export default function DatabaseModal({
           onClose={closeRename}
           onSave={() => {
             // UI only for now
-            console.log("[RENAME save]", renameTarget, renameFields);
+            onApplyRename?.(renameTarget, { ...renameFields });
             closeRename();
           }}
         />
@@ -463,11 +476,13 @@ export default function DatabaseModal({
   );
 }
 
-function ModeRows({ trackName, sectionKey, section, onRenameMode }) {
+function ModeRows({ trackName, sectionKey, section, onRenameMode, names }) {
   const raw = section?.modes;
   const modes = Array.isArray(raw) ? raw : (raw ? [raw] : []);
   const hasOnlyBase = modes.length === 0;
-  const baseLabel = section?.defaultBaseModeName || "base";
+  const baseLabel = names?.sections?.[trackName]?.[sectionKey]?.baseModeName
+    ?? section?.defaultBaseModeName
+    ?? "base";
 
   // Base mode row first
   const rows = [
@@ -478,7 +493,12 @@ function ModeRows({ trackName, sectionKey, section, onRenameMode }) {
       // gray out if only base exists
       dim: hasOnlyBase
     },
-    ...modes.map((m) => ({ key: m, label: m, isBase: false, dim: false }))
+    ...modes.map((m) => ({
+      key: m,
+      label: (names?.modes?.[trackName]?.[sectionKey]?.[m]?.displayName ?? m),
+      isBase: false,
+      dim: false
+    }))
   ];
 
   return (

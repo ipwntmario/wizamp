@@ -4,28 +4,37 @@ export default function TrackSelector({
   tracks,
   value,
   onChange,
-  sortMode = "alpha-asc",   // "alpha-asc" | "alpha-desc"
+  sortMode = "alpha-asc",
   dynamicFirst = true,
   hideTests = false,
-  pinned,                   // Set<string>
+  pinned,
+  names,                           // NEW
 }) {
   const isDynamic = (t) => t?.simple === false;
   const isTest = (name, t) => t?.test === true;
+
+  const titleFor = (name, t) =>
+    names?.tracks?.[name]?.displayName ?? t?.defaultDisplayName ?? name;
 
   const orderedNames = useMemo(() => {
     if (!tracks) return [];
     const entries = Object.entries(tracks);
 
-    let filtered = hideTests ? entries.filter(([n,t]) => !isTest(n,t)) : entries.slice();
+    // Hide tests except when pinned
+    let filtered = entries.filter(([n,t]) =>
+      hideTests ? (!isTest(n,t) || pinned?.has(n)) : true
+    );
 
+    // Sort comparator uses effective title
     const cmp = (a, b) => {
-      const an = a[1]?.defaultDisplayName || a[0];
-      const bn = b[1]?.defaultDisplayName || b[0];
+      const an = titleFor(a[0], a[1]);
+      const bn = titleFor(b[0], b[1]);
       return an.localeCompare(bn);
     };
     if (sortMode === "alpha-asc") filtered.sort(cmp);
     else if (sortMode === "alpha-desc") filtered.sort((a,b) => -cmp(a,b));
 
+    // Groups
     const pinnedDyn = [], pinnedSimple = [], unpinnedDyn = [], unpinnedSimple = [];
     for (const [name, t] of filtered) {
       const p = pinned?.has(name);
@@ -42,7 +51,7 @@ export default function TrackSelector({
                                          : [...pinnedSimple, ...pinnedDyn];
 
     return [...pinnedOrdered, ...unpinnedOrdered];
-  }, [tracks, sortMode, dynamicFirst, hideTests, pinned]);
+  }, [tracks, sortMode, dynamicFirst, hideTests, pinned, names]);
 
   return (
     <select
@@ -54,10 +63,10 @@ export default function TrackSelector({
       {orderedNames.map((name) => {
         const t = tracks[name];
         const label =
-          `${pinned?.has(name) ? "📌 " : ""}` +   // ← use 📌 here too
-          `${isTest(name, t) ? "🚩 " : ""}` +
-          `${isDynamic(t) ? "🔷 " : ""}` +
-          `${t?.defaultDisplayName || name}`;
+          `${pinned?.has(name) ? "📌 " : ""}` +
+          `${t?.test ? "🚩 " : ""}` +
+          `${t?.simple === false ? "🔷 " : ""}` +
+          `${titleFor(name, t)}`;
         return (
           <option key={name} value={name}>
             {label}
