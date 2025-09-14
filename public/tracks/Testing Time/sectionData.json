@@ -318,8 +318,6 @@
       "nextSection": "FailBig",
       "type": "auto"
     },
-
-
     "PostQ3and4-transition-Success1": {
       "defaultDisplayName": "Transition to Success1",
       "defaultButtonName": "✅Success1",
