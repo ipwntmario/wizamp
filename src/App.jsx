@@ -571,7 +571,7 @@ export default function App() {
       {/* Now Playing (shows what's actually loaded/ready) */}
       {playingTrackName && (
         <div style={{ marginTop: -8, marginBottom: 12, display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span style={{ color: "#aaa", fontSize: 14, fontWeight: 100 }}>Track:</span>
+          <span style={{ color: "#aaa", fontSize: 14, fontWeight: 400 }}>Track:</span>
           <span style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>
             {getTrackTitle(playingTrackName)}
           </span>
@@ -636,7 +636,7 @@ export default function App() {
         <section style={{ marginBottom: 16 }}>
           {isDynamicPlayingTrack && (
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-              <span style={{ color: "#aaa", fontSize: 14, fontWeight: 100 }}>Section:</span>
+              <span style={{ color: "#aaa", fontSize: 14, fontWeight: 400 }}>Section:</span>
               <span style={{ color: "#fff", fontSize: 18, fontWeight: 700 }}>
                 {currentSectionName ? getSectionTitle(playingTrackName || selectedTrack, currentSectionName) : null}
               </span>

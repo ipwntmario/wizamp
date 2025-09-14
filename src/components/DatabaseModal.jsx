@@ -450,7 +450,7 @@ export default function DatabaseModal({
                                 onDoubleClick={() => openRenameForSection(trackName, sectionKey)}
                                 title="Click to expand/collapse • Double-click to rename"
                               >
-                                <span style={{ fontWeight: 100 }}>{titleLabel}</span>
+                                <span style={{ fontWeight: 400 }}>{titleLabel}</span>
                                 {buttonLabel && (
                                   <>
                                     <span style={{ color: "#9a9a9a" }}>{", button: "}</span>
