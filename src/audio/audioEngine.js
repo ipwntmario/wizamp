@@ -20,6 +20,8 @@ export class AudioEngine {
     this.audioCtx = null;
     this.masterGain = null;
 
+    this._bufferCache = new Map(); // url -> AudioBuffer
+
     this.fadeOutSeconds = 6;
     this.userGain = 1.0;
     this.pauseFadeSeconds = 1;
@@ -73,6 +75,64 @@ export class AudioEngine {
     this.audioCtx = ctx;
     this.masterGain = master;
     return ctx;
+  }
+
+  // Build a safe URL for audio files: encode base path (keeps slashes) and filename.
+  _buildAudioUrl(filename) {
+    const base = this.trackBase ? String(this.trackBase) : "";
+    // encodeURI keeps "/" intact for the base path; it encodes spaces etc.
+    const safeBase = encodeURI(base.replace(/([^:])\/{2,}/g, "$1/"));
+    // encodeURIComponent for the file segment to handle "&", spaces, etc.
+    const safeFile = encodeURIComponent(String(filename));
+    // Normalize any accidental doubles again after join
+    return `${safeBase}/audio/${safeFile}`.replace(/([^:])\/{2,}/g, "$1/");
+  }
+
+  // Load & decode with per-URL cache + loud error logging.
+  // meta: { clipName, mode } is optional and only used for better console messages.
+  async _loadBufferWithCache(url, ctx, meta = {}) {
+    if (this._bufferCache.has(url)) return this._bufferCache.get(url);
+
+    let res, arr, buf;
+    try {
+      res = await fetch(url);
+    } catch (e) {
+      console.error("[AUDIO] network error while fetching", { url, ...meta, error: e });
+      throw e;
+    }
+
+    if (!res.ok) {
+      console.error("[AUDIO] fetch failed", {
+        url, status: res.status, statusText: res.statusText, ...meta
+      });
+      throw new Error(`Fetch failed for ${url}: ${res.status} ${res.statusText}`);
+    }
+
+    const contentType = res.headers.get("content-type") || "unknown/unknown";
+    try {
+      arr = await res.arrayBuffer();
+    } catch (e) {
+      console.error("[AUDIO] failed to read ArrayBuffer", { url, contentType, ...meta, error: e });
+      throw e;
+    }
+
+    try {
+      // slice(0) to detach from the original ArrayBuffer in some browsers
+      buf = await ctx.decodeAudioData(arr.slice(0));
+    } catch (e) {
+      console.error("[AUDIO] decode failed", {
+        url,
+        contentType,
+        bytes: arr?.byteLength ?? 0,
+        ...meta,
+        error: e
+      });
+      // Common reasons: wrong URL (404 HTML), non-Vorbis file, corrupted file.
+      throw e;
+    }
+
+    this._bufferCache.set(url, buf);
+    return buf;
   }
 
   setUserVolume(v) {
@@ -230,12 +290,16 @@ export class AudioEngine {
       return;
     }
 
+    if (!this.isPlaying && this.currentTrackName && this.currentTrackName !== trackName) {
+      this._bufferCache.clear(); // simple policy; or implement an LRU later
+    }
+
     // Decode all clips + all mode files to buffers (no need to start muted loopers)
     this.activeClips = {};
     const clipEntries = Object.entries(this.clipData);
 
     for (const [clipName, clipObj] of clipEntries) {
-      const fileMap = clipObj?.file || {};
+      const fileMap = this._normalizeFileMap(clipObj?.file);
       const modes = Object.keys(fileMap);
       if (modes.length === 0) continue;
 
@@ -243,10 +307,13 @@ export class AudioEngine {
       for (const modeKey of modes) {
         const fname = fileMap[modeKey];
         if (!fname) continue;
-        const url = `${this.trackBase ? this.trackBase : ""}/audio/${fname}`.replace(/([^:])\/{2,}/g, "$1/"); // normalize
-        const res = await fetch(url);
-        const arr = await res.arrayBuffer();
-        const buf = await ctx.decodeAudioData(arr.slice(0));
+
+        // NEW: build a safe URL and pass clip/mode meta for precise error logs
+        const url = this._buildAudioUrl(fname);
+        const buf = await this._loadBufferWithCache(url, this.audioCtx || ctx, {
+          clipName,
+          mode: modeKey
+        });
         buffersByMode[modeKey] = buf;
       }
 
@@ -401,7 +468,9 @@ export class AudioEngine {
       entry.buffersByMode?.base;
 
     if (!buffer) {
-      console.error(`No buffer for clip '${clipName}' in mode '${mode}' (or base)`);
+      console.error(`No buffer for clip '${clipName}' in mode '${mode}' (or base)`, {
+        clipName, mode, availableModes: Object.keys(entry.buffersByMode || {})
+      });
       return;
     }
 
@@ -711,5 +780,20 @@ export class AudioEngine {
     const mode = this.currentModeName || "base";
     // If you load per-mode buffers into entry.buffersByMode, select it; otherwise fall back to entry.buffer
     return entry.buffersByMode?.[mode] ?? entry.buffer ?? null;
+  }
+
+  // Accept both styles:
+  // - "file": "Foo.ogg"                -> { base: "Foo.ogg" }
+  // - "file": { base: "Foo.ogg", ... } -> unchanged
+  _normalizeFileMap(fileField) {
+    if (!fileField) return {};
+    if (typeof fileField === "string") {
+      return { base: fileField };
+    }
+    if (typeof fileField === "object") {
+      return fileField;
+    }
+    console.warn("[ENGINE] Unexpected 'file' field type:", typeof fileField, fileField);
+    return {};
   }
 }

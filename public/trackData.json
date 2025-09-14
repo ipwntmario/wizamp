@@ -28,6 +28,13 @@
       "simple": false,
       "test": true
     },
+    "Testing Time": {
+      "defaultDisplayName": "Testing Time",
+      "basePath": "/tracks/Testing Time",
+      "firstSection": "Intro",
+      "simple": false,
+      "test": false
+    },
     "The Ashwights Attack": {
       "defaultDisplayName": "The Ashwights Attack",
       "basePath": "/tracks/The Ashwights Attack",
