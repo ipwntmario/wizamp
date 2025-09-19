@@ -10,8 +10,12 @@ export default function SettingsModal({
   fadeOutSeconds, setFadeOutSeconds,
   pauseFadeSeconds, setPauseFadeSeconds,
   showStatus, setShowStatus,
-  appIconName, setAppIconName,
-  allIconNames = [],
+  appIconName, setAppIconName, allIconNames = [],
+
+  // Online features
+  onlineEnabled, setOnlineEnabled,
+  role, setRole,
+  displayName, setDisplayName,
 }) {
   const overlayRef = useRef(null);
   const mouseDownOnOverlay = useRef(false);
@@ -117,7 +121,7 @@ export default function SettingsModal({
         </div>
 
         {/* Show status bar */}
-        <div style={{ marginTop: 16 }}>
+        <div style={{ marginTop: 20, paddingTop: 12, borderTop: "1px solid #444" }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
               type="checkbox"
@@ -144,6 +148,55 @@ export default function SettingsModal({
               ))}
             </select>
           </label>
+        </div>
+
+        {/* --- Online (beta) --- */}
+        <div style={{ marginTop: 20, paddingTop: 12, borderTop: "1px solid #444" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <input
+              type="checkbox"
+              checked={!!onlineEnabled}
+              onChange={(e) => setOnlineEnabled?.(e.target.checked)}
+              id="onlineToggle"
+            />
+            <label htmlFor="onlineToggle" style={{ fontWeight: 600 }}>
+              Online (beta)
+            </label>
+          </div>
+          <div style={{ fontSize: 12, color: "#bbb", marginTop: -6 }}>
+            (Requires backend later; safe to leave ON/OFF now)
+          </div>
+
+          {/* Role */}
+          <div style={{ marginTop: 12 }}>
+            <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
+              Role
+            </label>
+            <select
+              value={role}
+              onChange={(e) => setRole?.(e.target.value)}
+              style={{ padding: "6px 8px", borderRadius: 6, width: "100%" }}
+              disabled={!onlineEnabled}
+            >
+              <option value="GM">GM (Active)</option>
+              <option value="Player">Player (Passive)</option>
+            </select>
+          </div>
+
+          {/* Display Name */}
+          <div style={{ marginTop: 12 }}>
+            <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
+              Display name
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName?.(e.target.value)}
+              placeholder="e.g., Dylan"
+              style={{ width: "100%", padding: "6px 8px", borderRadius: 6 }}
+              disabled={!onlineEnabled}
+            />
+          </div>
         </div>
       </div>
     </div>

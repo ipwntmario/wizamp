@@ -23,6 +23,7 @@ import SectionPanel from "./components/SectionPanel";
 import StatusBar from "./components/StatusBar";
 import DatabaseModal from "./components/DatabaseModal";
 import SettingsModal from "./components/SettingsModal";
+import { net, ONLINE, setOnlineEnabledRuntime } from "./net/netController";
 
 // Auto-import all PNGs in /assets/icons at build time
 const _iconModules = import.meta.glob("./assets/icons/*.png", { eager: true });
@@ -86,6 +87,26 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem("wizamp_showStatus", showStatus ? "1" : "0"); } catch {}
   }, [showStatus]);
+
+  // Online (beta) – dark-launched via env + toggle
+  const [onlineEnabled, setOnlineEnabled] = useState(() => {
+    try { return localStorage.getItem("wizamp_onlineEnabled") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wizamp_onlineEnabled", onlineEnabled ? "1" : "0"); } catch {}
+    setOnlineEnabledRuntime(onlineEnabled);
+  }, [onlineEnabled]);
+
+  // Role & Display Name
+  const [role, setRole] = useState(() => {
+    try { return localStorage.getItem("wizamp_role") || "GM"; } catch { return "GM"; }
+  });
+  useEffect(() => { try { localStorage.setItem("wizamp_role", role); } catch {} }, [role]);
+
+  const [displayName, setDisplayName] = useState(() => {
+    try { return localStorage.getItem("wizamp_displayName") || ""; } catch { return ""; }
+  });
+  useEffect(() => { try { localStorage.setItem("wizamp_displayName", displayName); } catch {} }, [displayName]);
 
   // Modes
   const [currentModeName, setCurrentModeName] = useState("base");
@@ -357,6 +378,7 @@ export default function App() {
 
     const target = currentSectionName || firstSection;
     if (target) {
+      net.playSection(target);
       engine.playSection(target);
     }
   };
@@ -365,12 +387,14 @@ export default function App() {
     setQueuedSectionName(null);
     engine.clearQueuedSection?.();
     engine.clearQueuedMode?.();
+    net.playSection(sectionName);
     engine.playSection(sectionName);
   };
 
   const handleStop = async () => {
     // Fade out current audio; do NOT reload any track here.
     setPlayDisabled(true);
+    net.stop(true);
     engine.stopTrack?.(true); // "Stopped" will arrive after fade; onStatus will re-enable
   };
 
@@ -397,7 +421,9 @@ export default function App() {
     setSelectedTrack(name);
     const savedVol = loadSavedTrackVolume(name);
     setTrackVolume(savedVol);
-    // No preload here by design.
+    net.setTrackVolume(savedVol); // IS THIS RIGHT?!
+    // Mirror to net (no-op until online is on)
+    net.setTrack(name);
   };
 
   // Helper: load assets for a given track (called when fully stopped)
@@ -478,10 +504,12 @@ export default function App() {
     // If the selected track is the one playing, use the slider value
     if (selectedTrack === playingTrackName) {
       engine.setTrackVolume?.(trackVolume);
+      net.setTrackVolume(trackVolume); // IS THIS RIGHT?!
     } else {
       // Otherwise, load the saved volume for the currently playing track
       const v = loadSavedTrackVolume(playingTrackName);
       engine.setTrackVolume?.(v);
+      net.setTrackVolume(v); // IS THIS RIGHT?!
     }
   }, [engine, playingTrackName, selectedTrack, trackVolume]);
 
@@ -620,7 +648,11 @@ export default function App() {
                       max={100}
                       step={1}
                       value={Math.round(trackVolume * 100)}
-                      onChange={(e) => setTrackVolume(Number(e.target.value) / 100)}
+                      onChange={(e) => {
+                        const v = Number(e.target.value) / 100;
+                        setTrackVolume(v);
+                        if (playingTrackName) net.setTrackVolume(playingTrackName, v);
+                      }}
                       style={{ flex: 1 }}
                     />
                   </div>
@@ -649,8 +681,13 @@ export default function App() {
             autoLockedTargets={autoLockedTargets}
             onToggleQueuedSection={(nameOrNull) => {
               setQueuedSectionName(nameOrNull);
-              if (nameOrNull) engine.queueSectionTransition(nameOrNull);
-              else engine.clearQueuedSection();
+              if (nameOrNull) {
+                net.queueSection(nameOrNull);
+                engine.queueSectionTransition(nameOrNull);
+              } else {
+                net.clearQueuedSection();
+                engine.clearQueuedSection();
+              }
             }}
             largeButtons
             // NEW name resolvers
@@ -670,8 +707,10 @@ export default function App() {
 
               // tell the engine, if available
               if (nameOrNull) {
+                net.queueMode(nameOrNull);
                 engine.queueModeTransition?.(nameOrNull);  // e.g., "base" or "keychange"
               } else {
+                net.clearQueuedMode();
                 engine.clearQueuedMode?.();
               }
             }}
@@ -709,8 +748,10 @@ export default function App() {
               if (isLoadingTrack) return;
               const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
               if (isPlaying) {
+                net.pause(simple);
                 engine.pause(simple);
               } else if (isPaused) {
+                net.resume(simple);
                 engine.resume(simple);
               } else {
                 handlePlay();
@@ -791,6 +832,12 @@ export default function App() {
         appIconName={appIconName}
         setAppIconName={setAppIconName}
         allIconNames={allIconNames}
+        onlineEnabled={onlineEnabled && ONLINE}   // gated by env + user toggle
+        setOnlineEnabled={(v) => setOnlineEnabled(v)}
+        role={role}
+        setRole={setRole}
+        displayName={displayName}
+        setDisplayName={setDisplayName}
       />
 
       {/* Database modal */}
