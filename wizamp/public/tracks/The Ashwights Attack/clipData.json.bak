@@ -1,0 +1,12 @@
+{
+  "clips": {
+    "The Ashwights Attack": {
+      "file": "The Ashwights Attack.ogg",
+      "loopPoint": 144.915261,
+      "clipEnd": 144.915261,
+      "nextClip": [
+        "The Ashwights Attack"
+      ]
+    }
+  }
+}

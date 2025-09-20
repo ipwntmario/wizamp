@@ -1,0 +1,21 @@
+{
+  "sections": {
+    "Intro": {
+      "defaultDisplayName": "Intro",
+      "firstClip": "Intro",
+      "nextSection": "Main",
+      "type": "auto"
+    },
+    "Main": {
+      "defaultDisplayName": "Main",
+      "firstClip": "Main_a",
+      "nextSection": "End",
+      "type": ""
+    },
+    "End": {
+      "defaultDisplayName": "End",
+      "firstClip": "End",
+      "type": "end"
+    }
+  }
+}

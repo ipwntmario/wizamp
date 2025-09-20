@@ -1,0 +1,12 @@
+{
+  "clips": {
+    "The Tower Card": {
+      "file": "The Tower Card.ogg",
+      "loopPoint": 75.937506,
+      "clipEnd": 75.937506,
+      "nextClip": [
+        "The Tower Card"
+      ]
+    }
+  }
+}
