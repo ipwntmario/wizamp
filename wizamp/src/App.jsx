@@ -633,7 +633,7 @@ export default function App() {
           alt="Wizamp icon"
           style={{ width: 64, height: 64, borderRadius: 6, objectFit: "cover" }}
         />
-        <h1 style={{ margin: 0, color: "white" }}>Wizamp</h1>
+        <h1 style={{ margin: 0, color: "white" }}>Wizaaamp</h1>
       </div>
 
       {/* Track Controls */}
