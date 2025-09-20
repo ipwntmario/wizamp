@@ -67,6 +67,7 @@ export default function App() {
 
   // Mirrors of state for net callbacks
   const currentLoadIdRef = useRef(0);
+  const readyForTrackRef = useRef(null); // which track we’ve marked ready
 
   // Autoplay setting (persist)
   const [autoplay, setAutoplay] = useState(() => {
@@ -464,7 +465,12 @@ export default function App() {
       console.log("[LOAD] calling engine.preloadTrack", name, "vol:", savedVol);
       const loadId = Date.now();
       currentLoadIdRef.current = loadId;
-      try { room.setReady(false); } catch {}
+      try {
+        // Only clear ready if we’re switching to a different track
+        if (readyForTrackRef.current !== name) {
+          room.setReady(false);
+        }
+      } catch {}
 
       await engine.preloadTrack(name, { trackVolume: savedVol, basePath });
 
@@ -476,6 +482,7 @@ export default function App() {
       try {
         if (currentLoadIdRef.current === loadId) {
           room.setReady(true);
+          readyForTrackRef.current = name; // remember which track is ready
         }
       } catch {}
 
