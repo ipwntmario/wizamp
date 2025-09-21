@@ -127,19 +127,39 @@ export class RoomHub {
         const serverMs = Number(data.serverMs) || (Date.now() + 2000);
         const trackName = String(data.trackName || "");
         const sectionName = String(data.sectionName || "");
-        console.log("[RoomHub] PLAY_REQUEST", { roomId, trackName, sectionName, serverMs });
-        // Later: validate role=GM; ready-gate if desired
-        const payload = JSON.stringify({
-          type: "PLAY",
-          trackName, sectionName,
-          serverMs,
-        });
+        const override = !!data.override;
+
+        // (1) Only allow GM to request play
+        if (u.role !== "GM") {
+          try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only GM can play." })); } catch {}
+          break;
+        }
+
+        // (2) Ready gate
+        const usersInRoom = [];
+        for (const [, ru] of this.clients) if (ru.roomId === roomId) usersInRoom.push(ru);
+        const notReady = usersInRoom.filter(x => !x.ready).map(x => x.name);
+
+        if (!override && notReady.length > 0) {
+          console.log("[RoomHub] PLAY_REQUEST rejected (not ready):", notReady);
+          try {
+            ws.send(JSON.stringify({
+              type: "ERROR",
+              code: "NOT_READY",
+              message: "Not all players are ready.",
+              notReady
+            }));
+          } catch {}
+          break;
+        }
+
+        console.log("[RoomHub] PLAY_REQUEST accepted", { roomId, trackName, sectionName, serverMs, override });
+        const payload = JSON.stringify({ type: "PLAY", trackName, sectionName, serverMs });
         for (const [sock, uu] of this.clients) {
           if (uu.roomId === roomId) {
             try { sock.send(payload); } catch {}
           }
         }
-        break;
       }
 
       // Future commands (Phase 2/3): PLAY, QUEUE_SECTION, etc. go here.

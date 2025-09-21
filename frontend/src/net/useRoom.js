@@ -24,6 +24,7 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay } = {}) {
 
   const [connected, setConnected] = useState(false);
   const [users, setUsers] = useState([]);
+  const [lastError, setLastError] = useState(null);
   const [latencyMs, setLatencyMs] = useState(null);
   const [offsetMs, setOffsetMs] = useState(0); // serverNow ≈ Date.now() + offsetMs
 
@@ -104,6 +105,9 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay } = {}) {
         const clientSend = Number(data.echoClientMs) || recv;
         const rtt = Math.max(0, recv - clientSend);
         updateOffset(rtt, Number(data.serverTimeMs) || recv, clientSend);
+      } else if (data.type === "ERROR") {
+        setLastError({ code: data.code, message: data.message, notReady: data.notReady });
+        console.warn("[room] ERROR", data);
       } else if (data.type === "PLAY") {
         onPlayRef.current?.({ trackName: data.trackName, sectionName: data.sectionName, serverMs: Number(data.serverMs) });
       }
@@ -145,12 +149,14 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay } = {}) {
     ws.send(JSON.stringify({ type: "SET_READY", ready: !!ready }));
   }, []);
 
-  const requestPlay = useCallback(({ trackName, sectionName, delayMs = 2000 }) => {
+  const requestPlay = useCallback(({ trackName, sectionName, delayMs = 2000, override = false }) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     const serverMs = serverNowMs() + Math.max(0, delayMs);
-    ws.send(JSON.stringify({ type: "PLAY_REQUEST", trackName, sectionName, serverMs }));
+    ws.send(JSON.stringify({ type: "PLAY_REQUEST", trackName, sectionName, serverMs, override }));
   }, [serverNowMs]);
+
+  const allReady = users.length > 0 && users.every(u => !!u.ready);
 
   return {
     onlineActive: shouldOnline && !!roomId,
@@ -162,5 +168,7 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay } = {}) {
     serverNowMs,
     latencyMs,
     offsetMs,
+    allReady,
+    lastError,
   };
 }

@@ -1,5 +1,5 @@
 // src/components/UsersPanel.jsx
-export default function UsersPanel({ onlineActive, connected, roomId, users = [], visible, latencyMs, offsetMs }) {
+export default function UsersPanel({ onlineActive, connected, roomId, users = [], visible, latencyMs, offsetMs, allReady, lastError }) {
   if (!onlineActive || !visible) return null;
   return (
     <div style={{
@@ -19,6 +19,11 @@ export default function UsersPanel({ onlineActive, connected, roomId, users = []
       <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
         latency ≈ {latencyMs ?? "—"} ms · offset ≈ {Math.round(offsetMs ?? 0)} ms
       </div>
+      <div style={{ fontSize: 12, marginBottom: 6 }}>
+        Ready gate: <span style={{ fontWeight: 700, color: allReady ? "#4ade80" : "#f59e0b" }}>
+          {allReady ? "All ready" : "Waiting…"}
+        </span>
+      </div>
       {users.length === 0 && (
         <div style={{ fontSize: 12, opacity: 0.8 }}>No users yet.</div>
       )}
@@ -29,6 +34,11 @@ export default function UsersPanel({ onlineActive, connected, roomId, users = []
           <span style={{ opacity: 0.8 }}>({u.role})</span>
         </div>
       ))}
+      {!!lastError && (
+        <div style={{ marginTop: 8, fontSize: 12, color: "#fca5a5" }}>
+          {lastError.message}{lastError.notReady?.length ? `: ${lastError.notReady.join(", ")}` : ""}
+        </div>
+      )}
       <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
         Add <code>?room=table-alpha</code> to the URL to invite others.
       </div>

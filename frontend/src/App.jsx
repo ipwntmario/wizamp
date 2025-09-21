@@ -402,7 +402,14 @@ export default function App() {
     const target = currentSectionName || firstSection;
     if (target) {
       if (room.onlineActive && role === "GM") {
-        // Ask server to schedule a play in ~2s for everyone
+        // enforce ready gate by default
+        if (!room.allReady) {
+          // Show something lightweight to the GM; you can replace with your modal/toast
+          console.warn("Not all players are ready:", room.users.filter(u => !u.ready).map(u => u.name));
+          // Optionally, uncomment to force play anyway:
+          // room.requestPlay({ trackName: selectedTrack, sectionName: target, delayMs: 2000, override: true });
+          return;
+        }
         room.requestPlay({ trackName: selectedTrack, sectionName: target, delayMs: 2000 });
       } else {
         engine.playSection(target);
@@ -662,6 +669,8 @@ export default function App() {
           visible={usersOpen}
           latencyMs={room.latencyMs}
           offsetMs={room.offsetMs}
+          allReady={room.allReady}
+          lastError={room.lastError}
         />
       </div>
 
