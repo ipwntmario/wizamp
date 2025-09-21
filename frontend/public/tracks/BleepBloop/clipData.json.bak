@@ -1,0 +1,88 @@
+{
+  "clips": {
+    "Intro": {
+      "file": "Intro.ogg",
+      "loopPoint": 4.615397,
+      "clipEnd": 11.538481,
+      "nextClip": [
+        "Intro"
+      ]
+    },
+    "Main_a": {
+      "file": "Main_a.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 16.153855,
+      "nextClip": [
+        "Main_b"
+      ]
+    },
+    "Main_b": {
+      "file": "Main_b.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 16.153855,
+      "nextClip": [
+        "Main_c"
+      ]
+    },
+    "Main_c": {
+      "file": "Main_c.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 16.153855,
+      "nextClip": [
+        "Main_d"
+      ]
+    },
+    "Main_d": {
+      "file": "Main_d.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 16.153855,
+      "nextClip": [
+        "Main_a"
+      ]
+    },
+    "Keychange_a": {
+      "file": "Keychange_a.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 13.846168,
+      "nextClip": [
+        "Keychange_b"
+      ]
+    },
+    "Keychange_b": {
+      "file": "Keychange_b.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 13.846168,
+      "nextClip": [
+        "Keychange_c"
+      ]
+    },
+    "Keychange_c": {
+      "file": "Keychange_c.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 13.846168,
+      "nextClip": [
+        "Keychange_d"
+      ]
+    },
+    "Keychange_d": {
+      "file": "Keychange_d.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 13.846168,
+      "nextClip": [
+        "Keychange_a"
+      ]
+    },
+    "End": {
+      "file": "End.ogg",
+      "loopPoint": 16.153855,
+      "clipEnd": 16.153855,
+      "nextClip": []
+    },
+    "EndInKeychange": {
+      "file": "EndInKeychange.ogg",
+      "loopPoint": 13.846168,
+      "clipEnd": 13.846168,
+      "nextClip": []
+    }
+  }
+}

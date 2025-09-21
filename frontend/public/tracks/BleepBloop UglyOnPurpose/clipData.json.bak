@@ -1,0 +1,50 @@
+{
+  "clips": {
+    "IntroTEST": {
+      "file": "IntroTEST.ogg",
+      "loopPoint": 4.615397,
+      "clipEnd": 11.538481,
+      "nextClip": [
+        "IntroTEST"
+      ]
+    },
+    "Main_aTEST": {
+      "file": "Main_aTEST.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 16.153855,
+      "nextClip": [
+        "Main_b"
+      ]
+    },
+    "Main_b": {
+      "file": "Main_b.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 16.153855,
+      "nextClip": [
+        "Main_c"
+      ]
+    },
+    "Main_c": {
+      "file": "Main_c.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 16.153855,
+      "nextClip": [
+        "Main_d"
+      ]
+    },
+    "Main_d": {
+      "file": "Main_d.ogg",
+      "loopPoint": 9.230771,
+      "clipEnd": 16.153855,
+      "nextClip": [
+        "Main_a"
+      ]
+    },
+    "End": {
+      "file": "End.ogg",
+      "loopPoint": 16.153855,
+      "clipEnd": 16.153855,
+      "nextClip": []
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "clips": {
+    "Follow the Moth": {
+      "file": "Follow the Moth.ogg",
+      "loopPoint": 116.170227,
+      "clipEnd": 116.170227,
+      "nextClip": [
+        "Follow the Moth"
+      ]
+    }
+  }
+}

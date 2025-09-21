@@ -1,0 +1,12 @@
+{
+  "clips": {
+    "One Who Sees": {
+      "file": "One Who Sees.ogg",
+      "loopPoint": 144,
+      "clipEnd": 144,
+      "nextClip": [
+        "One Who Sees"
+      ]
+    }
+  }
+}
