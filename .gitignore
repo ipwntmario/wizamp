@@ -24,4 +24,5 @@ dist-ssr
 *.sw?
 
 # WAV files
-public/tracks/_WAV
+frontend/public/tracks/_WAV
+*.wav
