@@ -15,7 +15,7 @@
  * for adequate testing to be done.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback  } from "react";
 import { AudioEngine } from "./audio/audioEngine";
 import { useMusicData } from "./data/useMusicData";
 import { net, ONLINE, setOnlineEnabledRuntime } from "./net/netController";
@@ -113,20 +113,6 @@ export default function App() {
     try { return localStorage.getItem("wizamp_displayName") || ""; } catch { return ""; }
   });
   useEffect(() => { try { localStorage.setItem("wizamp_displayName", displayName); } catch {} }, [displayName]);
-
-  const room = useRoom({
-    onlineEnabled,
-    displayName,
-    role,
-    onPlay: ({ trackName, sectionName, serverMs }) => {
-      // Optional: ensure we're on the same track (or auto-select)
-      // if (trackName && trackName !== selectedTrack) handleSelectTrack(trackName);
-      if (sectionName && serverMs) {
-        scheduleSectionAtServerTime(sectionName, serverMs);
-      }
-    }
-  });
-  // room = { onlineActive, connected, users, roomId, setReady }
 
   // Modes
   const [currentModeName, setCurrentModeName] = useState("base");
@@ -459,6 +445,13 @@ export default function App() {
     net.setTrack(name);
   };
 
+  const onSetTrack = useCallback((name) => {
+    // If already selected, ignore; else select & let existing preload flow run
+    if (selectedTrack !== name) {
+      handleSelectTrack(name); // your existing function that sets selectedTrack and preloads
+    }
+  }, [selectedTrack, handleSelectTrack]);
+
   // Helper: load assets for a given track (called when fully stopped)
   const loadTrackAssets = async (name) => {
     if (!name) return;
@@ -524,6 +517,21 @@ export default function App() {
       console.log("[LOAD] end", name);
     }
   };
+
+  const room = useRoom({
+    onlineEnabled,
+    displayName,
+    role,
+    onSetTrack,
+    onPlay: ({ trackName, sectionName, serverMs }) => {
+      // Optional: ensure we're on the same track (or auto-select)
+      if (trackName && trackName !== selectedTrack) handleSelectTrack(trackName);
+      if (sectionName && serverMs) {
+        scheduleSectionAtServerTime(sectionName, serverMs);
+      }
+    }
+  });
+  // room = { onlineActive, connected, users, roomId, setReady }
 
   // When fully stopped (end of fade or true end), load whichever track is selected.
   useEffect(() => {
@@ -592,6 +600,15 @@ export default function App() {
     }
   };
 
+  function onTrackChosen(name) {
+    // local select for snappy UI
+    handleSelectTrack(name);
+
+    // if online GM, announce to room so players mirror & preload
+    if (room.onlineActive && role === "GM") {
+      room.requestSetTrack?.(name);
+    }
+  }
 
   return (
     <div style={{
@@ -690,7 +707,7 @@ export default function App() {
           <TrackSelector
             tracks={tracks}
             value={selectedTrack}
-            onChange={handleSelectTrack}
+            onChange={onTrackChosen}
             sortMode={dbSort}
             dynamicFirst={dbDynamicFirst}
             hideTests={dbHideTests}

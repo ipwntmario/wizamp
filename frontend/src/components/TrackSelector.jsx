@@ -4,6 +4,7 @@ export default function TrackSelector({
   tracks,
   value,
   onChange,
+  disabled,
   sortMode = "alpha-asc",
   dynamicFirst = true,
   hideTests = false,
@@ -57,6 +58,7 @@ export default function TrackSelector({
     <select
       value={value || ""}
       onChange={(e) => onChange?.(e.target.value)}
+      disabled={!!disabled}
       style={{ padding: "6px 10px", borderRadius: 8, background: "#222", color: "white", border: "1px solid #555" }}
     >
       <option value="" disabled>— choose a track —</option>

@@ -31,8 +31,8 @@ export class RoomHub {
   constructor(state, env) {
     this.state = state;
     this.env = env;
-    // Map<WebSocket, {id,name,role,ready,roomId}>
-    this.clients = new Map();
+    this.clients = new Map(); // Map<WebSocket, {id,name,role,ready,roomId}>
+    this.roomState = new Map(); // Map<roomId, { selectedTrack?: string }>
   }
 
   async fetch(req) {
@@ -94,6 +94,11 @@ export class RoomHub {
         this.clients.set(ws, user);
         console.log("[RoomHub] HELLO add:", user, "total:", this.clients.size);
         this.broadcastPresence(user.roomId);
+        // Send current room state (selectedTrack) to this client, if any
+        const rs = this.roomState.get(user.roomId);
+        if (rs && rs.selectedTrack) {
+          try { ws.send(JSON.stringify({ type: "STATE", selectedTrack: rs.selectedTrack })); } catch {}
+        }
         break;
       }
 
@@ -160,6 +165,31 @@ export class RoomHub {
             try { sock.send(payload); } catch {}
           }
         }
+      }
+
+      case "SET_TRACK_REQUEST": {
+        const u = this.clients.get(ws);
+        if (!u) return;
+        if (u.role !== "GM") {
+          try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only GM can set track." })); } catch {}
+          break;
+        }
+        const roomId = u.roomId;
+        const name = String(data.name || "");
+        if (!name) break;
+        console.log("[RoomHub] SET_TRACK_REQUEST", { roomId, name });
+        // update room state
+        const rs = this.roomState.get(roomId) || {};
+        rs.selectedTrack = name;
+        this.roomState.set(roomId, rs);
+        // broadcast to room
+        const payload = JSON.stringify({ type: "SET_TRACK", name });
+        for (const [sock, uu] of this.clients) {
+          if (uu.roomId === roomId) {
+            try { sock.send(payload); } catch {}
+          }
+        }
+        break;
       }
 
       // Future commands (Phase 2/3): PLAY, QUEUE_SECTION, etc. go here.
