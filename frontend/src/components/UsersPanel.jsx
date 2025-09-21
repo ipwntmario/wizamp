@@ -1,5 +1,5 @@
 // src/components/UsersPanel.jsx
-export default function UsersPanel({ onlineActive, connected, roomId, users = [], visible }) {
+export default function UsersPanel({ onlineActive, connected, roomId, users = [], visible, latencyMs, offsetMs }) {
   if (!onlineActive || !visible) return null;
   return (
     <div style={{
@@ -15,6 +15,9 @@ export default function UsersPanel({ onlineActive, connected, roomId, users = []
     }}>
       <div style={{ fontWeight: 700, marginBottom: 6 }}>
         Room: {roomId || "(none)"} {connected ? "• online" : "• offline"}
+      </div>
+      <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+        latency ≈ {latencyMs ?? "—"} ms · offset ≈ {Math.round(offsetMs ?? 0)} ms
       </div>
       {users.length === 0 && (
         <div style={{ fontSize: 12, opacity: 0.8 }}>No users yet.</div>

@@ -9,6 +9,13 @@ export default {
     }
 
     if (url.pathname === "/ws") {
+      // Log to confirm we’re receiving the Upgrade request
+      console.log("[worker] /ws request headers:", Object.fromEntries(req.headers));
+
+      if (req.headers.get("Upgrade") !== "websocket") {
+        return new Response("Expected WebSocket", { status: 426 });
+      }
+
       // Forward the WebSocket upgrade to our Durable Object "hub".
       const id = env.ROOM_HUB.idFromName("hub"); // single DO that manages many rooms
       const stub = env.ROOM_HUB.get(id);
@@ -30,28 +37,47 @@ export class RoomHub {
 
   async fetch(req) {
     // Only accept WS upgrades here
+    const upgrade = req.headers.get("Upgrade");
+    console.log("[RoomHub] fetch upgrade:", upgrade);
     if (req.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected WebSocket", { status: 426 });
     }
 
-    // Accept the socket into this Durable Object
     const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
-    this.state.acceptWebSocket(server, ["wizamp"]); // optional subprotocol
-
-    return new Response(null, { status: 101, webSocket: client });
+    const client = pair[0];
+    const server = pair[1];
+    this.state.acceptWebSocket(server); // no subprotocol here
+    console.log("[RoomHub] accepted websocket");
+    // Important for Miniflare: do not force status:101; just attach the socket.
+    return new Response(null, {
+      status: 101,            // Required in Miniflare
+      webSocket: client
+    });
   }
 
   // ---- WebSocket lifecycle handlers ----
+  webSocketAccept(ws) {
+    try { ws.send(JSON.stringify({ type: "WELCOME", serverTimeMs: Date.now() })); } catch {}
+  }
+
+  webSocketOpen(ws) {
+    // DO-side confirmation that the socket is actually open
+    try { ws.send(JSON.stringify({ type: "WELCOME", serverTimeMs: Date.now() })); } catch {}
+    console.log("[RoomHub] open:", ws);
+  }
+
   webSocketMessage(ws, message) {
     let data;
     try {
       data =
         typeof message === "string" ? JSON.parse(message) :
         JSON.parse(new TextDecoder().decode(message));
-    } catch {
+    } catch (e) {
+      console.log("[RoomHub] message parse error:", e);
       return;
     }
+
+    console.log("[RoomHub] message:", data);
 
     if (!data || typeof data !== "object") return;
 
@@ -66,6 +92,7 @@ export class RoomHub {
           roomId: data.roomId || "default",
         };
         this.clients.set(ws, user);
+        console.log("[RoomHub] HELLO add:", user, "total:", this.clients.size);
         this.broadcastPresence(user.roomId);
         break;
       }
@@ -74,25 +101,66 @@ export class RoomHub {
         const u = this.clients.get(ws);
         if (!u) return;
         u.ready = !!data.ready;
+        console.log("[RoomHub] SET_READY:", u.name, "→", u.ready);
         this.broadcastPresence(u.roomId);
+        break;
+      }
+
+      case "PING": {
+        // client -> server ping; reply immediately with server time (ms) and echo
+        const u = this.clients.get(ws);
+        if (!u) return;
+        const payload = JSON.stringify({
+          type: "PONG",
+          serverTimeMs: Date.now(),
+          echoClientMs: Number(data.clientMs) || 0,
+        });
+        try { ws.send(payload); } catch {}
+        break;
+      }
+
+      case "PLAY_REQUEST": {
+        // GM requests a synchronized section start across the room
+        const u = this.clients.get(ws);
+        if (!u) return;
+        const roomId = u.roomId;
+        const serverMs = Number(data.serverMs) || (Date.now() + 2000);
+        const trackName = String(data.trackName || "");
+        const sectionName = String(data.sectionName || "");
+        console.log("[RoomHub] PLAY_REQUEST", { roomId, trackName, sectionName, serverMs });
+        // Later: validate role=GM; ready-gate if desired
+        const payload = JSON.stringify({
+          type: "PLAY",
+          trackName, sectionName,
+          serverMs,
+        });
+        for (const [sock, uu] of this.clients) {
+          if (uu.roomId === roomId) {
+            try { sock.send(payload); } catch {}
+          }
+        }
         break;
       }
 
       // Future commands (Phase 2/3): PLAY, QUEUE_SECTION, etc. go here.
       default:
+        console.log("[RoomHub] unknown type:", data.type);
         break;
     }
   }
 
   webSocketClose(ws, code, reason, wasClean) {
     const u = this.clients.get(ws);
+    console.log("[RoomHub] close:", { code, reason, wasClean, hadUser: !!u });
     if (!u) return;
     const roomId = u.roomId;
     this.clients.delete(ws);
+    console.log("[RoomHub] removed user on close. size:", this.clients.size);
     this.broadcastPresence(roomId);
   }
 
   webSocketError(ws, err) {
+    console.log("[RoomHub] error:", err);
     try { ws.close(1011, "unexpected error"); } catch {}
     const u = this.clients.get(ws);
     if (!u) return;
@@ -108,6 +176,7 @@ export class RoomHub {
         users.push({ id: u.id, name: u.name, role: u.role, ready: u.ready });
       }
     }
+    console.log("[RoomHub] PRESENCE →", roomId, "users:", users.map(u => u.name));
     const payload = JSON.stringify({ type: "PRESENCE", users });
     for (const [socket, u] of this.clients) {
       if (u.roomId === roomId) {

@@ -114,7 +114,18 @@ export default function App() {
   });
   useEffect(() => { try { localStorage.setItem("wizamp_displayName", displayName); } catch {} }, [displayName]);
 
-  const room = useRoom({ onlineEnabled, displayName, role });
+  const room = useRoom({
+    onlineEnabled,
+    displayName,
+    role,
+    onPlay: ({ trackName, sectionName, serverMs }) => {
+      // Optional: ensure we're on the same track (or auto-select)
+      // if (trackName && trackName !== selectedTrack) handleSelectTrack(trackName);
+      if (sectionName && serverMs) {
+        scheduleSectionAtServerTime(sectionName, serverMs);
+      }
+    }
+  });
   // room = { onlineActive, connected, users, roomId, setReady }
 
   // Modes
@@ -390,8 +401,12 @@ export default function App() {
 
     const target = currentSectionName || firstSection;
     if (target) {
-      net.playSection(target);
-      engine.playSection(target);
+      if (room.onlineActive && role === "GM") {
+        // Ask server to schedule a play in ~2s for everyone
+        room.requestPlay({ trackName: selectedTrack, sectionName: target, delayMs: 2000 });
+      } else {
+        engine.playSection(target);
+      }
     }
   };
 
@@ -549,6 +564,28 @@ export default function App() {
     localStorage.setItem("wizamp_appIcon", appIconName);
   }, [appIconName]);
 
+  // helper: schedule a section at a server timestamp
+  const scheduleSectionAtServerTime = (sectionName, serverMs) => {
+    try {
+      const ctx = engine.ensureContext ? engine.ensureContext() : engine.audioCtx;
+      const audioNow = ctx?.currentTime ?? 0;
+      const serverNow = room.serverNowMs ? room.serverNowMs() : Date.now();
+      const deltaSec = Math.max(0, (serverMs - serverNow) / 1000);
+      // Nudge a tiny safety margin for timers (20ms)
+      const delayMs = Math.max(0, (deltaSec - 0.02) * 1000);
+      setTimeout(() => {
+        engine.clearQueuedSection?.();
+        engine.clearQueuedMode?.();
+        engine.playSection(sectionName);
+      }, delayMs);
+    } catch (e) {
+      console.error("scheduleSectionAtServerTime failed", e);
+      // fallback: just play immediately
+      engine.playSection(sectionName);
+    }
+  };
+
+
   return (
     <div style={{
       fontFamily: "sans-serif",
@@ -623,6 +660,8 @@ export default function App() {
           roomId={room.roomId}
           users={room.users}
           visible={usersOpen}
+          latencyMs={room.latencyMs}
+          offsetMs={room.offsetMs}
         />
       </div>
 
