@@ -26,6 +26,7 @@ import StatusBar from "./components/StatusBar";
 import DatabaseModal from "./components/DatabaseModal";
 import SettingsModal from "./components/SettingsModal";
 import UsersPanel from "./components/UsersPanel";
+import Transport from "./components/Transport";
 
 // Auto-import all PNGs in /assets/icons at build time
 const _iconModules = import.meta.glob("./assets/icons/*.png", { eager: true });
@@ -108,6 +109,12 @@ export default function App() {
     try { return localStorage.getItem("wizamp_role") || "GM"; } catch { return "GM"; }
   });
   useEffect(() => { try { localStorage.setItem("wizamp_role", role); } catch {} }, [role]);
+
+  // Role flags
+  const normRole = role === "Player" ? "passive" : role; // map old to new
+  const isGM = normRole === "GM";
+  const isPassiveBTS = normRole === "passive-bts";
+  const isPassive = normRole === "passive";
 
   const [displayName, setDisplayName] = useState(() => {
     try { return localStorage.getItem("wizamp_displayName") || ""; } catch { return ""; }
@@ -387,7 +394,7 @@ export default function App() {
 
     const target = currentSectionName || firstSection;
     if (target) {
-      if (room.onlineActive && role === "GM") {
+      if (room.onlineActive && isGM) {
         // enforce ready gate by default
         if (!room.allReady) {
           // Show something lightweight to the GM; you can replace with your modal/toast
@@ -409,6 +416,18 @@ export default function App() {
     engine.clearQueuedMode?.();
     net.playSection(sectionName);
     engine.playSection(sectionName);
+  };
+
+  const handlePause = () => {
+    const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
+    net.pause(simple);
+    engine.pause(simple);
+  };
+
+  const handleResume = () => {
+    const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
+    net.resume(simple);
+    engine.resume(simple);
   };
 
   const handleStop = async () => {
@@ -605,7 +624,7 @@ export default function App() {
     handleSelectTrack(name);
 
     // if online GM, announce to room so players mirror & preload
-    if (room.onlineActive && role === "GM") {
+    if (room.onlineActive && isGM) {
       room.requestSetTrack?.(name);
     }
   }
@@ -639,24 +658,26 @@ export default function App() {
               👥
             </button>
           )}
-          <button
-            aria-label="Database"
-            onClick={() => setDbOpen(true)}
-            style={{
-              width: 32,
-              height: 32,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: "none",
-              fontSize: 20,
-              cursor: "pointer",
-            }}
-            title="Database"
-          >
-            🗄️
-          </button>
+          {isGM &&
+            <button
+              aria-label="Database"
+              onClick={() => setDbOpen(true)}
+              style={{
+                width: 32,
+                height: 32,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "transparent",
+                border: "none",
+                fontSize: 20,
+                cursor: "pointer",
+              }}
+              title="Database"
+            >
+              🗄️
+            </button>
+          }
           <button
             aria-label="Settings"
             onClick={() => setSettingsOpen(true)}
@@ -704,16 +725,19 @@ export default function App() {
       {/* Track Controls */}
       <section style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <TrackSelector
-            tracks={tracks}
-            value={selectedTrack}
-            onChange={onTrackChosen}
-            sortMode={dbSort}
-            dynamicFirst={dbDynamicFirst}
-            hideTests={dbHideTests}
-            pinned={pinned}
-            names={names}                 // NEW
-          />
+          {!isPassive && (
+            <TrackSelector
+              tracks={tracks}
+              value={selectedTrack}
+              onChange={onTrackChosen}
+              disabled={!isGM && room.onlineActive}
+              sortMode={dbSort}
+              dynamicFirst={dbDynamicFirst}
+              hideTests={dbHideTests}
+              pinned={pinned}
+              names={names}                 // NEW
+            />
+          )}
         </div>
       </section>
 
@@ -726,11 +750,12 @@ export default function App() {
           </span>
 
           {/* 🔊 Track volume toggle */}
-          {selectedTrack && (
+          {selectedTrack && !isPassive && (
             <div style={{ position: "relative" }}>
               <button
                 aria-label="Track volume"
                 onClick={() => setTrackVolUIOpen(o => !o)}
+                disabled={!isGM}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -740,7 +765,7 @@ export default function App() {
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  cursor: "pointer"
+                  cursor: (!isGM) ? "not-allowed" : "pointer",
                 }}
                 title="Track volume (set for all players)"
               >
@@ -785,7 +810,7 @@ export default function App() {
       )}
 
       {/* Section Controls */}
-      {currentSectionName && (
+      {currentSectionName && !isPassive && (
         <section style={{ marginBottom: 16 }}>
           {isDynamicPlayingTrack && (
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
@@ -795,7 +820,9 @@ export default function App() {
               </span>
             </div>
           )}
+          {!isPassive && (
           <SectionPanel
+            disabled={!isGM && room.onlineActive}
             sections={sections}
             currentSectionName={currentSectionName}
             queuedSectionName={queuedSectionName}
@@ -836,86 +863,35 @@ export default function App() {
               }
             }}
           />
+        )}
       </section>
       )}
 
       {/* Clip Information (progress bar from 0 to loopPoint) */}
-      <section style={{ marginBottom: 16 }}>
-        <div style={{ height: 10, background: "#363119", borderRadius: 6, overflow: "hidden" }} aria-label="Clip position">
-          <div style={{ width: `${Math.round(clipProgress * 100)}%`, height: "100%", background: "#E0C766", transition: "width 80ms linear" }} />
-        </div>
-      </section>
+      {!isPassive && (
+        <section style={{ marginBottom: 16 }}>
+          <div style={{ height: 10, background: "#363119", borderRadius: 6, overflow: "hidden" }} aria-label="Clip position">
+            <div style={{ width: `${Math.round(clipProgress * 100)}%`, height: "100%", background: "#E0C766", transition: "width 80ms linear" }} />
+          </div>
+        </section>
+      )}
 
-      {/* Control Row: Auto-Play • Play/Pause • Stop */}
-      <section style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Auto-Play toggle (smaller circle) */}
-          <button
-            onClick={() => setAutoplay(a => !a)}
-            title={autoplay ? "Auto-Play is ON (↠)" : "Auto-Play is OFF (⇥)"}
-            aria-pressed={autoplay}
-            style={{
-              width: 36, height: 36, borderRadius: "50%",
-              border: "1px solid #5C5C50", background: autoplay ? "#9C9160" : "#363119",
-              color: "white", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center"
-            }}
-          >
-            {autoplay ? "↠" : "⇥"}
-          </button>
-
-          {/* Play/Pause (largest circle) */}
-          <button
-            onClick={() => {
-              if (isLoadingTrack) return;
-              const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
-              if (isPlaying) {
-                net.pause(simple);
-                engine.pause(simple);
-              } else if (isPaused) {
-                net.resume(simple);
-                engine.resume(simple);
-              } else {
-                handlePlay();
-              }
-            }}
-            disabled={playDisabled || isLoadingTrack}
-            title={
-              isLoadingTrack ? "Loading… please wait"
-              : (isPlaying ? "Pause"
-              : (isPaused ? "Resume" : "Play"))
-            }
-            style={{
-              width: 52, height: 52, borderRadius: "50%",
-              border: "1px solid #555",
-              background: isLoadingTrack ? "#5C5C50"
-                        : (isPlaying ? "#363119"
-                        : (isPaused ? "#E0C766" : "#E0C766")),
-              color: isLoadingTrack ? "#888" : (isPlaying ? "white" : "black"),
-              fontSize: 18,
-              cursor: (playDisabled || isLoadingTrack) ? "not-allowed" : "pointer",
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-            }}
-            >
-              {isLoadingTrack ? "⏳" : (isPlaying ? "⏸" : (isPaused ? "⏵" : "⏵"))}
-            </button>
-
-            {/* Stop (always visible; black by default, red if a SIMPLE track is playing) */}
-            <button
-              onClick={() => { if (isPlaying) handleStop(); }}
-              title="Stop"
-              style={{
-                width: 40, height: 40, borderRadius: "50%",
-                border: "1px solid #555",
-                background: (isPlaying && tracks[playingTrackName]?.simple === true) ? "#B34745" : "#363119",
-                color: "white",
-                cursor: isPlaying ? "pointer" : "default",
-                display: "inline-flex", alignItems: "center", justifyContent: "center"
-              }}
-              >
-                ⏹
-              </button>
-        </div>
-      </section>
+      {/* Transport Controls */}
+      {!isPassive && (
+        <Transport
+          disabled={!isGM && room.onlineActive}
+          isLoadingTrack={isLoadingTrack}
+          isPlaying={isPlaying}
+          isPaused={isPaused}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onResume={handleResume}
+          onStop={handleStop}
+          autoplay={autoplay}
+          setAutoplay={setAutoplay}
+          isSimpleTrackPlaying={tracks[playingTrackName]?.simple === true}
+        />
+      )}
 
       {autoStartRequestedFor && (
         <div style={{

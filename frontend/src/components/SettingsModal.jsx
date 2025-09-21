@@ -178,8 +178,9 @@ export default function SettingsModal({
               style={{ padding: "6px 8px", borderRadius: 6, width: "100%" }}
               disabled={!onlineEnabled}
             >
-              <option value="GM">GM (Active)</option>
-              <option value="Player">Player (Passive)</option>
+              <option value="GM">Active (GM/DJ)</option>
+              <option value="passive-bts">Passive BTS (Player with potential spoilers)</option>
+              <option value="passive">Passive (Player)</option>
             </select>
           </div>
 
