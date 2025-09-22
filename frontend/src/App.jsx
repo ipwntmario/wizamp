@@ -87,6 +87,9 @@ export default function App() {
   // Mirror the ref into state just so we can show a badge in the UI
   const [autoStartRequestedFor, setAutoStartRequestedFor] = useState(null);
 
+  // Auto-start for late joiners
+  const pendingPlayRef = useRef(null); // { trackName, sectionName, serverMs } or null
+
   // Status visibility (persist)
   const [showStatus, setShowStatus] = useState(() => {
     try { return localStorage.getItem("wizamp_showStatus") !== "0"; } catch { return true; }
@@ -287,6 +290,17 @@ export default function App() {
           setAutoStartRequestedFor(null);
           console.log("[AUTOPLAY] started and request consumed");
           autoplayInFlightRef.current = false;
+        }
+
+        // If we have a pending network-driven start for this track, honor it now.
+        if (pendingPlayRef.current && pendingPlayRef.current.trackName === trackName) {
+          const { sectionName, serverMs } = pendingPlayRef.current;
+          const now = room.serverNowMs ? room.serverNowMs() : Date.now();
+          const target = Math.max(serverMs, now + 1500);
+          console.log("[NET-START] scheduling after preload:", { sectionName, serverMs, target });
+          scheduleSectionAtServerTime(sectionName, target);
+          pendingPlayRef.current = null;
+          return; // avoid also triggering local autoplay
         }
       },
     });
@@ -607,16 +621,43 @@ export default function App() {
     engine.clearQueuedMode?.();
   }, [engine]);
 
+  const onSetTrackVolumeMsg = useCallback((vol) => {
+    const v = Math.max(0, Math.min(1, Number(vol)));
+    setTrackVolume(v);
+    if (playingTrackName) saveTrackVolume(playingTrackName, v);
+    engine.setTrackVolume?.(v);
+  }, [engine, playingTrackName]);
+
+  const onSetAutoplayMsg = useCallback((val) => {
+    setAutoplay(!!val);
+  }, []);
+
   const room = useRoom({
     onlineEnabled,
     displayName,
     role,
     onSetTrack,
     onPlay: ({ trackName, sectionName, serverMs }) => {
-      // Optional: ensure we're on the same track (or auto-select)
+      // Late-join friendliness:
+      // 1) If assets not ready, ensure selection + preload first.
+      // 2) After preload, schedule at max(serverMs, serverNow + 1500ms) so everyone lines up.
+      const needPreload = !playingTrackName || playingTrackName !== trackName;
+      // Snap the UI track selector if needed (no load yet)
       if (trackName && trackName !== selectedTrack) handleSelectTrack(trackName);
-      if (sectionName && serverMs) {
-        scheduleSectionAtServerTime(sectionName, serverMs);
+      if (!sectionName || !serverMs) return;
+      if (needPreload || isLoadingTrack) {
+        pendingPlayRef.current = { trackName, sectionName, serverMs };
+        // kick off preload if not already happening
+        if (!isLoadingTrack && selectedTrack === trackName) {
+          // If we’re fully stopped, your effect will call loadTrackAssets(selectedTrack)
+          // If we’re not stopped yet, we can force load here as a safety:
+          if (!isPlaying) loadTrackAssets(trackName);
+        }
+      } else {
+        // We are ready: schedule with a safety lead time if serverMs already passed
+        const now = room.serverNowMs ? room.serverNowMs() : Date.now();
+        const target = Math.max(serverMs, now + 1500);
+        scheduleSectionAtServerTime(sectionName, target);
       }
     },
     onPause: onPauseMsg,
@@ -626,6 +667,8 @@ export default function App() {
     onClearSectionQueue: onClearSectionQueueMsg,
     onQueueMode: onQueueModeMsg,
     onClearModeQueue: onClearModeQueueMsg,
+    onSetTrackVolume: onSetTrackVolumeMsg,
+    onSetAutoplay: onSetAutoplayMsg,
   });
   // room = { onlineActive, connected, users, roomId, setReady }
 
@@ -902,7 +945,15 @@ export default function App() {
                       onChange={(e) => {
                         const v = Number(e.target.value) / 100;
                         setTrackVolume(v);
-                        if (playingTrackName) net.setTrackVolume(playingTrackName, v);
+                        // Always apply locally right away for zero-latency feedback
+                        engine.setTrackVolume?.(v);
+                        if (playingTrackName) {
+                          if (room.onlineActive && isGM) {
+                            room.requestSetTrackVolume(v); // sync to others + snapshot
+                          } else {
+                            net.setTrackVolume?.(playingTrackName, v);
+                          }
+                        }
                       }}
                       style={{ flex: 1 }}
                     />
@@ -1000,7 +1051,13 @@ export default function App() {
           onResume={handleResume}
           onStop={handleStop}
           autoplay={autoplay}
-          setAutoplay={setAutoplay}
+          setAutoplay={(fnOrBool) => {
+            const next = typeof fnOrBool === "function" ? !!fnOrBool(autoplay) : !!fnOrBool;
+            setAutoplay(next); // optimistic
+            if (room.onlineActive && isGM) {
+              room.requestSetAutoplay?.(next);
+            }
+          }}
           isSimpleTrackPlaying={tracks[playingTrackName]?.simple === true}
         />
       )}

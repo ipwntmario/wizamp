@@ -17,7 +17,9 @@ function getRoomIdFromUrl() {
 export function useRoom({
   onlineEnabled, displayName, role,
   onPlay, onSetTrack, onPause, onStop, onResume,
-  onQueueSection, onClearSectionQueue, onQueueMode, onClearModeQueue
+  onQueueSection, onClearSectionQueue, onQueueMode, onClearModeQueue,
+  onSetTrackVolume,
+  onSetAutoplay
 } = {}) {
   const shouldOnline = ONLINE_ENV && onlineEnabled && !!WS_URL;
   const roomId = useMemo(() => getRoomIdFromUrl(), []);
@@ -25,18 +27,26 @@ export function useRoom({
   // Keep refs so we don't reconnect on every render
   const onPlayRef = useRef(onPlay);
   useEffect(() => { onPlayRef.current = onPlay; }, [onPlay]);
-
   const onSetTrackRef = useRef(onSetTrack);
   useEffect(() => { onSetTrackRef.current = onSetTrack; }, [onSetTrack]);
-
   const onPauseRef = useRef(onPause);
   useEffect(() => { onPauseRef.current = onPause; }, [onPause]);
-
   const onStopRef = useRef(onStop);
   useEffect(() => { onStopRef.current = onStop; }, [onStop]);
-
   const onResumeRef = useRef(onResume);
   useEffect(() => { onResumeRef.current = onResume; }, [onResume]);
+  const onQueueSectionRef = useRef(onQueueSection);
+  useEffect(() => { onQueueSectionRef.current = onQueueSection; }, [onQueueSection]);
+  const onClearSectionQueueRef = useRef(onClearSectionQueue);
+  useEffect(() => { onClearSectionQueueRef.current = onClearSectionQueue; }, [onClearSectionQueue]);
+  const onQueueModeRef = useRef(onQueueMode);
+  useEffect(() => { onQueueModeRef.current = onQueueMode; }, [onQueueMode]);
+  const onClearModeQueueRef = useRef(onClearModeQueue);
+  useEffect(() => { onClearModeQueueRef.current = onClearModeQueue; }, [onClearModeQueue]);
+  const onSetTrackVolumeRef = useRef(onSetTrackVolume);
+  useEffect(() => { onSetTrackVolumeRef.current = onSetTrackVolume; }, [onSetTrackVolume]);
+  const onSetAutoplayRef = useRef(onSetAutoplay);
+  useEffect(() => { onSetAutoplayRef.current = onSetAutoplay; }, [onSetAutoplay]);
 
   const [connected, setConnected] = useState(false);
   const [users, setUsers] = useState([]);
@@ -50,15 +60,6 @@ export function useRoom({
   const lastReadyRef = useRef(null);
   const connIdRef = useRef(0);
   const startedRef = useRef(false);
-
-  const onQueueSectionRef = useRef(onQueueSection);
-  useEffect(() => { onQueueSectionRef.current = onQueueSection; }, [onQueueSection]);
-  const onClearSectionQueueRef = useRef(onClearSectionQueue);
-  useEffect(() => { onClearSectionQueueRef.current = onClearSectionQueue; }, [onClearSectionQueue]);
-  const onQueueModeRef = useRef(onQueueMode);
-  useEffect(() => { onQueueModeRef.current = onQueueMode; }, [onQueueMode]);
-  const onClearModeQueueRef = useRef(onClearModeQueue);
-  useEffect(() => { onClearModeQueueRef.current = onClearModeQueue; }, [onClearModeQueue]);
 
   // NTP-ish smoothing
   const updateOffset = useCallback((rtt, serverTimeMs, clientSendMs) => {
@@ -143,6 +144,21 @@ export function useRoom({
         // hydrate queued UI from snapshot (optional)
         if (data.queuedSection != null) onQueueSectionRef.current?.(String(data.queuedSection));
         if (data.queuedMode != null) onQueueModeRef.current?.(String(data.queuedMode));
+        if (typeof data.trackVolume === "number") {
+          onSetTrackVolumeRef.current?.(data.trackVolume);
+        }
+        if (typeof data.autoplay === "boolean") {
+          onSetAutoplayRef.current?.(!!data.autoplay);
+        }
+        if (data.playing && data.playing.trackName && data.playing.sectionName && data.playing.serverMs) {
+          // Minimal catch-up: let App decide how to handle late-join play snapshot.
+          // You can either re-broadcast PLAY or do a local catch-up; we surface it via onPlay.
+          onPlayRef.current?.({
+            trackName: String(data.playing.trackName),
+            sectionName: String(data.playing.sectionName),
+            serverMs: Number(data.playing.serverMs)
+          });
+        }
       } else if (data.type === "PLAY") {
         onPlayRef.current?.({ trackName: data.trackName, sectionName: data.sectionName, serverMs: Number(data.serverMs) });
       } else if (data.type === "PAUSE") {
@@ -159,6 +175,10 @@ export function useRoom({
         onQueueModeRef.current?.(String(data.name || ""));
       } else if (data.type === "CLEAR_MODE_QUEUE") {
         onClearModeQueueRef.current?.();
+      } else if (data.type === "SET_TRACK_VOLUME") {
+        onSetTrackVolumeRef.current?.(Math.max(0, Math.min(1, Number(data.volume))));
+      } else if (data.type === "SET_AUTOPLAY") {
+        onSetAutoplayRef.current?.(!!data.value);
       } else if (data.type === "ERROR") {
         setLastError({ code: data.code, message: data.message, notReady: data.notReady });
         console.warn("[room] ERROR", data);
@@ -250,6 +270,17 @@ export function useRoom({
     ws.send(JSON.stringify({ type: "CLEAR_MODE_QUEUE_REQUEST" }));
   }, []);
 
+  const requestSetTrackVolume = useCallback((volume) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "SET_TRACK_VOLUME_REQUEST", volume: Math.max(0, Math.min(1, Number(volume))) }));
+  }, []);
+
+  const requestSetAutoplay = useCallback((value) => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "SET_AUTOPLAY_REQUEST", value: !!value }));
+  }, []);
+
   const allReady = users.length > 0 && users.every(u => !!u.ready);
 
   return {
@@ -267,6 +298,8 @@ export function useRoom({
     requestClearSectionQueue,
     requestQueueMode,
     requestClearModeQueue,
+    requestSetTrackVolume,
+    requestSetAutoplay,
     serverNowMs,
     latencyMs,
     offsetMs,
