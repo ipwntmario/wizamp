@@ -284,7 +284,12 @@ export class RoomHub {
 
       case "QUEUE_MODE_REQUEST": {
         const u = this.clients.get(ws); if (!u) return;
-        if (u.role !== "GM") { try { ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can queue mode." })); } catch{}; break; }
+        if (u.role !== "GM") {
+          try {
+            ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can queue mode." }));
+          } catch {};
+          break;
+        }
         const roomId = u.roomId;
         const name = String(data.name || "");
         const rs = this.roomState.get(roomId) || {};
@@ -298,7 +303,12 @@ export class RoomHub {
 
       case "CLEAR_MODE_QUEUE_REQUEST": {
         const u = this.clients.get(ws); if (!u) return;
-        if (u.role !== "GM") { try { ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can clear mode queue." })); } catch{}; break; }
+        if (u.role !== "GM") {
+          try {
+            ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can clear mode queue." }));
+          } catch {};
+          break;
+        }
         const roomId = u.roomId;
         const rs = this.roomState.get(roomId) || {};
         rs.queuedMode = null;
@@ -312,7 +322,9 @@ export class RoomHub {
       case "SET_TRACK_VOLUME_REQUEST": {
         const u = this.clients.get(ws); if (!u) return;
         if (u.role !== "GM") {
-          try { ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can set track volume." })); } catch {}
+          try {
+            ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can set track volume." }));
+          } catch {}
           break;
         }
         const roomId = u.roomId;
@@ -328,7 +340,12 @@ export class RoomHub {
 
       case "SET_AUTOPLAY_REQUEST": {
         const u = this.clients.get(ws); if (!u) return;
-        if (u.role !== "GM") { try { ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can set autoplay." })); } catch{}; break; }
+        if (u.role !== "GM") {
+          try {
+            ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can set autoplay." }));
+          } catch {};
+          break;
+        }
         const roomId = u.roomId;
         const val = !!data.value;
         const rs = this.roomState.get(roomId) || {};
@@ -340,6 +357,41 @@ export class RoomHub {
         break;
       }
 
+      // Late-join precise sync: joiner → GM
+      case "SYNC_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        const roomId = u.roomId;
+        // Forward to any GM in the room
+        for (const [sock, uu] of this.clients) {
+          if (uu.roomId === roomId && uu.role === "GM") {
+            try {
+              sock.send(JSON.stringify({ type: "SYNC_REQUEST", requesterId: u.id }));
+            } catch {}
+          }
+        }
+        break;
+      }
+
+      // GM → server → specific joiner only
+      case "SYNC_RESPONSE": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") {
+          try {
+            ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can send SYNC_RESPONSE." }));
+          } catch {};
+          break;
+        }
+        const roomId = u.roomId;
+        const toId = String(data.to || "");
+        // Find that specific socket
+        for (const [sock, uu] of this.clients) {
+          if (uu.roomId === roomId && uu.id === toId) {
+            try { sock.send(JSON.stringify({ type:"SYNC_STATE", state: data.state || {} })); } catch {}
+            break;
+          }
+        }
+        break;
+      }
 
       // Future commands (Phase 2/3): PLAY, QUEUE_SECTION, etc. go here.
       default:

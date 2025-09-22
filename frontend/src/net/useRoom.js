@@ -19,7 +19,8 @@ export function useRoom({
   onPlay, onSetTrack, onPause, onStop, onResume,
   onQueueSection, onClearSectionQueue, onQueueMode, onClearModeQueue,
   onSetTrackVolume,
-  onSetAutoplay
+  onSetAutoplay,
+  onSyncRequest, onSyncState
 } = {}) {
   const shouldOnline = ONLINE_ENV && onlineEnabled && !!WS_URL;
   const roomId = useMemo(() => getRoomIdFromUrl(), []);
@@ -47,6 +48,11 @@ export function useRoom({
   useEffect(() => { onSetTrackVolumeRef.current = onSetTrackVolume; }, [onSetTrackVolume]);
   const onSetAutoplayRef = useRef(onSetAutoplay);
   useEffect(() => { onSetAutoplayRef.current = onSetAutoplay; }, [onSetAutoplay]);
+  const onSyncRequestRef = useRef(onSyncRequest);
+  useEffect(() => { onSyncRequestRef.current = onSyncRequest; }, [onSyncRequest]);
+  const onSyncStateRef = useRef(onSyncState);
+  useEffect(() => { onSyncStateRef.current = onSyncState; }, [onSyncState]);
+
 
   const [connected, setConnected] = useState(false);
   const [users, setUsers] = useState([]);
@@ -179,6 +185,11 @@ export function useRoom({
         onSetTrackVolumeRef.current?.(Math.max(0, Math.min(1, Number(data.volume))));
       } else if (data.type === "SET_AUTOPLAY") {
         onSetAutoplayRef.current?.(!!data.value);
+      } else if (data.type === "SYNC_REQUEST") {
+        // GM receives this; app will read precise position and answer
+        onSyncRequestRef.current?.(String(data.requesterId || ""));
+      } else if (data.type === "SYNC_STATE") {
+        onSyncStateRef.current?.(data.state || {});
       } else if (data.type === "ERROR") {
         setLastError({ code: data.code, message: data.message, notReady: data.notReady });
         console.warn("[room] ERROR", data);
@@ -281,6 +292,18 @@ export function useRoom({
     ws.send(JSON.stringify({ type: "SET_AUTOPLAY_REQUEST", value: !!value }));
   }, []);
 
+  const requestSync = useCallback(() => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "SYNC_REQUEST" }));
+  }, []);
+
+
+  const sendSyncResponse = useCallback((toId, state) => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "SYNC_RESPONSE", to: String(toId), state }));
+  }, []);
+
+
   const allReady = users.length > 0 && users.every(u => !!u.ready);
 
   return {
@@ -300,6 +323,8 @@ export function useRoom({
     requestClearModeQueue,
     requestSetTrackVolume,
     requestSetAutoplay,
+    requestSync,
+    sendSyncResponse,
     serverNowMs,
     latencyMs,
     offsetMs,

@@ -90,6 +90,8 @@ export default function App() {
   // Auto-start for late joiners
   const pendingPlayRef = useRef(null); // { trackName, sectionName, serverMs } or null
 
+  const sendSyncResponseRef = useRef(null);
+
   // Status visibility (persist)
   const [showStatus, setShowStatus] = useState(() => {
     try { return localStorage.getItem("wizamp_showStatus") !== "0"; } catch { return true; }
@@ -294,13 +296,13 @@ export default function App() {
 
         // If we have a pending network-driven start for this track, honor it now.
         if (pendingPlayRef.current && pendingPlayRef.current.trackName === trackName) {
-          const { sectionName, serverMs } = pendingPlayRef.current;
-          const now = room.serverNowMs ? room.serverNowMs() : Date.now();
-          const target = Math.max(serverMs, now + 1500);
-          console.log("[NET-START] scheduling after preload:", { sectionName, serverMs, target });
-          scheduleSectionAtServerTime(sectionName, target);
-          pendingPlayRef.current = null;
-          return; // avoid also triggering local autoplay
+          // Ask GM for exact position (section/mode/clip/offset)
+          console.log("[SYNC] requesting precise state from GM after preload");
+          room?.requestSetAutoplay?.(autoplay); // benign; keeps UI aligned for joiner too
+          // One-shot request:
+          room?.requestSync?.(); // we'll define this below (or call ws directly via a helper)
+          // We'll consume the reply in onSyncStateMsg
+          return;
         }
       },
     });
@@ -632,6 +634,56 @@ export default function App() {
     setAutoplay(!!val);
   }, []);
 
+  const onSyncRequestMsg = useCallback((requesterId) => {
+    // Build a precise snapshot from the engine (GM side)
+    const snapshot = engine.getNowPlaying?.();
+    if (!snapshot) return;
+
+    const state = {
+      ...snapshot,                // {trackName, sectionName, modeName, clipName, offsetSeconds, seed}
+      volume: trackVolume ?? 1,   // include current room volume
+      rngDrawCount: engine.getRngDrawCount?.() ?? snapshot.rngDrawCount ?? 0,
+    };
+
+    // Use the ref (may still be null on first render; that’s OK)
+    sendSyncResponseRef.current?.(requesterId, state);
+  }, [engine, trackVolume]);
+
+  const onSyncStateMsg = useCallback((state) => {
+    if (!state) return;
+    const { trackName, sectionName, modeName, clipName, offsetSeconds, seed, volume } = state;
+
+    // Ensure we’re on the right track (should already be selected/preloaded)
+    if (trackName && trackName !== selectedTrack) handleSelectTrack(trackName);
+
+    // 1) Seed + fast-forward RNG to GM’s draw count BEFORE any transitions
+    if (seed != null) engine.setRandomSeed?.(seed >>> 0);
+    const draws = Number(state?.rngDrawCount ?? 0) | 0;
+    if (draws > 0) engine.fastForwardRng?.(draws);
+
+    // 2) Apply volume for good measure
+    if (typeof volume === "number") {
+      setTrackVolume(volume);
+      engine.setTrackVolume?.(volume);
+    }
+
+    // 3) Jump precisely to the reported musical position
+    engine.clearQueuedSection?.();
+    engine.clearQueuedMode?.();
+    engine.playAtPosition?.({ sectionName, modeName, clipName, offsetSeconds });
+
+    pendingPlayRef.current = null;
+  }, [engine, selectedTrack, handleSelectTrack, setTrackVolume]);
+
+  // // Joiner asks GM for an exact position once ready:
+  // const sendSyncRequest = useCallback(() => {
+  //   // we’ll send via useRoom by exposing a simple method; or directly:
+  //   try {
+  //     // useRoom exposes no-arg wrapper here:
+  //     room?.requestSync?.();
+  //   } catch {}
+  // }, [room]);
+
   const room = useRoom({
     onlineEnabled,
     displayName,
@@ -669,8 +721,15 @@ export default function App() {
     onClearModeQueue: onClearModeQueueMsg,
     onSetTrackVolume: onSetTrackVolumeMsg,
     onSetAutoplay: onSetAutoplayMsg,
+    onSyncRequest: onSyncRequestMsg,
+    onSyncState: onSyncStateMsg,
   });
   // room = { onlineActive, connected, users, roomId, setReady }
+
+  useEffect(() => {
+    sendSyncResponseRef.current = room.sendSyncResponse;
+    return () => { sendSyncResponseRef.current = null; };
+  }, [room.sendSyncResponse]);
 
   // When fully stopped (end of fade or true end), load whichever track is selected.
   useEffect(() => {

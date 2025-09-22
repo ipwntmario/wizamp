@@ -63,6 +63,47 @@ export class AudioEngine {
     this._rng = Math.random;
     this._rngDraws = 0;
     this._rngDebug = true; // flip to false once things are stable
+    // After a mid-clip jump, force the first loopPoint to honor only clip.nextClip
+    this._stayInSectionOnce = false;
+  }
+
+  /**
+   * Snapshot the precise current musical position.
+   * Returns null if nothing is playing.
+   */
+  getNowPlaying() {
+    if (!this.audioCtx) return null;
+    const clipName = this.lastPlayingClipName;
+    if (!clipName) return null;
+    const entry = this.activeClips?.[clipName];
+    if (!entry) return null;
+    const ctx = this.audioCtx;
+    const elapsed = Math.max(0, ctx.currentTime - (entry.startedAt || ctx.currentTime));
+    const offsetSeconds = (entry.offsetAtStart || 0) + elapsed;
+    return {
+      trackName: this.currentTrackName || null,
+      sectionName: this.currentSectionName || null,
+      modeName: this.currentModeName || "base",
+      clipName,
+      offsetSeconds,
+      seed: this._seed ?? null,
+      rngDrawCount: this._rngDraws | 0,
+    };
+  }
+
+  /**
+   * Jump to an exact musical position (must already be preloaded).
+   * Starts the given clip with an offset, setting section/mode consistently.
+   */
+  playAtPosition({ sectionName, modeName = "base", clipName, offsetSeconds = 0 } = {}) {
+    if (!sectionName || !clipName) return;
+    // Set section & mode before starting the clip
+    this.setCurrentSection(sectionName);
+    this.setCurrentMode(modeName || "base");
+    // Ensure first loop after a mid-clip jump doesn’t take queued/section/mode detours
+    this._stayInSectionOnce = true;
+    // Start the target clip at given offset with no fade-in (to avoid double ramps)
+    this.playClip(clipName, { offsetSeconds, skipFadeIn: true });
   }
 
   get isPlaying() {
@@ -157,9 +198,21 @@ export class AudioEngine {
   }
 
   setTrackVolume(v) {
-    // you already scale track volume at individual clip gains;
-    // if you centralize it later, apply here.
-    this.trackVolume = Math.max(0, Math.min(1, Number(v) || 0));
+    // Central track volume (0..1)
+    const ctx = this.ensureContext();
+    const val = Math.max(0, Math.min(1, Number(v) || 0));
+    this.trackVolume = val;
+    // If a global stop fade is in progress, don't stomp its automation.
+    const now = ctx.currentTime;
+    if (this._stopPendingUntil && now < this._stopPendingUntil) return;
+    // Apply immediately to all active clip gains
+    try {
+      Object.values(this.activeClips).forEach(({ gainNode }) => {
+        if (!gainNode) return;
+        gainNode.gain.cancelScheduledValues(now);
+        gainNode.gain.setValueAtTime(val, now);
+      });
+    } catch {}
   }
 
   setFadeOutSeconds(n) {
@@ -186,13 +239,29 @@ export class AudioEngine {
   rand() {
     try {
       const r = this._rng ? this._rng() : Math.random();
-      if (this._rngDebug) console.log(`[ENGINE][RNG] draw#${++this._rngDraws} → ${r}`);
+      this._rngDraws += 1;
+      if (this._rngDebug) console.log(`[ENGINE][RNG] draw#${this._rngDraws} → ${r}`);
       return r;
     } catch {
       const r = Math.random();
       if (this._rngDebug) console.log(`[ENGINE][RNG] draw#${++this._rngDraws} (fallback) → ${r}`);
       return r;
     }
+  }
+
+  getRngDrawCount() {
+    return this._rngDraws | 0;
+  }
+
+  fastForwardRng(n) {
+    // Advance RNG deterministically to match GM’s draw count
+    const count = Math.max(0, Number(n) | 0);
+    if (!count) return;
+    for (let i = 0; i < count; i++) {
+      // Discarded draws (still increment counter for truthful state)
+      const _ = this.rand();
+    }
+    if (this._rngDebug) console.log(`[ENGINE][RNG] fast-forwarded to draw#${this._rngDraws}`);
   }
 
   setData({ clips, sections, tracks }) {
@@ -614,48 +683,54 @@ export class AudioEngine {
         }
         const now2 = ctx.currentTime;
 
-        // (1) Section queued?
-        if (this.queuedNextSectionName) {
-          // We’re about to jump sections; stop any other pending callbacks.
-          this.clearScheduled();
+        // On the *first* loop after a mid-clip jump, skip section/mode detours
+        const skipHigherPriorityOnce = this._stayInSectionOnce === true;
+        if (!skipHigherPriorityOnce) {
+          // (1) Section queued?
+          if (this.queuedNextSectionName) {
+            // We’re about to jump sections; stop any other pending callbacks.
+            this.clearScheduled();
 
-          const targetSection = this.sectionData[this.queuedNextSectionName];
-          const nextClipName = targetSection?.firstClip || null;
+            const targetSection = this.sectionData[this.queuedNextSectionName];
+            const nextClipName = targetSection?.firstClip || null;
 
-          // mode selection on section change:
-          // default to base; if new section supports currentModeName, keep it
-          if (targetSection) {
-            const modes = this.getAvailableModes(this.queuedNextSectionName);
-            const nextMode = modes.includes(this.currentModeName) ? this.currentModeName : "base";
-            this.currentModeName = nextMode;
-            this.onModeChange?.(nextMode);
-            this.setCurrentSection(this.queuedNextSectionName);
+            // mode selection on section change:
+            // default to base; if new section supports currentModeName, keep it
+            if (targetSection) {
+              const modes = this.getAvailableModes(this.queuedNextSectionName);
+              const nextMode = modes.includes(this.currentModeName) ? this.currentModeName : "base";
+              this.currentModeName = nextMode;
+              this.onModeChange?.(nextMode);
+              this.setCurrentSection(this.queuedNextSectionName);
+            }
+            this.clearQueuedSection();
+            this.clearQueuedMode(); // also clear any queued mode
+
+            if (nextClipName && this.clipData[nextClipName] && this.activeClips[nextClipName]) {
+              this.playClip(nextClipName);
+            }
+
+            // fade out this clip until clipEnd
+            const clipEndTime = clip.clipEnd ?? buffer.duration;
+            const delta = clipEndTime - (clip.loopPoint ?? buffer.duration);
+            gainNode.gain.setValueAtTime(0, now2 + Math.max(0, delta));
+            return;
           }
-          this.clearQueuedSection();
-          this.clearQueuedMode(); // also clear any queued mode
 
-          if (nextClipName && this.clipData[nextClipName] && this.activeClips[nextClipName]) {
-            this.playClip(nextClipName);
+          // (2) Mode queued (same section)?
+          if (this.queuedNextModeName) {
+            // apply NOW: change currentMode, clear queue; continue normal nextClip transition below
+            const modes = this.getAvailableModes(this.currentSectionName);
+            const chosen = modes.includes(this.queuedNextModeName) ? this.queuedNextModeName : "base";
+            this.currentModeName = chosen;
+            this.onModeChange?.(chosen);
+            this.clearQueuedMode();
+            // do not return; allow clip.nextClip to proceed,
+            // but next playClip() will select buffer for new mode
           }
-
-          // fade out this clip until clipEnd
-          const clipEndTime = clip.clipEnd ?? buffer.duration;
-          const delta = clipEndTime - (clip.loopPoint ?? buffer.duration);
-          gainNode.gain.setValueAtTime(0, now2 + Math.max(0, delta));
-          return;
         }
-
-        // (2) Mode queued (same section)?
-        if (this.queuedNextModeName) {
-          // apply NOW: change currentMode, clear queue; continue normal nextClip transition below
-          const modes = this.getAvailableModes(this.currentSectionName);
-          const chosen = modes.includes(this.queuedNextModeName) ? this.queuedNextModeName : "base";
-          this.currentModeName = chosen;
-          this.onModeChange?.(chosen);
-          this.clearQueuedMode();
-          // do not return; allow clip.nextClip to proceed,
-          // but next playClip() will select buffer for new mode
-        }
+        // Clear the guard after evaluating priorities once
+        this._stayInSectionOnce = false;
 
         // (3) Normal nextClip
         if (hasNextInClip) {
