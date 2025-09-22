@@ -32,7 +32,7 @@ export class RoomHub {
     this.state = state;
     this.env = env;
     this.clients = new Map(); // Map<WebSocket, {id,name,role,ready,roomId}>
-    this.roomState = new Map(); // Map<roomId, { selectedTrack?: string }>
+    this.roomState = new Map(); // Map<roomId, { selectedTrack?: string, seed?: number, queuedSection?: string|null, queuedMode?: string|null }>
   }
 
   async fetch(req) {
@@ -97,7 +97,13 @@ export class RoomHub {
         // Send current room state (selectedTrack) to this client, if any
         const rs = this.roomState.get(user.roomId);
         if (rs && rs.selectedTrack) {
-          ws.send(JSON.stringify({ type: "STATE", selectedTrack: rs.selectedTrack, seed: rs.seed ?? null }));
+          ws.send(JSON.stringify({
+            type: "STATE",
+            selectedTrack: rs.selectedTrack,
+            seed: rs.seed ?? null,
+            queuedSection: rs.queuedSection ?? null,
+            queuedMode: rs.queuedMode ?? null
+          }));
         }
         break;
       }
@@ -167,47 +173,46 @@ export class RoomHub {
         }
       }
 
-    case "PAUSE_REQUEST": {
-      const u = this.clients.get(ws); if (!u) return;
-      if (u.role !== "GM") {
-        try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only GM can pause." })); } catch {}
+      case "PAUSE_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") {
+          try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only GM can pause." })); } catch {}
+          break;
+        }
+        const roomId = u.roomId;
+        console.log("[RoomHub] PAUSE_REQUEST", { roomId });
+        const payload = JSON.stringify({ type: "PAUSE" });
+        for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
         break;
       }
-      const roomId = u.roomId;
-      console.log("[RoomHub] PAUSE_REQUEST", { roomId });
-      const payload = JSON.stringify({ type: "PAUSE" });
-      for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
-      break;
-    }
 
-    case "STOP_REQUEST": {
-      const u = this.clients.get(ws); if (!u) return;
-      if (u.role !== "GM") {
-        try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only GM can stop." })); } catch {}
+      case "STOP_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") {
+          try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only GM can stop." })); } catch {}
+          break;
+        }
+        const roomId = u.roomId;
+        const fade = !!data.fade;
+        console.log("[RoomHub] STOP_REQUEST", { roomId, fade });
+        const payload = JSON.stringify({ type: "STOP", fade });
+        for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
         break;
       }
-      const roomId = u.roomId;
-      const fade = !!data.fade;
-      console.log("[RoomHub] STOP_REQUEST", { roomId, fade });
-      const payload = JSON.stringify({ type: "STOP", fade });
-      for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
-      break;
-    }
 
-    case "RESUME_REQUEST": {
-      const u = this.clients.get(ws); if (!u) return;
-      if (u.role !== "GM") {
-        try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only GM can resume." })); } catch {}
+      case "RESUME_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") {
+          try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only GM can resume." })); } catch {}
+          break;
+        }
+        const roomId = u.roomId;
+        const serverMs = Number(data.serverMs) || (Date.now() + 2000);
+        console.log("[RoomHub] RESUME_REQUEST", { roomId, serverMs });
+        const payload = JSON.stringify({ type: "RESUME", serverMs });
+        for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
         break;
       }
-      const roomId = u.roomId;
-      const serverMs = Number(data.serverMs) || (Date.now() + 2000);
-      console.log("[RoomHub] RESUME_REQUEST", { roomId, serverMs });
-      const payload = JSON.stringify({ type: "RESUME", serverMs });
-      for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
-      break;
-    }
-
 
       case "SET_TRACK_REQUEST": {
         const u = this.clients.get(ws);
@@ -236,6 +241,60 @@ export class RoomHub {
             try { sock.send(payload); } catch {}
           }
         }
+        break;
+      }
+
+      case "QUEUE_SECTION_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") { try { ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can queue section." })); } catch{}; break; }
+        const roomId = u.roomId;
+        const name = String(data.name || "");
+        const rs = this.roomState.get(roomId) || {};
+        rs.queuedSection = name || null;
+        this.roomState.set(roomId, rs);
+        console.log("[RoomHub] QUEUE_SECTION_REQUEST", { roomId, name });
+        const payload = JSON.stringify({ type: "QUEUE_SECTION", name });
+        for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
+        break;
+      }
+
+      case "CLEAR_SECTION_QUEUE_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") { try { ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can clear section queue." })); } catch{}; break; }
+        const roomId = u.roomId;
+        const rs = this.roomState.get(roomId) || {};
+        rs.queuedSection = null;
+        this.roomState.set(roomId, rs);
+        console.log("[RoomHub] CLEAR_SECTION_QUEUE_REQUEST", { roomId });
+        const payload = JSON.stringify({ type: "CLEAR_SECTION_QUEUE" });
+        for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
+        break;
+      }
+
+      case "QUEUE_MODE_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") { try { ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can queue mode." })); } catch{}; break; }
+        const roomId = u.roomId;
+        const name = String(data.name || "");
+        const rs = this.roomState.get(roomId) || {};
+        rs.queuedMode = name || null;
+        this.roomState.set(roomId, rs);
+        console.log("[RoomHub] QUEUE_MODE_REQUEST", { roomId, name });
+        const payload = JSON.stringify({ type: "QUEUE_MODE", name });
+        for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
+        break;
+      }
+
+      case "CLEAR_MODE_QUEUE_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") { try { ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only GM can clear mode queue." })); } catch{}; break; }
+        const roomId = u.roomId;
+        const rs = this.roomState.get(roomId) || {};
+        rs.queuedMode = null;
+        this.roomState.set(roomId, rs);
+        console.log("[RoomHub] CLEAR_MODE_QUEUE_REQUEST", { roomId });
+        const payload = JSON.stringify({ type: "CLEAR_MODE_QUEUE" });
+        for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
         break;
       }
 

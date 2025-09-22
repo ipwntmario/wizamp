@@ -587,6 +587,26 @@ export default function App() {
     });
   }, [tracks, playingTrackName, selectedTrack, net, engine]);
 
+  const onQueueSectionMsg = useCallback((name) => {
+    setQueuedSectionName(name || null);
+    if (name) engine.queueSectionTransition?.(name);
+  }, [engine]);
+
+  const onClearSectionQueueMsg = useCallback(() => {
+    setQueuedSectionName(null);
+    engine.clearQueuedSection?.();
+  }, [engine]);
+
+  const onQueueModeMsg = useCallback((name) => {
+    setQueuedModeName(name || null);
+    if (name) engine.queueModeTransition?.(name);
+  }, [engine]);
+
+  const onClearModeQueueMsg = useCallback(() => {
+    setQueuedModeName(null);
+    engine.clearQueuedMode?.();
+  }, [engine]);
+
   const room = useRoom({
     onlineEnabled,
     displayName,
@@ -602,6 +622,10 @@ export default function App() {
     onPause: onPauseMsg,
     onStop: onStopMsg,
     onResume: onResumeMsg,
+    onQueueSection: onQueueSectionMsg,
+    onClearSectionQueue: onClearSectionQueueMsg,
+    onQueueMode: onQueueModeMsg,
+    onClearModeQueue: onClearModeQueueMsg,
   });
   // room = { onlineActive, connected, users, roomId, setReady }
 
@@ -910,12 +934,17 @@ export default function App() {
             autoLockedTargets={autoLockedTargets}
             onToggleQueuedSection={(nameOrNull) => {
               setQueuedSectionName(nameOrNull);
-              if (nameOrNull) {
-                net.queueSection(nameOrNull);
-                engine.queueSectionTransition(nameOrNull);
+              if (room.onlineActive && isGM) {
+                if (nameOrNull) room.requestQueueSection(nameOrNull);
+                else room.requestClearSectionQueue();
               } else {
-                net.clearQueuedSection();
-                engine.clearQueuedSection();
+                if (nameOrNull) {
+                  net.queueSection?.(nameOrNull);
+                  engine.queueSectionTransition?.(nameOrNull);
+                } else {
+                  net.clearQueuedSection?.();
+                  engine.clearQueuedSection?.();
+                }
               }
             }}
             largeButtons
@@ -931,16 +960,18 @@ export default function App() {
             currentModeName={currentModeName}     // "base" or a mode name
             queuedModeName={queuedModeName}       // null or a mode name
             onToggleQueuedMode={(nameOrNull) => {
-              // queue or clear in UI
               setQueuedModeName(nameOrNull);
-
-              // tell the engine, if available
-              if (nameOrNull) {
-                net.queueMode(nameOrNull);
-                engine.queueModeTransition?.(nameOrNull);  // e.g., "base" or "keychange"
+              if (room.onlineActive && isGM) {
+                if (nameOrNull) room.requestQueueMode(nameOrNull);
+                else room.requestClearModeQueue();
               } else {
-                net.clearQueuedMode();
-                engine.clearQueuedMode?.();
+                if (nameOrNull) {
+                  net.queueMode?.(nameOrNull);
+                  engine.queueModeTransition?.(nameOrNull);
+                } else {
+                  net.clearQueuedMode?.();
+                  engine.clearQueuedMode?.();
+                }
               }
             }}
           />

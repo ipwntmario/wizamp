@@ -14,7 +14,11 @@ function getRoomIdFromUrl() {
   }
 }
 
-export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack, onPause, onStop, onResume } = {}) {
+export function useRoom({
+  onlineEnabled, displayName, role,
+  onPlay, onSetTrack, onPause, onStop, onResume,
+  onQueueSection, onClearSectionQueue, onQueueMode, onClearModeQueue
+} = {}) {
   const shouldOnline = ONLINE_ENV && onlineEnabled && !!WS_URL;
   const roomId = useMemo(() => getRoomIdFromUrl(), []);
 
@@ -46,6 +50,15 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack, 
   const lastReadyRef = useRef(null);
   const connIdRef = useRef(0);
   const startedRef = useRef(false);
+
+  const onQueueSectionRef = useRef(onQueueSection);
+  useEffect(() => { onQueueSectionRef.current = onQueueSection; }, [onQueueSection]);
+  const onClearSectionQueueRef = useRef(onClearSectionQueue);
+  useEffect(() => { onClearSectionQueueRef.current = onClearSectionQueue; }, [onClearSectionQueue]);
+  const onQueueModeRef = useRef(onQueueMode);
+  useEffect(() => { onQueueModeRef.current = onQueueMode; }, [onQueueMode]);
+  const onClearModeQueueRef = useRef(onClearModeQueue);
+  useEffect(() => { onClearModeQueueRef.current = onClearModeQueue; }, [onClearModeQueue]);
 
   // NTP-ish smoothing
   const updateOffset = useCallback((rtt, serverTimeMs, clientSendMs) => {
@@ -127,6 +140,9 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack, 
         const seed = (data.seed ?? null);
         console.log("[room] ← STATE", { name, seed });
         if (name) onSetTrackRef.current?.(name, seed);
+        // hydrate queued UI from snapshot (optional)
+        if (data.queuedSection != null) onQueueSectionRef.current?.(String(data.queuedSection));
+        if (data.queuedMode != null) onQueueModeRef.current?.(String(data.queuedMode));
       } else if (data.type === "PLAY") {
         onPlayRef.current?.({ trackName: data.trackName, sectionName: data.sectionName, serverMs: Number(data.serverMs) });
       } else if (data.type === "PAUSE") {
@@ -135,6 +151,14 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack, 
         onStopRef.current?.(!!data.fade);
       } else if (data.type === "RESUME") {
         onResumeRef.current?.(Number(data.serverMs));
+      } else if (data.type === "QUEUE_SECTION") {
+        onQueueSectionRef.current?.(String(data.name || ""));
+      } else if (data.type === "CLEAR_SECTION_QUEUE") {
+        onClearSectionQueueRef.current?.();
+      } else if (data.type === "QUEUE_MODE") {
+        onQueueModeRef.current?.(String(data.name || ""));
+      } else if (data.type === "CLEAR_MODE_QUEUE") {
+        onClearModeQueueRef.current?.();
       } else if (data.type === "ERROR") {
         setLastError({ code: data.code, message: data.message, notReady: data.notReady });
         console.warn("[room] ERROR", data);
@@ -206,6 +230,26 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack, 
     ws.send(JSON.stringify({ type: "SET_TRACK_REQUEST", name }));
   }, []);
 
+  const requestQueueSection = useCallback((name) => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "QUEUE_SECTION_REQUEST", name }));
+  }, []);
+
+  const requestClearSectionQueue = useCallback(() => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "CLEAR_SECTION_QUEUE_REQUEST" }));
+  }, []);
+
+  const requestQueueMode = useCallback((name) => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "QUEUE_MODE_REQUEST", name }));
+  }, []);
+
+  const requestClearModeQueue = useCallback(() => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "CLEAR_MODE_QUEUE_REQUEST" }));
+  }, []);
+
   const allReady = users.length > 0 && users.every(u => !!u.ready);
 
   return {
@@ -219,6 +263,10 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack, 
     requestStop,
     requestResume,
     requestSetTrack,
+    requestQueueSection,
+    requestClearSectionQueue,
+    requestQueueMode,
+    requestClearModeQueue,
     serverNowMs,
     latencyMs,
     offsetMs,
