@@ -14,15 +14,25 @@ function getRoomIdFromUrl() {
   }
 }
 
-export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack } = {}) {
+export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack, onPause, onStop, onResume } = {}) {
   const shouldOnline = ONLINE_ENV && onlineEnabled && !!WS_URL;
   const roomId = useMemo(() => getRoomIdFromUrl(), []);
 
-  // Keep a ref to the onPlay and onSetTrackRef callbacks so we don't reconnect on every render
+  // Keep refs so we don't reconnect on every render
   const onPlayRef = useRef(onPlay);
   useEffect(() => { onPlayRef.current = onPlay; }, [onPlay]);
+
   const onSetTrackRef = useRef(onSetTrack);
   useEffect(() => { onSetTrackRef.current = onSetTrack; }, [onSetTrack]);
+
+  const onPauseRef = useRef(onPause);
+  useEffect(() => { onPauseRef.current = onPause; }, [onPause]);
+
+  const onStopRef = useRef(onStop);
+  useEffect(() => { onStopRef.current = onStop; }, [onStop]);
+
+  const onResumeRef = useRef(onResume);
+  useEffect(() => { onResumeRef.current = onResume; }, [onResume]);
 
   const [connected, setConnected] = useState(false);
   const [users, setUsers] = useState([]);
@@ -119,6 +129,12 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack }
         if (name) onSetTrackRef.current?.(name, seed);
       } else if (data.type === "PLAY") {
         onPlayRef.current?.({ trackName: data.trackName, sectionName: data.sectionName, serverMs: Number(data.serverMs) });
+      } else if (data.type === "PAUSE") {
+        onPauseRef.current?.();
+      } else if (data.type === "STOP") {
+        onStopRef.current?.(!!data.fade);
+      } else if (data.type === "RESUME") {
+        onResumeRef.current?.(Number(data.serverMs));
       } else if (data.type === "ERROR") {
         setLastError({ code: data.code, message: data.message, notReady: data.notReady });
         console.warn("[room] ERROR", data);
@@ -168,6 +184,22 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack }
     ws.send(JSON.stringify({ type: "PLAY_REQUEST", trackName, sectionName, serverMs, override }));
   }, [serverNowMs]);
 
+  const requestPause = useCallback(() => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "PAUSE_REQUEST" }));
+  }, []);
+
+  const requestStop = useCallback((fade = true) => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "STOP_REQUEST", fade }));
+  }, []);
+
+  const requestResume = useCallback(({ delayMs = 2000 } = {}) => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const serverMs = serverNowMs() + Math.max(0, delayMs);
+    ws.send(JSON.stringify({ type: "RESUME_REQUEST", serverMs }));
+  }, [serverNowMs]);
+
   const requestSetTrack = useCallback((name) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -183,6 +215,9 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack }
     roomId,
     setReady,
     requestPlay,
+    requestPause,
+    requestStop,
+    requestResume,
     requestSetTrack,
     serverNowMs,
     latencyMs,

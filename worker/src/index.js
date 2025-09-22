@@ -167,6 +167,48 @@ export class RoomHub {
         }
       }
 
+    case "PAUSE_REQUEST": {
+      const u = this.clients.get(ws); if (!u) return;
+      if (u.role !== "GM") {
+        try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only GM can pause." })); } catch {}
+        break;
+      }
+      const roomId = u.roomId;
+      console.log("[RoomHub] PAUSE_REQUEST", { roomId });
+      const payload = JSON.stringify({ type: "PAUSE" });
+      for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
+      break;
+    }
+
+    case "STOP_REQUEST": {
+      const u = this.clients.get(ws); if (!u) return;
+      if (u.role !== "GM") {
+        try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only GM can stop." })); } catch {}
+        break;
+      }
+      const roomId = u.roomId;
+      const fade = !!data.fade;
+      console.log("[RoomHub] STOP_REQUEST", { roomId, fade });
+      const payload = JSON.stringify({ type: "STOP", fade });
+      for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
+      break;
+    }
+
+    case "RESUME_REQUEST": {
+      const u = this.clients.get(ws); if (!u) return;
+      if (u.role !== "GM") {
+        try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only GM can resume." })); } catch {}
+        break;
+      }
+      const roomId = u.roomId;
+      const serverMs = Number(data.serverMs) || (Date.now() + 2000);
+      console.log("[RoomHub] RESUME_REQUEST", { roomId, serverMs });
+      const payload = JSON.stringify({ type: "RESUME", serverMs });
+      for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
+      break;
+    }
+
+
       case "SET_TRACK_REQUEST": {
         const u = this.clients.get(ws);
         if (!u) return;

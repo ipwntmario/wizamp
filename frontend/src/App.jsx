@@ -423,22 +423,40 @@ export default function App() {
 
   const handlePause = () => {
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
-    net.pause(simple);
-    engine.pause(simple);
+    if (room.onlineActive && isGM) {
+      room.requestPause();
+    } else {
+      net.pause(simple); engine.pause(simple);
+    }
   };
 
   const handleResume = () => {
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
-    net.resume(simple);
-    engine.resume(simple);
+    if (room.onlineActive && isGM) {
+      room.requestResume({ delayMs: 1000 }); // small lead time like Play
+    } else {
+      net.resume(simple); engine.resume(simple);
+    }
   };
 
   const handleStop = async () => {
-    // Fade out current audio; do NOT reload any track here.
     setPlayDisabled(true);
-    net.stop(true);
-    engine.stopTrack?.(true); // "Stopped" will arrive after fade; onStatus will re-enable
+
+    if (room.onlineActive && isGM) {
+      // Tell everyone to stop (with fade)
+      room.requestStop(true);
+    } else {
+      // Local stop only
+      net.stop(true);
+      // Use the same method you already had for fading out
+      if (engine.stopTrack) {
+        engine.stopTrack(true);
+      } else {
+        engine.stop(true);
+      }
+    }
   };
+
 
   const loadSavedTrackVolume = (name) => {
     try {
@@ -468,12 +486,15 @@ export default function App() {
   };
 
   const onSetTrack = useCallback((name, seed) => {
-    // If already selected, ignore; else select & let existing preload flow run
+    console.log("[APP] onSetTrack", { name, seed });
+    // Always apply the seed (GM and players)
+    if (seed != null) {
+      console.log("[APP] engine.setRandomSeed(seed) (apply even if already selected)");
+      try { engine.setRandomSeed?.(seed >>> 0); } catch (e) { console.warn("engine.setRandomSeed failed", e); }
+    }
+    // Only trigger local selection if it changed
     if (selectedTrack !== name) {
-      if (seed != null) {
-        try { engine.setRandomSeed?.(seed >>> 0); } catch (e) { console.warn("engine.setRandomSeed failed", e); }
-      }
-      handleSelectTrack(name); // your existing function that sets selectedTrack and preloads
+      handleSelectTrack(name);
     }
   }, [selectedTrack, handleSelectTrack]);
 
@@ -543,6 +564,29 @@ export default function App() {
     }
   };
 
+  const onPauseMsg = useCallback(() => {
+    const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
+    net.pause(simple);
+    engine.pause(simple);
+  }, [tracks, playingTrackName, selectedTrack, net, engine]);
+
+  const onStopMsg = useCallback((fade = true) => {
+    // Keep UI behavior consistent with local handleStop:
+    setPlayDisabled?.(true);
+    // Your net layer's existing stop (use the signature you already use locally)
+    try { net.stop?.(true); } catch {}
+    // Fade the engine out; engine.stopTrack handles the fade
+    if (engine.stopTrack) engine.stopTrack(fade);
+  }, [setPlayDisabled, net, engine]);
+
+  const onResumeMsg = useCallback((serverMs) => {
+    const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
+    scheduleAtServerTime(serverMs, () => {
+      net.resume(simple);
+      engine.resume(simple);
+    });
+  }, [tracks, playingTrackName, selectedTrack, net, engine]);
+
   const room = useRoom({
     onlineEnabled,
     displayName,
@@ -554,7 +598,10 @@ export default function App() {
       if (sectionName && serverMs) {
         scheduleSectionAtServerTime(sectionName, serverMs);
       }
-    }
+    },
+    onPause: onPauseMsg,
+    onStop: onStopMsg,
+    onResume: onResumeMsg,
   });
   // room = { onlineActive, connected, users, roomId, setReady }
 
@@ -603,6 +650,16 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("wizamp_appIcon", appIconName);
   }, [appIconName]);
+
+  const scheduleAtServerTime = (serverMs, fn) => {
+    try {
+      const now = room.serverNowMs ? room.serverNowMs() : Date.now();
+      const delay = Math.max(0, serverMs - now);
+      setTimeout(fn, delay);
+    } catch {
+      fn();
+    }
+  };
 
   // helper: schedule a section at a server timestamp
   const scheduleSectionAtServerTime = (sectionName, serverMs) => {
