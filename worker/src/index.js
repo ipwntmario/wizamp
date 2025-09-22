@@ -97,7 +97,7 @@ export class RoomHub {
         // Send current room state (selectedTrack) to this client, if any
         const rs = this.roomState.get(user.roomId);
         if (rs && rs.selectedTrack) {
-          try { ws.send(JSON.stringify({ type: "STATE", selectedTrack: rs.selectedTrack })); } catch {}
+          ws.send(JSON.stringify({ type: "STATE", selectedTrack: rs.selectedTrack, seed: rs.seed ?? null }));
         }
         break;
       }
@@ -177,13 +177,18 @@ export class RoomHub {
         const roomId = u.roomId;
         const name = String(data.name || "");
         if (!name) break;
+        // Generate a 32-bit seed (keep it small/int)
+        const seed = (crypto.getRandomValues(new Uint32Array(1))[0]) >>> 0;
         console.log("[RoomHub] SET_TRACK_REQUEST", { roomId, name });
+
         // update room state
         const rs = this.roomState.get(roomId) || {};
         rs.selectedTrack = name;
+        rs.seed = seed;
         this.roomState.set(roomId, rs);
+
         // broadcast to room
-        const payload = JSON.stringify({ type: "SET_TRACK", name });
+        const payload = JSON.stringify({ type: "SET_TRACK", name, seed });
         for (const [sock, uu] of this.clients) {
           if (uu.roomId === roomId) {
             try { sock.send(payload); } catch {}

@@ -57,6 +57,12 @@ export class AudioEngine {
     // stop-state
     this._stopPendingUntil = 0;     // audio time when the global stop fade ends (0 = none)
     this._stopFinishTimer = null;   // timeout id for finishing stop
+
+    // RNG/debug
+    this._seed = null;
+    this._rng = Math.random;
+    this._rngDraws = 0;
+    this._rngDebug = true; // flip to false once things are stable
   }
 
   get isPlaying() {
@@ -162,6 +168,31 @@ export class AudioEngine {
 
   setPauseFadeSeconds(n) {
     this.pauseFadeSeconds = Math.max(1, Math.min(30, Number(n) || 1));
+  }
+
+  // ---- deterministic RNG API ----
+  setRandomSeed(seed) {
+    // Accept 32-bit integer; fall back to 1 if someone passes 0/NaN
+    const s = (Number(seed) >>> 0) || 1;
+    this._seed = s;
+    try {
+      this._rng = mulberry32(s);
+    } catch {
+      this._rng = Math.random;
+    }
+    this._rngDraws = 0;
+    if (this._rngDebug) console.log(`[ENGINE][RNG] setRandomSeed=${s}`);
+  }
+  rand() {
+    try {
+      const r = this._rng ? this._rng() : Math.random();
+      if (this._rngDebug) console.log(`[ENGINE][RNG] draw#${++this._rngDraws} → ${r}`);
+      return r;
+    } catch {
+      const r = Math.random();
+      if (this._rngDebug) console.log(`[ENGINE][RNG] draw#${++this._rngDraws} (fallback) → ${r}`);
+      return r;
+    }
   }
 
   setData({ clips, sections, tracks }) {
@@ -337,7 +368,6 @@ export class AudioEngine {
     } catch (e) {
       console.warn("[ENGINE] onPreloadComplete handler threw:", e);
     }
-    this.onPreloadComplete?.(this.currentTrackName || trackName);
   }
 
   // ----- stop -----
@@ -630,9 +660,28 @@ export class AudioEngine {
         // (3) Normal nextClip
         if (hasNextInClip) {
           const arr = clip.nextClip;
-          const next = arr.length > 1 ? arr[Math.floor(Math.random() * arr.length)] : arr[0];
+          // Stable order across clients: sort before indexing
+          const arr2 = arr.length > 1 ? [...arr].sort() : arr;
+          const lpVal = (clip.loopPoint ?? buffer.duration);
+          if (this._rngDebug) {
+            console.log(`[ENGINE][XITION] clip=${clipName} loopPoint=${lpVal}s options=${JSON.stringify(arr2)} len=${arr2?.length ?? 0}`);
+          }
+          let next;
+          if (arr2.length > 1) {
+            const sample = this.rand();
+            const idx = Math.floor(sample * arr2.length);
+            next = arr2[idx];
+            if (this._rngDebug) console.log(`[ENGINE][XITION] choose idx=${idx} → ${next}`);
+          } else {
+            next = arr2[0];
+            if (this._rngDebug) console.log(`[ENGINE][XITION] single-option → ${next}`);
+          }
           if (this.clipData[next] && this.activeClips[next]) {
             this.playClip(next);
+          } else {
+            if (this._rngDebug) {
+              console.warn(`[ENGINE][XITION] chosen=${next} not available (clipData=${!!this.clipData[next]} active=${!!this.activeClips[next]})`);
+            }
           }
         }
 
@@ -796,4 +845,13 @@ export class AudioEngine {
     console.warn("[ENGINE] Unexpected 'file' field type:", typeof fileField, fileField);
     return {};
   }
+}
+
+function mulberry32(a) {
+  return function() {
+    let t = (a += 0x6D2B79F5) >>> 0;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }

@@ -109,10 +109,14 @@ export function useRoom({ onlineEnabled, displayName, role, onPlay, onSetTrack }
         updateOffset(rtt, Number(data.serverTimeMs) || recv, clientSend);
       } else if (data.type === "SET_TRACK") {
         const name = String(data.name || "");
-        if (name) onSetTrackRef.current?.(name);
+        const seed = (data.seed ?? null);
+        console.log("[room] ← SET_TRACK", { name, seed });
+        if (name) onSetTrackRef.current?.(name, seed);
       } else if (data.type === "STATE") {
         const name = String(data.selectedTrack || "");
-        if (name) onSetTrackRef.current?.(name);
+        const seed = (data.seed ?? null);
+        console.log("[room] ← STATE", { name, seed });
+        if (name) onSetTrackRef.current?.(name, seed);
       } else if (data.type === "PLAY") {
         onPlayRef.current?.({ trackName: data.trackName, sectionName: data.sectionName, serverMs: Number(data.serverMs) });
       } else if (data.type === "ERROR") {

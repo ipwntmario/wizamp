@@ -1,6 +1,10 @@
 // src/components/UsersPanel.jsx
 export default function UsersPanel({ onlineActive, connected, roomId, users = [], visible, latencyMs, offsetMs, allReady, lastError }) {
   if (!onlineActive || !visible) return null;
+
+  const roleIcon = (r) => (r === "GM" ? "🎛️" : r === "passive-bts" ? "👁️🎧" : "🎧");
+  const roleLabel = (r) => (r === "GM" ? "active" : r === "passive-bts" ? "passive-bts" : "passive");
+
   return (
     <div style={{
       position: "absolute", // appears just under parent
@@ -31,7 +35,10 @@ export default function UsersPanel({ onlineActive, connected, roomId, users = []
         <div key={u.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14, marginTop: 4 }}>
           <span style={{ width: 8, height: 8, borderRadius: 9999, background: u.ready ? "#4ade80" : "#f59e0b" }} />
           <span style={{ fontWeight: 600 }}>{u.name}</span>
-          <span style={{ opacity: 0.8 }}>({u.role})</span>
+          <span style={{ opacity: 0.8, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span title={roleLabel(u.role)}>{roleIcon(u.role)}</span>
+            <span>({roleLabel(u.role)})</span>
+          </span>
         </div>
       ))}
       {!!lastError && (

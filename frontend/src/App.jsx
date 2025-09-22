@@ -116,6 +116,9 @@ export default function App() {
   const isPassiveBTS = normRole === "passive-bts";
   const isPassive = normRole === "passive";
 
+  const displayRoleLabel = isGM ? "active" : (isPassiveBTS ? "passive-bts" : "passive");
+  const displayRoleIcon  = isGM ? "🎛️"     : (isPassiveBTS ? "👁️🎧"       : "🎧");
+
   const [displayName, setDisplayName] = useState(() => {
     try { return localStorage.getItem("wizamp_displayName") || ""; } catch { return ""; }
   });
@@ -464,9 +467,12 @@ export default function App() {
     net.setTrack(name);
   };
 
-  const onSetTrack = useCallback((name) => {
+  const onSetTrack = useCallback((name, seed) => {
     // If already selected, ignore; else select & let existing preload flow run
     if (selectedTrack !== name) {
+      if (seed != null) {
+        try { engine.setRandomSeed?.(seed >>> 0); } catch (e) { console.warn("engine.setRandomSeed failed", e); }
+      }
       handleSelectTrack(name); // your existing function that sets selectedTrack and preloads
     }
   }, [selectedTrack, handleSelectTrack]);
@@ -638,6 +644,24 @@ export default function App() {
       {/* Top-right controls: DB (left) + Settings (right) */}
       <div style={{ position: "absolute", top: 16, right: 16, display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{ display: "flex", gap: 8 }}>
+          <span
+            title={`You are ${displayRoleLabel}`}
+            style={{
+              marginRight: 8,
+              padding: "4px 8px",
+              borderRadius: 999,
+              fontSize: 12,
+              background: "rgba(0,0,0,0.5)",
+              color: "#fff",
+              opacity: room.onlineActive ? 1 : 0.6,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span>{displayRoleIcon}</span>
+            <span style={{ fontWeight: 600 }}>{displayRoleLabel}</span>
+          </span>
           {room.onlineActive && (
             <button
               aria-label="Users"
