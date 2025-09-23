@@ -670,7 +670,7 @@ export default function App() {
     // 3) Jump precisely to the reported musical position
     engine.clearQueuedSection?.();
     engine.clearQueuedMode?.();
-    engine.playAtPosition?.({ sectionName, modeName, clipName, offsetSeconds });
+    engine.playAtPosition?.({ sectionName, modeName, clipName, offsetSeconds, warmStartDeltaSec: 0.5 });
 
     pendingPlayRef.current = null;
   }, [engine, selectedTrack, handleSelectTrack, setTrackVolume]);

@@ -65,6 +65,11 @@ export class AudioEngine {
     this._rngDebug = true; // flip to false once things are stable
     // After a mid-clip jump, force the first loopPoint to honor only clip.nextClip
     this._stayInSectionOnce = false;
+
+    // ---- warm-start support ----
+    this.WARMUP_LEAD_MS = 500;           // Δ, can tune 300–500ms
+    this._warmStart = null;              // { clipName, source, gainNode, timerId|null }
+    this._defaultStartSection = null;    // computed at preload
   }
 
   /**
@@ -95,15 +100,66 @@ export class AudioEngine {
    * Jump to an exact musical position (must already be preloaded).
    * Starts the given clip with an offset, setting section/mode consistently.
    */
-  playAtPosition({ sectionName, modeName = "base", clipName, offsetSeconds = 0 } = {}) {
+  playAtPosition({ sectionName, modeName = "base", clipName, offsetSeconds = 0, warmStartDeltaSec = 0 } = {}) {
     if (!sectionName || !clipName) return;
     // Set section & mode before starting the clip
     this.setCurrentSection(sectionName);
     this.setCurrentMode(modeName || "base");
     // Ensure first loop after a mid-clip jump doesn’t take queued/section/mode detours
     this._stayInSectionOnce = true;
-    // Start the target clip at given offset with no fade-in (to avoid double ramps)
-    this.playClip(clipName, { offsetSeconds, skipFadeIn: true });
+
+    const Δ = Math.max(0, Number(warmStartDeltaSec) || 0);
+    if (Δ <= 0) {
+      // Old behavior: start immediately at this exact position
+      this.playClip(clipName, { offsetSeconds, skipFadeIn: true });
+      return;
+    }
+    // Look ahead deterministically to the state at t+Δ
+    let future = null;
+    try {
+      future = this._computeFuturePosition({
+        deltaSec: Δ,
+        sectionName,
+        modeName: modeName || "base",
+        clipName,
+        offsetSeconds,
+        seed: this._seed ?? 1,
+        rngDrawCount: this._rngDraws | 0
+      });
+    } catch (e) {
+      console.warn("[ENGINE][WARM] future compute failed; falling back to immediate start:", e);
+      this.playClip(clipName, { offsetSeconds, skipFadeIn: true });
+      return;
+    }
+    if (!future) {
+      this.playClip(clipName, { offsetSeconds, skipFadeIn: true });
+      return;
+    }
+    const { sectionName: fSec, modeName: fMode, clipName: fClip, offsetSeconds: fOffset } = future;
+    // Spin the chosen future clip muted NOW (no scheduling) to warm up
+    try {
+      this._clearWarmStart();
+      const ws = this._startMutedClip(fClip, { modeName: fMode, offsetSeconds: (this.clipData[fClip]?.loopStart || 0) });
+      if (ws) {
+        this._warmStart = { clipName: fClip, ...ws, timerId: null };
+        if (this._rngDebug) console.log("[ENGINE][WARM] late-join spun muted:", fClip, "mode:", fMode);
+      }
+    } catch (e) {
+      console.warn("[ENGINE][WARM] spin future muted failed:", e);
+    }
+    // At Δ later, start the exact node at offset and unmute; stop the warm one.
+    const ctx = this.ensureContext();
+    const when = ctx.currentTime + Δ;
+    const startAt = () => {
+      // Ensure we’re still on the same track/section plan
+      this.setCurrentSection(fSec);
+      this.setCurrentMode(fMode);
+      this.playClip(fClip, { offsetSeconds: fOffset, skipFadeIn: true });
+      // Done with warm node
+      this._clearWarmStart();
+    };
+    // Use audio-time-aware scheduler for better alignment
+    this.schedule(startAt, when);
   }
 
   get isPlaying() {
@@ -394,7 +450,7 @@ export class AudioEngine {
       this._bufferCache.clear(); // simple policy; or implement an LRU later
     }
 
-    // Decode all clips + all mode files to buffers (no need to start muted loopers)
+    // Decode all clips + all mode files to buffers
     this.activeClips = {};
     const clipEntries = Object.entries(this.clipData);
 
@@ -436,6 +492,24 @@ export class AudioEngine {
       this.onPreloadComplete?.(this.currentTrackName || trackName);
     } catch (e) {
       console.warn("[ENGINE] onPreloadComplete handler threw:", e);
+    }
+
+    // ---- Warm-start: spin up first section's first clip muted (no scheduling) ----
+    try {
+      this._clearWarmStart();
+      this._defaultStartSection = this._computeDefaultStartSection();
+      const secName = this._defaultStartSection;
+      const sec = secName ? this.sectionData?.[secName] : null;
+      const firstClip = sec?.firstClip;
+      if (firstClip && this.activeClips[firstClip]) {
+        const ws = this._startMutedClip(firstClip, { modeName: "base", offsetSeconds: (this.clipData[firstClip]?.loopStart || 0) });
+        if (ws) {
+          this._warmStart = { clipName: firstClip, ...ws, timerId: null };
+          if (this._rngDebug) console.log("[ENGINE][WARM] preloaded muted first clip:", firstClip);
+        }
+      }
+    } catch (e) {
+      console.warn("[ENGINE][WARM] preload warm-start failed:", e);
     }
   }
 
@@ -578,6 +652,9 @@ export class AudioEngine {
       try { entry.source.stop(); } catch {}
     }
 
+    // if we had a warm-started muted node, clear it (we’ll start a fresh, exact node)
+    this._clearWarmStart();
+
     this._playbackToken++;
     const myToken = this._playbackToken;
 
@@ -632,8 +709,9 @@ export class AudioEngine {
       const fadeInDur = Math.max(1, this.pauseFadeSeconds);
       gainNode.gain.linearRampToValueAtTime(targetGain, now + fadeInDur);
     } else {
-      // All other paths: **no fade-in**
-      gainNode.gain.setValueAtTime(targetGain, now);
+      // All other paths: micro fade-in to avoid zipper/clicks
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(targetGain, now + 0.01);
     }
 
     // Record timing for progress + subsequent pauses
@@ -920,6 +998,136 @@ export class AudioEngine {
     console.warn("[ENGINE] Unexpected 'file' field type:", typeof fileField, fileField);
     return {};
   }
+
+  // Pick a reasonable default section for warm-start: first key in sectionData
+  _computeDefaultStartSection() {
+    const names = Object.keys(this.sectionData || {});
+    return names.length ? names[0] : null;
+  }
+
+  _createBufferForClipMode(clipName, modeName) {
+    const entry = this.activeClips?.[clipName];
+    if (!entry) return null;
+    const mode = modeName || this.currentModeName || "base";
+    return entry.buffersByMode?.[mode] ?? entry.buffer ?? null;
+  }
+
+  _startMutedClip(clipName, { modeName = "base", offsetSeconds = 0 } = {}) {
+    const ctx = this.ensureContext();
+    const buffer = this._createBufferForClipMode(clipName, modeName);
+    if (!buffer) return null;
+    // build nodes
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    src.loopStart = (this.clipData[clipName]?.loopStart || 0);
+    src.loopEnd  = (this.clipData[clipName]?.loopPoint ?? buffer.duration);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, ctx.currentTime);
+    src.connect(g).connect(this.masterGain);
+    try { src.start(0, Math.max(0, offsetSeconds)); } catch {}
+    return { source: src, gainNode: g };
+  }
+
+  _clearWarmStart() {
+    const ws = this._warmStart;
+    if (!ws) return;
+    try { ws.timerId != null && clearTimeout(ws.timerId); } catch {}
+    try { ws.source?.stop(); } catch {}
+    this._warmStart = null;
+  }
+
+  // A peekable mulberry32 that we can fast-forward without touching engine RNG
+  _makePeekRng(seed, drawCount = 0) {
+    const s0 = (Number(seed) >>> 0) || 1;
+    let s = s0;
+    const step = () => {
+      let t = (s += 0x6D2B79F5) >>> 0;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    // fast-forward to drawCount
+    for (let i = 0; i < (drawCount|0); i++) step();
+    return { next: step, cloneAt: (n) => this._makePeekRng(seed, n) };
+  }
+
+  /**
+   * Compute which clip/mode and offset will be playing after deltaSec,
+   * given current position, queued section/mode, and seeded RNG.
+   * Does not mutate engine state or engine RNG.
+   */
+  _computeFuturePosition({ deltaSec, sectionName, modeName, clipName, offsetSeconds, seed, rngDrawCount }) {
+    const clipData = this.clipData;
+    const sectionData = this.sectionData;
+    if (!clipName || !clipData[clipName]) return null;
+    let remaining = Math.max(0, Number(deltaSec) || 0);
+    let sec = sectionName;
+    let mode = modeName || "base";
+    let clip = clipName;
+    let offset = Math.max(0, Number(offsetSeconds) || 0);
+    let draws = rngDrawCount | 0;
+    const rng = this._makePeekRng(seed, draws);
+
+    // consider one possible queued section at the first loop boundary only
+    let allowSectionQueue = true;
+    let queuedSec = this.queuedNextSectionName || null;
+    let queuedMode = this.queuedNextModeName || null;
+
+    for (let hop = 0; hop < 16 && remaining > 0; hop++) {
+      const cd = clipData[clip]; if (!cd) break;
+      const buffer = this._createBufferForClipMode(clip, mode) || this._createBufferForClipMode(clip, "base");
+      if (!buffer) break;
+      const loopStart = cd.loopStart || 0;
+      const loopPoint = (cd.loopPoint ?? buffer.duration);
+      const spanToLoop = Math.max(0, loopPoint - offset);
+      if (remaining <= spanToLoop) {
+        // still inside current clip at t+Δ
+        return { sectionName: sec, modeName: mode, clipName: clip, offsetSeconds: offset + remaining, rngDrawCount: draws };
+      }
+      // cross a boundary
+      remaining -= spanToLoop;
+      offset = loopStart; // next clip starts at its loopStart
+
+      // section change takes precedence once, at the boundary
+      if (allowSectionQueue && queuedSec) {
+        const nextSection = sectionData[queuedSec];
+        const nextClip = nextSection?.firstClip;
+        sec = queuedSec;
+        // compute mode for new section: keep current if allowed else base; apply queuedMode if provided and valid
+        let nextMode = mode;
+        const modesAvail = this.getAvailableModes(sec);
+        if (!modesAvail.includes(nextMode)) nextMode = "base";
+        if (queuedMode && modesAvail.includes(queuedMode)) nextMode = queuedMode;
+        mode = nextMode;
+        clip = nextClip || clip; // if section missing, fallback
+        // after switching sections once, ignore further section queues in this look-ahead
+        allowSectionQueue = false;
+        queuedSec = null; // consumed
+        continue;
+      }
+
+      // no section change → normal nextClip path (respect queued mode at boundary)
+      if (queuedMode) {
+        const modesAvail = this.getAvailableModes(sec);
+        if (modesAvail.includes(queuedMode)) mode = queuedMode;
+        queuedMode = null;
+      }
+      const arr = Array.isArray(cd.nextClip) ? cd.nextClip : [];
+      if (!arr.length) {
+        // no next → stay on this clip (loops itself to clipEnd)
+        return { sectionName: sec, modeName: mode, clipName: clip, offsetSeconds: offset, rngDrawCount: draws };
+      }
+      const arr2 = arr.length > 1 ? [...arr].sort() : arr;
+      const sample = rng.next(); draws += 1;
+      const idx = Math.floor(sample * arr2.length);
+      clip = arr2[idx];
+      // loop: continue with new clip & same mode
+    }
+    // fallback if loop exits
+    return { sectionName: sec, modeName: mode, clipName: clip, offsetSeconds: offset, rngDrawCount: draws };
+  }
+
 }
 
 function mulberry32(a) {
