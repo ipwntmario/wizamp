@@ -10,6 +10,7 @@ export default function Transport({
   autoplay,
   setAutoplay,
   isSimpleTrackPlaying, // boolean, true if currently playing track is "simple"
+  unlockAudio,
 }) {
   const primaryLabel = isLoadingTrack ? "⏳" : (isPlaying ? "⏸" : (isPaused ? "⏵" : "⏵"));
   const primaryTitle = isLoadingTrack
@@ -17,6 +18,7 @@ export default function Transport({
     : (isPlaying ? "Pause" : (isPaused ? "Resume" : "Play"));
 
   const handlePrimary = () => {
+    unlockAudio?.();
     if (disabled || isLoadingTrack) return;
     if (isPlaying) onPause?.();
     else if (isPaused) onResume?.();

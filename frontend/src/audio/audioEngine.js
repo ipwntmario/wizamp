@@ -67,9 +67,11 @@ export class AudioEngine {
     this._stayInSectionOnce = false;
 
     // ---- warm-start support ----
-    this.WARMUP_LEAD_MS = 500;           // Δ, can tune 300–500ms
-    this._warmStart = null;              // { clipName, source, gainNode, timerId|null }
-    this._defaultStartSection = null;    // computed at preload
+    this.enablePreloadWarmStart = false;  // default true; set false to disable
+    this.enableLateJoinWarmStart = false; // default true; set false to disable
+    this.WARMUP_LEAD_MS = 500;            // Δ, can tune 300–500ms
+    this._warmStart = null;               // { clipName, source, gainNode, timerId|null }
+    this._defaultStartSection = null;     // computed at preload
   }
 
   /**
@@ -111,6 +113,7 @@ export class AudioEngine {
     const Δ = Math.max(0, Number(warmStartDeltaSec) || 0);
     if (Δ <= 0) {
       // Old behavior: start immediately at this exact position
+      this._clearWarmStart(); // make sure
       this.playClip(clipName, { offsetSeconds, skipFadeIn: true });
       return;
     }
@@ -144,11 +147,13 @@ export class AudioEngine {
 
     // Warm start (muted) of the future clip now (keeps the device/graph hot)
     try {
-      this._clearWarmStart();
-      const ws = this._startMutedClip(fClip, { modeName: fMode, offsetSeconds: (this.clipData[fClip]?.loopStart || 0) });
-      if (ws) {
-        this._warmStart = { clipName: fClip, ...ws, timerId: null };
-        if (this._rngDebug) console.log("[ENGINE][WARM] late-join spun muted:", fClip, "mode:", fMode);
+      if (this.enableLateJoinWarmStart) {
+        this._clearWarmStart();
+        const ws = this._startMutedClip(fClip, { modeName: fMode, offsetSeconds: (this.clipData[fClip]?.loopStart || 0) });
+        if (ws) {
+          this._warmStart = { clipName: fClip, ...ws, timerId: null };
+          if (this._rngDebug) console.log("[ENGINE][WARM] late-join spun muted:", fClip, "mode:", fMode);
+        }
       }
     } catch (e) {
       console.warn("[ENGINE][WARM] spin future muted failed:", e);
@@ -159,12 +164,18 @@ export class AudioEngine {
     this.setCurrentMode(fMode);
 
     // Sample-accurate start at `when` with exact offset
+    this._clearWarmStart();   // ensure no warmer survives
     this._playClipAtAudioTime(fClip, {
       modeName: fMode,
       offsetSeconds: fOffset,
       startAtAudioTime: when,
       skipFadeIn: true
     });
+
+    // After the new node ramps in, nuke any other sources so nothing can loop under it.
+    const sweepAt = when + 0.03; // 30ms after start
+    const ms = Math.max(0, (sweepAt - this.audioCtx.currentTime) * 1000);
+    setTimeout(() => this._stopAllExcept(fClip), ms);
 
     // Stop the warm node right after we’ve ramped in the real one
     try {
@@ -197,6 +208,7 @@ export class AudioEngine {
         this.setCurrentMode(nextMode);
         this._stayInSectionOnce = false;       // do NOT suppress auto-advance
         this._fadeOutAndStopClip(currentClipName);
+        this._clearWarmStart();
         this.playClip(nextClip);
         return;
       }
@@ -236,6 +248,7 @@ export class AudioEngine {
         this.setCurrentMode(nextMode);
         this._stayInSectionOnce = false;
         this._fadeOutAndStopClip(currentClipName);
+        this._clearWarmStart();
         this.playClip(nextClip);
         return;
       }
@@ -287,14 +300,26 @@ export class AudioEngine {
   }
 
   ensureContext() {
-    if (this.audioCtx) return this.audioCtx;
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(1, ctx.currentTime);
-    master.connect(ctx.destination);
-    this.audioCtx = ctx;
-    this.masterGain = master;
-    return ctx;
+    if (!this.audioCtx) {
+      this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+        latencyHint: "interactive",
+      });
+    }
+    // Ensure master chain exists
+    if (!this.masterGain) {
+      const g = this.audioCtx.createGain();
+      g.gain.value = this.userVolume ?? 1; // your saved user volume, or 1
+      g.connect(this.audioCtx.destination);
+      this.masterGain = g;
+    }
+    // A separate, always-zero bus for warm-start nodes (never altered)
+    if (!this.warmBus) {
+      const warm = this.audioCtx.createGain();
+      warm.gain.value = 0;                 // <- stays 0 forever
+      warm.connect(this.masterGain);       // still in the graph so it runs
+      this.warmBus = warm;
+    }
+    return this.audioCtx;
   }
 
   // Build a safe URL for audio files: encode base path (keeps slashes) and filename.
@@ -612,21 +637,26 @@ export class AudioEngine {
     }
 
     // ---- Warm-start: spin up first section's first clip muted (no scheduling) ----
-    try {
-      this._clearWarmStart();
-      this._defaultStartSection = this._computeDefaultStartSection();
-      const secName = this._defaultStartSection;
-      const sec = secName ? this.sectionData?.[secName] : null;
-      const firstClip = sec?.firstClip;
-      if (firstClip && this.activeClips[firstClip]) {
-        const ws = this._startMutedClip(firstClip, { modeName: "base", offsetSeconds: (this.clipData[firstClip]?.loopStart || 0) });
-        if (ws) {
-          this._warmStart = { clipName: firstClip, ...ws, timerId: null };
-          if (this._rngDebug) console.log("[ENGINE][WARM] preloaded muted first clip:", firstClip);
+    if (this.enablePreloadWarmStart) {
+      try {
+        this._clearWarmStart();
+        this._defaultStartSection = this._computeDefaultStartSection();
+        const secName = this._defaultStartSection;
+        const sec = secName ? this.sectionData?.[secName] : null;
+        const firstClip = sec?.firstClip;
+        if (firstClip && this.activeClips[firstClip]) {
+          const ws = this._startMutedClip(firstClip, {
+            modeName: "base",
+            offsetSeconds: (this.clipData[firstClip]?.loopStart || 0)
+          });
+          if (ws) {
+            this._warmStart = { clipName: firstClip, ...ws, timerId: null };
+            if (this._rngDebug) console.log("[ENGINE][WARM] preloaded muted first clip:", firstClip);
+          }
         }
+      } catch (e) {
+        console.warn("[ENGINE][WARM] preload warm-start failed:", e);
       }
-    } catch (e) {
-      console.warn("[ENGINE][WARM] preload warm-start failed:", e);
     }
   }
 
@@ -807,13 +837,12 @@ export class AudioEngine {
 
     const gainNode = ctx.createGain();
 
-
-
     // apply trackVolume * userVolume (masterGain already applies user; keep trackVolume here)
     const startGain = 0;
     gainNode.gain.setValueAtTime(startGain, now);
 
-    source.connect(gainNode).connect(this.masterGain);
+    source.connect(gainNode);
+    gainNode.connect(this.masterGain || this.audioCtx.destination);
     const startOffset = (offsetSeconds != null) ? offsetSeconds : (clip.loopStart || 0);
     source.start(0, startOffset);
 
@@ -1011,7 +1040,8 @@ export class AudioEngine {
 
     const gainNode = ctx.createGain();
     gainNode.gain.setValueAtTime(0, startAtAudioTime); // start muted; we’ll ramp
-    src.connect(gainNode).connect(this.masterGain);
+    src.connect(gainNode);
+    gainNode.connect(this.masterGain || ctx.destination);
 
     // Bookkeeping for progress and loop scheduling
     entry.source = src;
@@ -1130,6 +1160,26 @@ export class AudioEngine {
     return !!(s.autoNextSection || s.auto || s.autoAdvance || s.nextSection);
   }
 
+  _stopAllExcept(keepClipName) {
+    if (!this.activeClips) return;
+    for (const [name, entry] of Object.entries(this.activeClips)) {
+      if (name === keepClipName) continue;
+      try {
+        if (entry?.source) {
+          // Hard stop; we don't need old tails on a late join.
+          entry.source.stop();
+          entry.source.disconnect?.();
+          entry.source = null;
+        }
+        if (entry?.gainNode) {
+          entry.gainNode.disconnect?.();
+          entry.gainNode = null;
+        }
+        entry.timerId && clearTimeout(entry.timerId);
+        entry.timerId = null;
+      } catch {}
+    }
+  }
 
   pause(simpleTrack = true) {
     if (!this.audioCtx || !this.lastPlayingClipName) return;
@@ -1292,17 +1342,16 @@ export class AudioEngine {
     const ctx = this.ensureContext();
     const buffer = this._createBufferForClipMode(clipName, modeName);
     if (!buffer) return null;
-    // build nodes
+    // build nodes (directly into the always-zero warmBus)
     const src = ctx.createBufferSource();
     src.buffer = buffer;
     src.loop = true;
     src.loopStart = (this.clipData[clipName]?.loopStart || 0);
     src.loopEnd  = (this.clipData[clipName]?.loopPoint ?? buffer.duration);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, ctx.currentTime);
-    src.connect(g).connect(this.masterGain);
+    // Route to warmBus so it can never be heard
+    src.connect(this.warmBus);
     try { src.start(0, Math.max(0, offsetSeconds)); } catch {}
-    return { source: src, gainNode: g };
+    return { source: src };
   }
 
   _clearWarmStart() {
@@ -1404,6 +1453,42 @@ export class AudioEngine {
     return { sectionName: sec, modeName: mode, clipName: clip, offsetSeconds: offset, rngDrawCount: draws };
   }
 
+  getAudioState() {
+    return this.audioCtx?.state || "suspended";
+  }
+
+  /** Returns a promise that resolves once the context is running. */
+  unlockAudio = () => {
+    const ctx = this.ensureContext();
+    if (ctx.state === "running") return Promise.resolve();
+
+    return new Promise((resolve) => {
+      const tryResume = async () => {
+        try { await ctx.resume(); } catch {}
+        if (ctx.state === "running") {
+          cleanup();
+          resolve();
+        }
+      };
+      const onUserGesture = () => { tryResume(); };
+      const onVis = () => { if (document.visibilityState === "visible") tryResume(); };
+
+      const cleanup = () => {
+        window.removeEventListener("pointerdown", onUserGesture, true);
+        window.removeEventListener("keydown", onUserGesture, true);
+        window.removeEventListener("touchstart", onUserGesture, true);
+        document.removeEventListener("visibilitychange", onVis, true);
+      };
+
+      window.addEventListener("pointerdown", onUserGesture, true);
+      window.addEventListener("keydown", onUserGesture, true);
+      window.addEventListener("touchstart", onUserGesture, true);
+      document.addEventListener("visibilitychange", onVis, true);
+
+      // Also try immediately in case a prior gesture already occurred
+      tryResume();
+    });
+  };
 }
 
 function mulberry32(a) {

@@ -129,6 +129,9 @@ export default function App() {
   });
   useEffect(() => { try { localStorage.setItem("wizamp_displayName", displayName); } catch {} }, [displayName]);
 
+  // Audio unlock for Chrome late-joiners
+  const [audioLocked, setAudioLocked] = useState(false);
+
   // Modes
   const [currentModeName, setCurrentModeName] = useState("base");
   const [queuedModeName, setQueuedModeName] = useState(null);
@@ -308,6 +311,19 @@ export default function App() {
     });
   }
   const engine = engineRef.current;
+
+  // Audio unlock for late joiners
+  useEffect(() => {
+    const st = engine.getAudioState?.();
+    setAudioLocked(st !== "running");
+  }, [engine]);
+
+  const handleEnableAudio = async () => {
+    await engine.unlockAudio?.();
+    setAudioLocked(engine.getAudioState?.() !== "running" ? true : false);
+    // If we arrived mid-session, re-request sync to jump in immediately
+    try { room?.requestSync?.(); } catch {}
+  };
 
   // Placeholder: in the future, replace this with a networked "all clients ready" await.
   // For now, it's immediate.
@@ -670,6 +686,11 @@ export default function App() {
     // 3) Jump precisely to the reported musical position
     engine.clearQueuedSection?.();
     engine.clearQueuedMode?.();
+    if (engine.getAudioState?.() !== "running") {
+      // wait until user enables audio; the banner will call requestSync() again
+      console.log("[AUDIO] Context locked; waiting for user gesture to start");
+      return;
+    }
     engine.playAtPosition?.({ sectionName, modeName, clipName, offsetSeconds, warmStartDeltaSec: 0.5 });
 
     pendingPlayRef.current = null;
@@ -919,6 +940,22 @@ export default function App() {
         />
       </div>
 
+      {audioLocked && (
+        <div style={{
+          position: "fixed", top: 56, right: 16, zIndex: 9999,
+          background: "rgba(20,20,20,0.9)", color: "#fff",
+          padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)"
+        }}>
+          <div style={{fontWeight:600, marginBottom:6}}>Audio is paused by the browser</div>
+          <button onClick={handleEnableAudio} style={{
+            cursor:"pointer", padding:"6px 10px", borderRadius:6, border:"1px solid #aaa",
+            background:"#1e90ff", color:"#fff"
+          }}>
+            Enable audio
+          </button>
+        </div>
+      )}
+
       {/* Title with icon */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 0, marginBottom: 16 }}>
         <img
@@ -942,7 +979,7 @@ export default function App() {
               dynamicFirst={dbDynamicFirst}
               hideTests={dbHideTests}
               pinned={pinned}
-              names={names}                 // NEW
+              names={names}
             />
           )}
         </div>
@@ -1118,6 +1155,7 @@ export default function App() {
             }
           }}
           isSimpleTrackPlaying={tracks[playingTrackName]?.simple === true}
+          unlockAudio={() => engine.unlockAudio?.()}
         />
       )}
 
