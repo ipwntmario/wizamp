@@ -1008,18 +1008,49 @@ export default function App() {
       </div>
 
       {audioLocked && (
-        <div style={{
-          position: "fixed", top: 56, right: 16, zIndex: 9999,
-          background: "rgba(20,20,20,0.9)", color: "#fff",
-          padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)"
-        }}>
-          <div style={{fontWeight:600, marginBottom:6}}>Audio is paused by the browser</div>
-          <button onClick={handleEnableAudio} style={{
-            cursor:"pointer", padding:"6px 10px", borderRadius:6, border:"1px solid #aaa",
-            background:"#1e90ff", color:"#fff"
-          }}>
-            Enable audio
-          </button>
+        <div
+          style={{
+            position: "fixed",
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.5)",   // dark backdrop
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+            zIndex: 9999
+          }}
+          onClick={handleEnableAudio} // optional: close modal when clicking backdrop
+        >
+          <div
+            style={{
+              background: "rgba(20,20,20,0.95)",
+              color: "#fff",
+              padding: "20px 24px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.15)",
+              maxWidth: 400,
+              width: "100%",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.3)"
+            }}
+            onClick={(e) => e.stopPropagation()} // prevent closing when clicking inside
+          >
+            <div style={{ fontWeight: 600, marginBottom: 12 }}>
+              Audio is paused by the browser
+            </div>
+            <button
+              onClick={handleEnableAudio}
+              style={{
+                cursor: "pointer",
+                padding: "8px 14px",
+                borderRadius: 6,
+                border: "1px solid #aaa",
+                background: "#1e90ff",
+                color: "#fff",
+              }}
+            >
+              Enable audio
+            </button>
+          </div>
         </div>
       )}
 
