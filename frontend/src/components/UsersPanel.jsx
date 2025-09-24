@@ -2,7 +2,7 @@ import React from "react";
 
 const roleIcon = (role) => {
   switch (role) {
-    case "ACTIVE": return "🎛️";              // Active
+    case "GM": return "🎛️";              // Active
     case "PASSIVE_BTS": return "👁️";   // Passive BTS
     default: return "🎧";                 // Passive
   }

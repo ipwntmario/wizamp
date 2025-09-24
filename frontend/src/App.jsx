@@ -122,28 +122,28 @@ export default function App() {
 
   // Role & Display Name
   const [role, setRole] = useState(() => {
-    try { return localStorage.getItem("wizamp_role") || "ACTIVE"; } catch { return "ACTIVE"; }
+    try { return localStorage.getItem("wizamp_role") || "GM"; } catch { return "GM"; }
   });
   useEffect(() => { try { localStorage.setItem("wizamp_role", role); } catch {} }, [role]);
 
   // --- Role normalization ---
 
   const normalizeRole = (r) => {
-    if (!r) return "ACTIVE";
+    if (!r) return "GM";
     // accept legacy & variants
     const v = String(r).trim();
-    if (v === "ACTIVE" || v.toLowerCase() === "active" || v === "GM") return "ACTIVE";
+    if (v === "GM" || v.toLowerCase() === "active" || v === "GM") return "GM";
     if (v === "PASSIVE_BTS" || v.toLowerCase() === "passive-bts") return "PASSIVE_BTS";
     if (v === "PASSIVE" || v.toLowerCase() === "passive" || v === "Player") return "PASSIVE";
-    return "ACTIVE";
+    return "GM";
   };
 
   const normRole = normalizeRole(role);
-  const isActiveRole = normRole === "ACTIVE";
+  const isActiveRole = normRole === "GM";
   const isPassiveBTSRole = normRole === "PASSIVE_BTS";
   const isPassiveRole = normRole === "PASSIVE";
 
-  const displayRoleLabel = isActiveRole ? "ACTIVE" : (isPassiveBTSRole ? "PASSIVE_BTS" : "PASSIVE");
+  const displayRoleLabel = isActiveRole ? "GM" : (isPassiveBTSRole ? "PASSIVE_BTS" : "PASSIVE");
   const displayRoleIcon  = isActiveRole ? "🎛️"     : (isPassiveBTSRole ? "👁️🎧"       : "🎧");
 
 

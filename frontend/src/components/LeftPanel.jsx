@@ -3,7 +3,7 @@ import UsersPanel from "./UsersPanel";
 
 const LS_PANEL_OPEN = "ui.panelOpen";
 const LS_ROOM_CHOICE = "ui.roomChoice";       // "awc" | "private"
-const LS_ROLE = "wizamp.role";                // "ACTIVE" | "PASSIVE_BTS" | "PASSIVE"
+const LS_ROLE = "wizamp.role";                // "GM" | "PASSIVE_BTS" | "PASSIVE"
 const LS_NAME = "wizamp.displayName";
 
 function persist(key, val) { try { localStorage.setItem(key, val); } catch {} }
@@ -47,11 +47,11 @@ export default function LeftPanel({
   }, [choice, setOnlineEnabled, setRoomId]);
 
   // Role
-  const [roleLocal, setRoleLocal] = useState(() => readStr(LS_ROLE, role || "ACTIVE"));
+  const [roleLocal, setRoleLocal] = useState(() => readStr(LS_ROLE, role || "GM"));
   useEffect(() => { setRole?.(roleLocal); persist(LS_ROLE, roleLocal); }, [roleLocal, setRole]);
 
   const displayRole = useMemo(() => {
-    if (roleLocal === "ACTIVE") return "Active";
+    if (roleLocal === "GM") return "Active";
     if (roleLocal === "PASSIVE_BTS") return "Passive (BTS)";
     return "Passive";
   }, [roleLocal]);
@@ -154,7 +154,7 @@ export default function LeftPanel({
                 background: "#0f172a", color: "white", border: "1px solid rgba(255,255,255,0.15)"
               }}
             >
-              <option value="ACTIVE">🎛️ Active</option>
+              <option value="GM">🎛️ Active</option>
               <option value="PASSIVE_BTS">👁️ Passive (BTS)</option>
               <option value="PASSIVE">🎧 Passive</option>
             </select>
