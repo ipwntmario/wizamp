@@ -20,13 +20,14 @@ import { AudioEngine } from "./audio/audioEngine";
 import { useMusicData } from "./data/useMusicData";
 import { net, ONLINE, setOnlineEnabledRuntime } from "./net/netController";
 import { useRoom } from "./net/useRoom";
-import TrackSelector from "./components/TrackSelector";
-import SectionPanel from "./components/SectionPanel";
-import StatusBar from "./components/StatusBar";
+import LeftPanel from "./components/LeftPanel";
 import DatabaseModal from "./components/DatabaseModal";
 import SettingsModal from "./components/SettingsModal";
+import TrackSelector from "./components/TrackSelector";
+import SectionPanel from "./components/SectionPanel";
 import UsersPanel from "./components/UsersPanel";
 import Transport from "./components/Transport";
+import StatusBar from "./components/StatusBar";
 
 // Auto-import all PNGs in /assets/icons at build time
 const _iconModules = import.meta.glob("./assets/icons/*.png", { eager: true });
@@ -109,20 +110,42 @@ export default function App() {
     setOnlineEnabledRuntime(onlineEnabled);
   }, [onlineEnabled]);
 
+  // Track the current room id from the URL (or null)
+  const [roomId, setRoomId] = useState(() => {
+    try {
+      const usp = new URLSearchParams(window.location.search);
+      return usp.get("room"); // "awc" or null
+    } catch {
+      return null;
+    }
+  });
+
   // Role & Display Name
   const [role, setRole] = useState(() => {
-    try { return localStorage.getItem("wizamp_role") || "GM"; } catch { return "GM"; }
+    try { return localStorage.getItem("wizamp_role") || "ACTIVE"; } catch { return "ACTIVE"; }
   });
   useEffect(() => { try { localStorage.setItem("wizamp_role", role); } catch {} }, [role]);
 
-  // Role flags
-  const normRole = role === "Player" ? "passive" : role; // map old to new
-  const isGM = normRole === "GM";
-  const isPassiveBTS = normRole === "passive-bts";
-  const isPassive = normRole === "passive";
+  // --- Role normalization ---
 
-  const displayRoleLabel = isGM ? "active" : (isPassiveBTS ? "passive-bts" : "passive");
-  const displayRoleIcon  = isGM ? "🎛️"     : (isPassiveBTS ? "👁️🎧"       : "🎧");
+  const normalizeRole = (r) => {
+    if (!r) return "ACTIVE";
+    // accept legacy & variants
+    const v = String(r).trim();
+    if (v === "ACTIVE" || v.toLowerCase() === "active" || v === "GM") return "ACTIVE";
+    if (v === "PASSIVE_BTS" || v.toLowerCase() === "passive-bts") return "PASSIVE_BTS";
+    if (v === "PASSIVE" || v.toLowerCase() === "passive" || v === "Player") return "PASSIVE";
+    return "ACTIVE";
+  };
+
+  const normRole = normalizeRole(role);
+  const isActiveRole = normRole === "ACTIVE";
+  const isPassiveBTSRole = normRole === "PASSIVE_BTS";
+  const isPassiveRole = normRole === "PASSIVE";
+
+  const displayRoleLabel = isActiveRole ? "ACTIVE" : (isPassiveBTSRole ? "PASSIVE_BTS" : "PASSIVE");
+  const displayRoleIcon  = isActiveRole ? "🎛️"     : (isPassiveBTSRole ? "👁️🎧"       : "🎧");
+
 
   const [displayName, setDisplayName] = useState(() => {
     try { return localStorage.getItem("wizamp_displayName") || ""; } catch { return ""; }
@@ -299,8 +322,8 @@ export default function App() {
 
         // If we have a pending network-driven start for this track, honor it now.
         if (pendingPlayRef.current && pendingPlayRef.current.trackName === trackName) {
-          // Ask GM for exact position (section/mode/clip/offset)
-          console.log("[SYNC] requesting precise state from GM after preload");
+          // Ask active user for exact position (section/mode/clip/offset)
+          console.log("[SYNC] requesting precise state from active user after preload");
           room?.requestSetAutoplay?.(autoplay); // benign; keeps UI aligned for joiner too
           // One-shot request:
           room?.requestSync?.(); // we'll define this below (or call ws directly via a helper)
@@ -429,10 +452,10 @@ export default function App() {
 
     const target = currentSectionName || firstSection;
     if (target) {
-      if (room.onlineActive && isGM) {
+      if (room.onlineActive && isActiveRole) {
         // enforce ready gate by default
         if (!room.allReady) {
-          // Show something lightweight to the GM; you can replace with your modal/toast
+          // Show something lightweight to the active user; you can replace with your modal/toast
           console.warn("Not all players are ready:", room.users.filter(u => !u.ready).map(u => u.name));
           // Optionally, uncomment to force play anyway:
           // room.requestPlay({ trackName: selectedTrack, sectionName: target, delayMs: 2000, override: true });
@@ -455,7 +478,7 @@ export default function App() {
 
   const handlePause = () => {
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
-    if (room.onlineActive && isGM) {
+    if (room.onlineActive && isActiveRole) {
       room.requestPause();
     } else {
       net.pause(simple); engine.pause(simple);
@@ -464,7 +487,7 @@ export default function App() {
 
   const handleResume = () => {
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
-    if (room.onlineActive && isGM) {
+    if (room.onlineActive && isActiveRole) {
       room.requestResume({ delayMs: 1000 }); // small lead time like Play
     } else {
       net.resume(simple); engine.resume(simple);
@@ -474,7 +497,7 @@ export default function App() {
   const handleStop = async () => {
     setPlayDisabled(true);
 
-    if (room.onlineActive && isGM) {
+    if (room.onlineActive && isActiveRole) {
       // Tell everyone to stop (with fade)
       room.requestStop(true);
     } else {
@@ -519,7 +542,7 @@ export default function App() {
 
   const onSetTrack = useCallback((name, seed) => {
     console.log("[APP] onSetTrack", { name, seed });
-    // Always apply the seed (GM and players)
+    // Always apply the seed (active and passive roles)
     if (seed != null) {
       console.log("[APP] engine.setRandomSeed(seed) (apply even if already selected)");
       try { engine.setRandomSeed?.(seed >>> 0); } catch (e) { console.warn("engine.setRandomSeed failed", e); }
@@ -747,6 +770,48 @@ export default function App() {
   });
   // room = { onlineActive, connected, users, roomId, setReady }
 
+    const roomState = {
+    isOnline: onlineEnabled,
+    users: room?.users ?? [],
+    latencyMs: room?.latencyMs ?? null,
+    serverOffsetMs: room?.serverOffsetMs ?? null,
+  };
+
+  // --- Boot logic: normalize room from localStorage on base URL ---
+  useEffect(() => {
+    try {
+      const usp = new URLSearchParams(window.location.search);
+      const hasRoom = usp.has("room");
+      const lastChoice = localStorage.getItem("ui.roomChoice") || "awc"; // "awc" | "private"
+
+      if (!hasRoom) {
+        const url = new URL(window.location.href);
+        if (lastChoice === "awc") {
+          url.searchParams.set("room", "awc");
+          setOnlineEnabled?.(true);
+          setRoomId?.("awc");
+        } else {
+          url.searchParams.delete("room");
+          setOnlineEnabled?.(false);
+          setRoomId?.(null);
+        }
+        window.history.replaceState({}, "", url);
+      } else {
+        // If URL says room=..., honor it and persist it as "awc"
+        const rm = usp.get("room");
+        if (rm) {
+          localStorage.setItem("ui.roomChoice", "awc");
+          setOnlineEnabled?.(true);
+          setRoomId?.(rm);
+        }
+      }
+    } catch {
+      // ignore
+    }
+    // Run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     sendSyncResponseRef.current = room.sendSyncResponse;
     return () => { sendSyncResponseRef.current = null; };
@@ -834,7 +899,7 @@ export default function App() {
     handleSelectTrack(name);
 
     // if online GM, announce to room so players mirror & preload
-    if (room.onlineActive && isGM) {
+    if (room.onlineActive && isActiveRole) {
       room.requestSetTrack?.(name);
     }
   }
@@ -845,28 +910,43 @@ export default function App() {
       padding: 20
       }}>
 
+      <LeftPanel
+        engine={engine}
+        roomState={roomState}
+        setOnlineEnabled={setOnlineEnabled}
+        setRoomId={setRoomId}
+        currentRoomId={roomId}
+        role={role}
+        setRole={setRole}
+        displayName={displayName}
+        setDisplayName={setDisplayName}
+        room={room}
+      />
+
       {/* Top-right controls: DB (left) + Settings (right) */}
       <div style={{ position: "absolute", top: 16, right: 16, display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{ display: "flex", gap: 8 }}>
-          <span
-            title={`You are ${displayRoleLabel}`}
-            style={{
-              marginRight: 8,
-              padding: "4px 8px",
-              borderRadius: 999,
-              fontSize: 12,
-              background: "rgba(0,0,0,0.5)",
-              color: "#fff",
-              opacity: room.onlineActive ? 1 : 0.6,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <span>{displayRoleIcon}</span>
-            <span style={{ fontWeight: 600 }}>{displayRoleLabel}</span>
-          </span>
-          {room.onlineActive && (
+          {false && (
+            <span
+              title={`You are ${displayRoleLabel}`}
+              style={{
+                marginRight: 8,
+                padding: "4px 8px",
+                borderRadius: 999,
+                fontSize: 12,
+                background: "rgba(0,0,0,0.5)",
+                color: "#fff",
+                opacity: room.onlineActive ? 1 : 0.6,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <span>{displayRoleIcon}</span>
+              <span style={{ fontWeight: 600 }}>{displayRoleLabel}</span>
+            </span>
+          )}
+          {room.onlineActive && false && (
             <button
               aria-label="Users"
               onClick={() => setUsersOpen(v => !v)}
@@ -886,7 +966,7 @@ export default function App() {
               👥
             </button>
           )}
-          {isGM &&
+          {isActiveRole &&
             <button
               aria-label="Database"
               onClick={() => setDbOpen(true)}
@@ -925,19 +1005,6 @@ export default function App() {
             ⚙️
           </button>
         </div>
-
-        {/* UsersPanel anchored under this row */}
-        <UsersPanel
-          onlineActive={room.onlineActive}
-          connected={room.connected}
-          roomId={room.roomId}
-          users={room.users}
-          visible={usersOpen}
-          latencyMs={room.latencyMs}
-          offsetMs={room.offsetMs}
-          allReady={room.allReady}
-          lastError={room.lastError}
-        />
       </div>
 
       {audioLocked && (
@@ -969,12 +1036,12 @@ export default function App() {
       {/* Track Controls */}
       <section style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          {!isPassive && (
+          {!isPassiveRole && (
             <TrackSelector
               tracks={tracks}
               value={selectedTrack}
               onChange={onTrackChosen}
-              disabled={!isGM && room.onlineActive}
+              disabled={!isActiveRole && room.onlineActive}
               sortMode={dbSort}
               dynamicFirst={dbDynamicFirst}
               hideTests={dbHideTests}
@@ -994,12 +1061,12 @@ export default function App() {
           </span>
 
           {/* 🔊 Track volume toggle */}
-          {selectedTrack && !isPassive && (
+          {selectedTrack && !isPassiveRole && (
             <div style={{ position: "relative" }}>
               <button
                 aria-label="Track volume"
                 onClick={() => setTrackVolUIOpen(o => !o)}
-                disabled={!isGM}
+                disabled={!isActiveRole}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -1009,7 +1076,7 @@ export default function App() {
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  cursor: (!isGM) ? "not-allowed" : "pointer",
+                  cursor: (!isActiveRole) ? "not-allowed" : "pointer",
                 }}
                 title="Track volume (set for all players)"
               >
@@ -1044,7 +1111,7 @@ export default function App() {
                         // Always apply locally right away for zero-latency feedback
                         engine.setTrackVolume?.(v);
                         if (playingTrackName) {
-                          if (room.onlineActive && isGM) {
+                          if (room.onlineActive && isActiveRole) {
                             room.requestSetTrackVolume(v); // sync to others + snapshot
                           } else {
                             net.setTrackVolume?.(playingTrackName, v);
@@ -1062,7 +1129,7 @@ export default function App() {
       )}
 
       {/* Section Controls */}
-      {currentSectionName && !isPassive && (
+      {currentSectionName && !isPassiveRole && (
         <section style={{ marginBottom: 16 }}>
           {isDynamicPlayingTrack && (
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
@@ -1072,16 +1139,16 @@ export default function App() {
               </span>
             </div>
           )}
-          {!isPassive && (
+          {!isPassiveRole && (
           <SectionPanel
-            disabled={!isGM && room.onlineActive}
+            disabled={!isActiveRole && room.onlineActive}
             sections={sections}
             currentSectionName={currentSectionName}
             queuedSectionName={queuedSectionName}
             autoLockedTargets={autoLockedTargets}
             onToggleQueuedSection={(nameOrNull) => {
               setQueuedSectionName(nameOrNull);
-              if (room.onlineActive && isGM) {
+              if (room.onlineActive && isActiveRole) {
                 if (nameOrNull) room.requestQueueSection(nameOrNull);
                 else room.requestClearSectionQueue();
               } else {
@@ -1108,7 +1175,7 @@ export default function App() {
             queuedModeName={queuedModeName}       // null or a mode name
             onToggleQueuedMode={(nameOrNull) => {
               setQueuedModeName(nameOrNull);
-              if (room.onlineActive && isGM) {
+              if (room.onlineActive && isActiveRole) {
                 if (nameOrNull) room.requestQueueMode(nameOrNull);
                 else room.requestClearModeQueue();
               } else {
@@ -1127,7 +1194,7 @@ export default function App() {
       )}
 
       {/* Clip Information (progress bar from 0 to loopPoint) */}
-      {!isPassive && (
+      {!isPassiveRole && (
         <section style={{ marginBottom: 16 }}>
           <div style={{ height: 10, background: "#363119", borderRadius: 6, overflow: "hidden" }} aria-label="Clip position">
             <div style={{ width: `${Math.round(clipProgress * 100)}%`, height: "100%", background: "#E0C766", transition: "width 80ms linear" }} />
@@ -1136,9 +1203,9 @@ export default function App() {
       )}
 
       {/* Transport Controls */}
-      {!isPassive && (
+      {!isPassiveRole && (
         <Transport
-          disabled={!isGM && room.onlineActive}
+          disabled={!isActiveRole && room.onlineActive}
           isLoadingTrack={isLoadingTrack}
           isPlaying={isPlaying}
           isPaused={isPaused}
@@ -1150,7 +1217,7 @@ export default function App() {
           setAutoplay={(fnOrBool) => {
             const next = typeof fnOrBool === "function" ? !!fnOrBool(autoplay) : !!fnOrBool;
             setAutoplay(next); // optimistic
-            if (room.onlineActive && isGM) {
+            if (room.onlineActive && isActiveRole) {
               room.requestSetAutoplay?.(next);
             }
           }}

@@ -1,54 +1,54 @@
-// src/components/UsersPanel.jsx
-export default function UsersPanel({ onlineActive, connected, roomId, users = [], visible, latencyMs, offsetMs, allReady, lastError }) {
-  if (!onlineActive || !visible) return null;
+import React from "react";
 
-  const roleIcon = (r) => (r === "GM" ? "🎛️" : r === "passive-bts" ? "👁️🎧" : "🎧");
-  const roleLabel = (r) => (r === "GM" ? "active" : r === "passive-bts" ? "passive-bts" : "passive");
+const roleIcon = (role) => {
+  switch (role) {
+    case "ACTIVE": return "🎛️";              // Active
+    case "PASSIVE_BTS": return "👁️";   // Passive BTS
+    default: return "🎧";                 // Passive
+  }
+};
 
+export default function UsersPanel({ users = [], latencyMs, offsetMs }) {
   return (
-    <div style={{
-      position: "absolute", // appears just under parent
-      right: 0, top: "100%",
-      marginTop: 6,
-      background: "rgba(0,0,0,0.6)",
-      color: "#fff",
-      padding: "10px 12px",
-      borderRadius: 8,
-      minWidth: 220,
-      zIndex: 50,
-    }}>
-      <div style={{ fontWeight: 700, marginBottom: 6 }}>
-        Room: {roomId || "(none)"} {connected ? "• online" : "• offline"}
+    <div
+      style={{
+        background: "rgba(15, 23, 42, 0.6)",
+        border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: 10,
+        padding: 10,
+        color: "white",
+      }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>Users</div>
+
+      <div style={{ display: "grid", gap: 6 }}>
+        {users.length === 0 && (
+          <div style={{ opacity: 0.7, fontSize: 13 }}>No one connected</div>
+        )}
+        {users.map((u) => (
+          <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 18, textAlign: "center" }}>{roleIcon(u.role)}</span>
+            <span style={{ fontWeight: 500 }}>{u.name || "Unknown"}</span>
+            <span style={{
+              marginLeft: "auto",
+              fontSize: 11,
+              padding: "2px 6px",
+              borderRadius: 6,
+              background: u.ready ? "rgba(16,185,129,0.25)" : "rgba(245,158,11,0.25)",
+              border: `1px solid ${u.ready ? "rgba(16,185,129,0.5)" : "rgba(245,158,11,0.5)"}`,
+            }}>
+              {u.ready ? "ready" : "loading"}
+            </span>
+          </div>
+        ))}
       </div>
-      <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
-        latency ≈ {latencyMs ?? "—"} ms · offset ≈ {Math.round(offsetMs ?? 0)} ms
-      </div>
-      <div style={{ fontSize: 12, marginBottom: 6 }}>
-        Ready gate: <span style={{ fontWeight: 700, color: allReady ? "#4ade80" : "#f59e0b" }}>
-          {allReady ? "All ready" : "Waiting…"}
-        </span>
-      </div>
-      {users.length === 0 && (
-        <div style={{ fontSize: 12, opacity: 0.8 }}>No users yet.</div>
-      )}
-      {users.map(u => (
-        <div key={u.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14, marginTop: 4 }}>
-          <span style={{ width: 8, height: 8, borderRadius: 9999, background: u.ready ? "#4ade80" : "#f59e0b" }} />
-          <span style={{ fontWeight: 600 }}>{u.name}</span>
-          <span style={{ opacity: 0.8, display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span title={roleLabel(u.role)}>{roleIcon(u.role)}</span>
-            <span>({roleLabel(u.role)})</span>
-          </span>
+
+      {(latencyMs != null || offsetMs != null) && (
+        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
+          {latencyMs != null && <div>Latency: {Math.round(latencyMs)} ms</div>}
+          {offsetMs != null && <div>Clock offset: {Math.round(offsetMs)} ms</div>}
         </div>
-      ))}
-      {!!lastError && (
-        <div style={{ marginTop: 8, fontSize: 12, color: "#fca5a5" }}>
-          {lastError.message}{lastError.notReady?.length ? `: ${lastError.notReady.join(", ")}` : ""}
-        </div>
       )}
-      <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-        Add <code>?room=table-alpha</code> to the URL to invite others.
-      </div>
     </div>
   );
 }
