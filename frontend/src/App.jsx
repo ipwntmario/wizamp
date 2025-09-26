@@ -724,7 +724,10 @@ export default function App() {
     const state = {
       ...snapshot,                // {trackName, sectionName, modeName, clipName, offsetSeconds, seed}
       volume: trackVolume ?? 1,   // include current room volume
-      rngDrawCount: engine.getRngDrawCount?.() ?? snapshot.rngDrawCount ?? 0,
+      rngNext:
+        (engine.getRngDrawCount?.() != null
+          ? engine.getRngDrawCount() + 1
+          : (snapshot.rngDrawCount ?? 0) + 1),
     };
 
     // Use the ref (may still be null on first render; that’s OK)
@@ -755,8 +758,9 @@ export default function App() {
 
     // 1) Seed + fast-forward RNG to GM’s draw count BEFORE any transitions
     if (seed != null) engine.setRandomSeed?.(seed >>> 0);
-    const draws = Number(state?.rngDrawCount ?? 0) | 0;
-    if (draws > 0) engine.fastForwardRng?.(draws);
+    // GM reports the next draw index; we fast-forward to next-1
+    const rngNext = Number(state?.rngNext ?? 0) | 0;
+    if (rngNext > 1) engine.fastForwardRng?.(rngNext - 1);
 
     // 2) Apply volume for good measure
     if (typeof volume === "number") {
