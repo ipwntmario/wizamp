@@ -155,6 +155,9 @@ export default function App() {
   // Audio unlock for Chrome late-joiners
   const [audioLocked, setAudioLocked] = useState(false);
 
+  // Track if a net "start" arrived while audio was locked, so we can resync after unlock
+  const [pendingNetStart, setPendingNetStart] = useState(null); // or useRef(null)
+
   // Modes
   const [currentModeName, setCurrentModeName] = useState("base");
   const [queuedModeName, setQueuedModeName] = useState(null);
@@ -344,6 +347,13 @@ export default function App() {
   const handleEnableAudio = async () => {
     await engine.unlockAudio?.();
     setAudioLocked(engine.getAudioState?.() !== "running" ? true : false);
+
+    // If we deferred a net start while locked, ask the GM for a fresh snapshot now.
+    if (engine.getAudioState?.() === "running" && pendingNetStart) {
+      try { room?.requestSync?.(); } catch {}
+      setPendingNetStart(null);
+    }
+
     // If we arrived mid-session, re-request sync to jump in immediately
     try { room?.requestSync?.(); } catch {}
   };
@@ -436,6 +446,14 @@ export default function App() {
 
   // Handlers
   const handlePlay = async () => {
+    // If audio is locked, don't start or advance RNG. Defer until unlock, then re-sync.
+    if (engine.getAudioState?.() !== "running") {
+      setAudioLocked(true);           // show the banner if you have it
+      setPendingNetStart({ type: "PLAY", msg, ts: Date.now() });
+      // Do not call engine.play... here. Just wait for unlock.
+      return;
+    }
+
     if (isLoadingTrack) return;  // <-- early bail
 
     // If we’re idle or stopped and the selected track isn’t loaded, load it now
@@ -486,6 +504,12 @@ export default function App() {
   };
 
   const handleResume = () => {
+    if (engine.getAudioState?.() !== "running") {
+      setAudioLocked(true);
+      setPendingNetStart({ type: "RESUME", msg, ts: Date.now() });
+      return;
+    }
+
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
     if (room.onlineActive && isActiveRole) {
       room.requestResume({ delayMs: 1000 }); // small lead time like Play
@@ -540,24 +564,40 @@ export default function App() {
     net.setTrack(name);
   };
 
-  const onSetTrack = useCallback((name, seed) => {
-    console.log("[APP] onSetTrack", { name, seed });
-    // Always apply the seed (active and passive roles)
+  // Called when server sends STATE { name, seed, ... }.
+  // It should ONLY select/preload, never start playback here.
+  const onSetTrack = useCallback(({ name, seed }) => {
+    if (!name) return;
+
+    // If already on this track, do nothing unless we're idle.
+    const local = engine.getNowPlaying?.(); // {trackName, ...} or null
+    const alreadySelected = selectedTrack === name || local?.trackName === name;
+
+    if (alreadySelected) {
+      // Optional: only reseed when we're not actively playing
+      if (!isPlaying && seed != null) {
+        console.log("[APP] engine.setRandomSeed(seed) (idle reseed)");
+        engine.setRandomSeed?.(seed >>> 0);
+      }
+      return; // <- prevent any restart
+    }
+
+    // Not on this track yet: select & preload (no auto-start here)
+    console.log("[APP] onSetTrack select/preload only:", name);
     if (seed != null) {
-      console.log("[APP] engine.setRandomSeed(seed) (apply even if already selected)");
-      try { engine.setRandomSeed?.(seed >>> 0); } catch (e) { console.warn("engine.setRandomSeed failed", e); }
+      engine.setRandomSeed?.(seed >>> 0);
     }
-    // Only trigger local selection if it changed
-    if (selectedTrack !== name) {
-      handleSelectTrack(name);
-    }
-  }, [selectedTrack, handleSelectTrack]);
+    handleSelectTrack(name); // this triggers the preload effect below
+  }, [engine, selectedTrack, handleSelectTrack]);
+
 
   // Helper: load assets for a given track (called when fully stopped)
   const loadTrackAssets = async (name) => {
     if (!name) return;
     if (isPlaying) return;          // never load mid-play
     if (isLoadingTrack) return;     // already loading
+    const online = onlineEnabled && !!roomId;   // 👈 add this
+    // isGM already computed in your component (normRole === "GM")
 
     setIsLoadingTrack(true);
     try {
@@ -602,16 +642,19 @@ export default function App() {
         }
       } catch {}
 
-      // If this preload was requested for auto-start, do it now
+      // If this preload was requested for auto-start, only allow local start when OFFLINE.
+      // Online starts should be driven by the GM via PLAY broadcast from the server.
       if (autoStartForRef.current === name) {
-        console.log("[AUTOPLAY] (redundant path) awaiting barrier for", name);
-        await awaitAllClientsReady(name); // local no-op; future: wait for all clients
-        const first = tracks[name]?.firstSection;
-        if (first) {
-          console.log("[AUTOPLAY] (redundant path) starting first section:", first);
-          engine.playSection(first);
+        const allowLocalAutoStart = !online; // keep starts server-driven when online
+        if (allowLocalAutoStart) {
+          console.log("[AUTOPLAY] offline → start first section after barrier:", name);
+          await awaitAllClientsReady(name);
+          const first = tracks[name]?.firstSection;
+          if (first) engine.playSection(first);
+        } else {
+          console.log("[AUTOPLAY] online → wait for PLAY from server (no local start)");
         }
-        autoStartForRef.current = null; // consume the request
+        autoStartForRef.current = null; // always consume the request
       }
     } finally {
       setIsLoadingTrack(false);
@@ -691,6 +734,21 @@ export default function App() {
   const onSyncStateMsg = useCallback((state) => {
     if (!state) return;
     const { trackName, sectionName, modeName, clipName, offsetSeconds, seed, volume } = state;
+
+    // 0) If we’re already playing essentially the same spot, ignore the sync
+    try {
+      const local = engine.getNowPlaying?.(); // {trackName, sectionName, modeName, clipName, offsetSeconds, ...}
+      if (local &&
+          local.trackName === trackName &&
+          local.clipName === clipName) {
+        const drift = Math.abs((local.offsetSeconds ?? 0) - (offsetSeconds ?? 0));
+        // 300ms is generous; adjust if you want tighter/looser
+        if (drift < 0.30) {
+          // Also avoid reseeding / fast-forwarding RNG if we’re already aligned
+          return;
+        }
+      }
+    } catch {}
 
     // Ensure we’re on the right track (should already be selected/preloaded)
     if (trackName && trackName !== selectedTrack) handleSelectTrack(trackName);
@@ -1007,7 +1065,7 @@ export default function App() {
         </div>
       </div>
 
-      {audioLocked && (
+      {audioLocked && room.onlineActive && (
         <div
           style={{
             position: "fixed",

@@ -103,6 +103,11 @@ export class AudioEngine {
    * Starts the given clip with an offset, setting section/mode consistently.
    */
   playAtPosition({ sectionName, modeName = "base", clipName, offsetSeconds = 0, warmStartDeltaSec = 0 } = {}) {
+    if (this.audioCtx && this.audioCtx.state !== "running") {
+      if (this._rngDebug) console.warn("[ENGINE] playAtPosition ignored: AudioContext suspended");
+      return;
+    }
+
     if (!sectionName || !clipName) return;
     // Set section & mode before starting the clip
     this.setCurrentSection(sectionName);
@@ -783,6 +788,10 @@ export class AudioEngine {
 
   // ----- core playback -----
   playClip = (clipName, opts = {}) => {
+    if (this.audioCtx && this.audioCtx.state !== "running") {
+      if (this._rngDebug) console.warn("[ENGINE] playClip ignored: AudioContext suspended");
+      return;
+    }
     const { offsetSeconds = null, skipFadeIn = false, usePauseFade = false } = opts || {};
     console.log("[ENGINE] playClip", clipName,
                 "mode:", this.currentModeName, "section:", this.currentSectionName);
@@ -827,13 +836,12 @@ export class AudioEngine {
 
     const hasNextInClip = Array.isArray(clip.nextClip) && clip.nextClip.length > 0;
 
-    const loopEndPoint = (!hasNextInClip)
-      ? (clip.loopPoint ?? buffer.duration)
-      : (clip.clipEnd ?? buffer.duration);
+    // Dynamic tracks: do NOT loop the node — scheduler handles transitions.
+    // Simple (perma-loop) tracks can be handled later as a special case.
+    source.loop = false;
+    source.loopStart = 0;
+    source.loopEnd  = buffer.duration;
 
-    source.loop = !hasNextInClip;
-    source.loopStart = clip.loopStart || 0;
-    source.loopEnd  = loopEndPoint;
 
     const gainNode = ctx.createGain();
 
@@ -1006,6 +1014,17 @@ export class AudioEngine {
       this.scheduledTimeouts.push(id);
     }
 
+    // Stop the source at clipEnd (one-shot safety)
+    const endAtSec = (clip.clipEnd ?? buffer.duration);
+    const stopSpan = Math.max(0, endAtSec - startOffset);
+    if (stopSpan > 0) {
+      const idStop = setTimeout(() => {
+        try { source.stop(); } catch {}
+      }, stopSpan * 1000 + 10);
+      this.scheduledTimeouts.push(idStop);
+    }
+
+
     // true end detection for "end" sections: when last clip has no nextClip
     const section = this.sectionData[this.currentSectionName];
     if (!hasNextInClip && section?.type === "end") {
@@ -1034,9 +1053,11 @@ export class AudioEngine {
     // Build nodes
     const src = ctx.createBufferSource();
     src.buffer = buffer;
-    src.loop = true;
-    src.loopStart = (this.clipData[clipName]?.loopStart || 0);
-    src.loopEnd  = (this.clipData[clipName]?.loopPoint ?? buffer.duration);
+    // One-shot: no node-level looping for dynamic tracks
+    src.loop = false;
+    src.loopStart = 0;
+    src.loopEnd  = buffer.duration;
+
 
     const gainNode = ctx.createGain();
     gainNode.gain.setValueAtTime(0, startAtAudioTime); // start muted; we’ll ramp
@@ -1073,6 +1094,15 @@ export class AudioEngine {
     entry.timerId = setTimeout(() => {
       this._handleLoopPointForClip(clipName);
     }, msUntilLoop);
+
+    // NEW: stop this source at its true clipEnd
+    const clipEnd = (this.clipData[clipName]?.clipEnd ?? buffer.duration);
+    // time remaining from our scheduled start to clipEnd:
+    const spanToEnd = Math.max(0, clipEnd - entry.offsetAtStart);
+    const msUntilEnd = Math.max(0, (leadSec + spanToEnd) * 1000);
+    setTimeout(() => {
+      try { src.stop(); } catch {}
+    }, msUntilEnd + 10);
 
     // Update current pointers & status
     this.lastPlayingClipName = clipName;

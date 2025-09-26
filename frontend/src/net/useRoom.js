@@ -141,12 +141,12 @@ export function useRoom({
         const name = String(data.name || "");
         const seed = (data.seed ?? null);
         console.log("[room] ← SET_TRACK", { name, seed });
-        if (name) onSetTrackRef.current?.(name, seed);
+        if (name) onSetTrackRef.current?.({ name, seed });
       } else if (data.type === "STATE") {
         const name = String(data.selectedTrack || "");
         const seed = (data.seed ?? null);
         console.log("[room] ← STATE", { name, seed });
-        if (name) onSetTrackRef.current?.(name, seed);
+        if (name) onSetTrackRef.current?.({ name, seed });
         // hydrate queued UI from snapshot (optional)
         if (data.queuedSection != null) onQueueSectionRef.current?.(String(data.queuedSection));
         if (data.queuedMode != null) onQueueModeRef.current?.(String(data.queuedMode));
