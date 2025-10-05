@@ -134,7 +134,7 @@ export class RoomHub {
       }
 
       case "PLAY_REQUEST": {
-        // Active user requests a synchronized section start across the room
+        // Audio Manager user requests a synchronized section start across the room
         const u = this.clients.get(ws);
         if (!u) return;
         const roomId = u.roomId;

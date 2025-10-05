@@ -2,7 +2,7 @@ import React from "react";
 
 const roleIcon = (role) => {
   switch (role) {
-    case "GM": return "🎛️";              // Active
+    case "GM": return "🎛️";              // Audio Manager
     case "PASSIVE_BTS": return "👁️";   // Passive BTS
     default: return "🎧";                 // Passive
   }

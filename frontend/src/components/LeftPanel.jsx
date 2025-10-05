@@ -51,7 +51,7 @@ export default function LeftPanel({
   useEffect(() => { setRole?.(roleLocal); persist(LS_ROLE, roleLocal); }, [roleLocal, setRole]);
 
   const displayRole = useMemo(() => {
-    if (roleLocal === "GM") return "Active";
+    if (roleLocal === "GM") return "Audio Manager";
     if (roleLocal === "PASSIVE_BTS") return "Passive (BTS)";
     return "Passive";
   }, [roleLocal]);
@@ -154,7 +154,7 @@ export default function LeftPanel({
                 background: "#0f172a", color: "white", border: "1px solid rgba(255,255,255,0.15)"
               }}
             >
-              <option value="GM">🎛️ Active</option>
+              <option value="GM">🎛️ Audio Manager</option>
               <option value="PASSIVE_BTS">👁️ Passive (BTS)</option>
               <option value="PASSIVE">🎧 Passive</option>
             </select>
