@@ -104,12 +104,12 @@ export default function SettingsModal({
           </label>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
-              type="number" min={1} max={30} step={0.1}
+              type="number" min={0} max={30} step={0.1}
               value={pauseFadeSeconds}
               onChange={(e) => {
                 const v = Number(e.target.value);
                 if (Number.isFinite(v)) {
-                  const clamped = Math.max(1, Math.min(30, v));
+                  const clamped = Math.max(0, Math.min(30, v));
                   setPauseFadeSeconds?.(clamped);
                 }
               }}

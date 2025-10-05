@@ -71,6 +71,11 @@ export default function App() {
   const currentLoadIdRef = useRef(0);
   const readyForTrackRef = useRef(null); // which track we’ve marked ready
 
+  // After late-join hydrate, ignore any queued sections/modes from room STATE for a moment
+  const ignoreQueueUntilMsRef = useRef(0);
+  const setHydrateGuard = (ms=3000) => { ignoreQueueUntilMsRef.current = Date.now() + ms; };
+  const shouldIgnoreQueues = () => Date.now() < (ignoreQueueUntilMsRef.current || 0);
+
   // Autoplay setting (persist)
   const [autoplay, setAutoplay] = useState(() => {
     try { return localStorage.getItem("wizamp_autoplay") === "1"; } catch { return false; }
@@ -316,7 +321,10 @@ export default function App() {
           await awaitAllClientsReady(trackName); // local no-op; future: wait for all clients
           const first = tracksRef.current?.[trackName]?.firstSection;
           console.log("[AUTOPLAY] barrier passed; first section:", first);
-          if (first) engine.playSection(first);
+          if (first) {
+            engine.playSection(first);
+            console.log("[WHO CALLED PLAYSECTION?] reason=", reasonString, "ignore?", shouldIgnoreQueues());
+          }
           autoStartForRef.current = null; // consume the request
           setAutoStartRequestedFor(null);
           console.log("[AUTOPLAY] started and request consumed");
@@ -337,6 +345,21 @@ export default function App() {
     });
   }
   const engine = engineRef.current;
+
+  // === Verification timers for late-join drift correction ===
+  const verifyTimer1Ref = useRef(null);
+  const verifyTimer2Ref = useRef(null);
+  const verifyingRef = useRef(false);
+
+  const scheduleSyncVerificationRef = useRef(null);
+
+  // Given a clip name, return its loopPoint (sec) from current clips state
+  const getLoopPointSec = useCallback((clipName) => {
+    const c = clips?.[clipName];
+    if (!c) return null;
+    const lp = Number(c?.loopPoint);
+    return Number.isFinite(lp) ? lp : null;
+  }, [clips]);
 
   // Audio unlock for late joiners
   useEffect(() => {
@@ -443,7 +466,6 @@ export default function App() {
   const isDynamicTrack = tracks[selectedTrack]?.simple === false;
   const isDynamicPlayingTrack = playingTrackName && tracks[playingTrackName]?.simple === false;
 
-
   // Handlers
   const handlePlay = async () => {
     // If audio is locked, don't start or advance RNG. Defer until unlock, then re-sync.
@@ -482,16 +504,9 @@ export default function App() {
         room.requestPlay({ trackName: selectedTrack, sectionName: target, delayMs: 2000 });
       } else {
         engine.playSection(target);
+        console.log("[WHO CALLED PLAYSECTION?] reason=", reasonString, "ignore?", shouldIgnoreQueues());
       }
     }
-  };
-
-  const handlePlaySection = (sectionName) => {
-    setQueuedSectionName(null);
-    engine.clearQueuedSection?.();
-    engine.clearQueuedMode?.();
-    net.playSection(sectionName);
-    engine.playSection(sectionName);
   };
 
   const handlePause = () => {
@@ -650,7 +665,10 @@ export default function App() {
           console.log("[AUTOPLAY] offline → start first section after barrier:", name);
           await awaitAllClientsReady(name);
           const first = tracks[name]?.firstSection;
-          if (first) engine.playSection(first);
+          if (first) {
+            engine.playSection(first);
+            console.log("[WHO CALLED PLAYSECTION?] reason=", reasonString, "ignore?", shouldIgnoreQueues());
+          }
         } else {
           console.log("[AUTOPLAY] online → wait for PLAY from server (no local start)");
         }
@@ -686,6 +704,10 @@ export default function App() {
   }, [tracks, playingTrackName, selectedTrack, net, engine]);
 
   const onQueueSectionMsg = useCallback((name) => {
+    if (shouldIgnoreQueues()) {
+      console.log("[SYNC][IGNORE] dropping stale QUEUE_SECTION during hydrate window:", name);
+      return;
+    }
     setQueuedSectionName(name || null);
     if (name) engine.queueSectionTransition?.(name);
   }, [engine]);
@@ -696,6 +718,10 @@ export default function App() {
   }, [engine]);
 
   const onQueueModeMsg = useCallback((name) => {
+    if (shouldIgnoreQueues()) {
+      console.log("[SYNC][IGNORE] dropping stale QUEUE_MODE during hydrate window:", mode);
+      return;
+    }
     setQueuedModeName(name || null);
     if (name) engine.queueModeTransition?.(name);
   }, [engine]);
@@ -716,71 +742,6 @@ export default function App() {
     setAutoplay(!!val);
   }, []);
 
-  const onSyncRequestMsg = useCallback((requesterId) => {
-    // Build a precise snapshot from the engine (GM side)
-    const snapshot = engine.getNowPlaying?.();
-    if (!snapshot) return;
-
-    const state = {
-      ...snapshot,                // {trackName, sectionName, modeName, clipName, offsetSeconds, seed}
-      volume: trackVolume ?? 1,   // include current room volume
-      rngNext:
-        (engine.getRngDrawCount?.() != null
-          ? engine.getRngDrawCount() + 1
-          : (snapshot.rngDrawCount ?? 0) + 1),
-    };
-
-    // Use the ref (may still be null on first render; that’s OK)
-    sendSyncResponseRef.current?.(requesterId, state);
-  }, [engine, trackVolume]);
-
-  const onSyncStateMsg = useCallback((state) => {
-    if (!state) return;
-    const { trackName, sectionName, modeName, clipName, offsetSeconds, seed, volume } = state;
-
-    // 0) If we’re already playing essentially the same spot, ignore the sync
-    try {
-      const local = engine.getNowPlaying?.(); // {trackName, sectionName, modeName, clipName, offsetSeconds, ...}
-      if (local &&
-          local.trackName === trackName &&
-          local.clipName === clipName) {
-        const drift = Math.abs((local.offsetSeconds ?? 0) - (offsetSeconds ?? 0));
-        // 300ms is generous; adjust if you want tighter/looser
-        if (drift < 0.30) {
-          // Also avoid reseeding / fast-forwarding RNG if we’re already aligned
-          return;
-        }
-      }
-    } catch {}
-
-    // Ensure we’re on the right track (should already be selected/preloaded)
-    if (trackName && trackName !== selectedTrack) handleSelectTrack(trackName);
-
-    // 1) Seed + fast-forward RNG to GM’s draw count BEFORE any transitions
-    if (seed != null) engine.setRandomSeed?.(seed >>> 0);
-    // GM reports the next draw index; we fast-forward to next-1
-    const rngNext = Number(state?.rngNext ?? 0) | 0;
-    if (rngNext > 1) engine.fastForwardRng?.(rngNext - 1);
-
-    // 2) Apply volume for good measure
-    if (typeof volume === "number") {
-      setTrackVolume(volume);
-      engine.setTrackVolume?.(volume);
-    }
-
-    // 3) Jump precisely to the reported musical position
-    engine.clearQueuedSection?.();
-    engine.clearQueuedMode?.();
-    if (engine.getAudioState?.() !== "running") {
-      // wait until user enables audio; the banner will call requestSync() again
-      console.log("[AUDIO] Context locked; waiting for user gesture to start");
-      return;
-    }
-    engine.playAtPosition?.({ sectionName, modeName, clipName, offsetSeconds, warmStartDeltaSec: 0.5 });
-
-    pendingPlayRef.current = null;
-  }, [engine, selectedTrack, handleSelectTrack, setTrackVolume]);
-
   // // Joiner asks GM for an exact position once ready:
   // const sendSyncRequest = useCallback(() => {
   //   // we’ll send via useRoom by exposing a simple method; or directly:
@@ -789,6 +750,195 @@ export default function App() {
   //     room?.requestSync?.();
   //   } catch {}
   // }, [room]);
+
+  const onSyncRequestMsg = useCallback((requesterId) => {
+    // Build a precise snapshot from the engine (GM side)
+    const snapshot = engine.getNowPlaying?.();
+    if (!snapshot) return;
+
+    // Current draw count up to "now"
+    const drawCount =
+      (engine.getRngDrawCount?.() != null
+        ? engine.getRngDrawCount()
+        : (snapshot.rngDrawCount ?? 0));
+
+    const state = {
+      ...snapshot,              // {trackName, sectionName, modeName, clipName, offsetSeconds, seed, ...}
+      volume: trackVolume ?? 1, // include current room volume for the joiner
+      rngDrawCount: drawCount,  // for debugging / fallback
+      rngNext: drawCount + 1,   // <- the next draw the GM will consume at the next boundary
+    };
+
+    // Use the ref (may still be null on first render; that’s OK)
+    sendSyncResponseRef.current?.(requesterId, state);
+  }, [engine, trackVolume]);
+
+  // Schedule a verification SYNC right after the next loop boundary
+  useEffect(() => {
+    scheduleSyncVerificationRef.current = () => {
+      // clear any previous timers
+      if (verifyTimer1Ref.current) { clearTimeout(verifyTimer1Ref.current); verifyTimer1Ref.current = null; }
+      if (verifyTimer2Ref.current) { clearTimeout(verifyTimer2Ref.current); verifyTimer2Ref.current = null; }
+
+      const nowPlaying = engine.getNowPlaying?.();
+      if (!nowPlaying) return;
+
+      const { clipName, offsetSeconds = 0 } = nowPlaying;
+
+      // You already have this helper; if not, inline the lookup from `clips`.
+      const c = clips?.[clipName];
+      const lp = c ? Number(c.loopPoint) : null;
+
+      // If we can’t resolve loopPoint/offset, do two coarse checks
+      if (!lp || offsetSeconds == null) {
+        verifyingRef.current = true;
+        verifyTimer1Ref.current = setTimeout(() => requestSyncRef.current?.(), 900);
+        verifyTimer2Ref.current = setTimeout(() => requestSyncRef.current?.(), 1600);
+        return;
+      }
+
+      const remainMs = Math.max(60, (lp - offsetSeconds) * 1000);
+      verifyingRef.current = true;
+
+      // Right after boundary
+      verifyTimer1Ref.current = setTimeout(() => requestSyncRef.current?.(), remainMs + 20);
+      // Backup mid-next-clip
+      verifyTimer2Ref.current = setTimeout(() => requestSyncRef.current?.(), remainMs + 420);
+    };
+
+    // Cleanup on unmount
+    return () => {
+      if (verifyTimer1Ref.current) { clearTimeout(verifyTimer1Ref.current); verifyTimer1Ref.current = null; }
+      if (verifyTimer2Ref.current) { clearTimeout(verifyTimer2Ref.current); verifyTimer2Ref.current = null; }
+    };
+  }, [engine, clips]); // NOTE: no `room` and no `onSyncStateMsg` here
+
+  const onSyncStateMsg = useCallback((snapshot) => {
+    // (A) If the snapshot happens to include queued fields, never enact them here.
+    //     We only *display* queues on the GM and we execute queues via explicit QUEUE_* events.
+    if (snapshot?.queuedSection || snapshot?.queuedMode) {
+      const qs = snapshot?.queuedSection ?? null;
+      const qm = snapshot?.queuedMode ?? null;
+      if (!isActiveRole || shouldIgnoreQueues()) {
+        console.log("[SYNC_STATE][IGNORE] queued fields present in snapshot (hydrate/non-GM):", { qs, qm });
+      } else {
+        console.log("[SYNC_STATE] queued fields (GM display only):", { qs, qm });
+      }
+    }
+
+    // (B) Verification path (post-hydrate re-check)
+    if (verifyingRef.current) {
+      verifyingRef.current = false;
+      if (verifyTimer1Ref.current) { clearTimeout(verifyTimer1Ref.current); verifyTimer1Ref.current = null; }
+      if (verifyTimer2Ref.current) { clearTimeout(verifyTimer2Ref.current); verifyTimer2Ref.current = null; }
+
+      const local = engine.getNowPlaying?.();
+      const localDraw  = engine.getRngDrawCount?.() | 0;
+      const remoteDraw = (snapshot?.rngDrawCount | 0);
+      const drawDiff   = remoteDraw - localDraw;
+
+      // RNG correction (authoritative = remote/GM)
+      if (drawDiff !== 0) {
+        console.log("[VERIFY][RNG] correcting draw from", localDraw, "to", remoteDraw);
+        if (Number.isFinite(snapshot?.seed)) engine.setRandomSeed?.(snapshot.seed);
+        engine.fastForwardRng?.(remoteDraw);
+      }
+
+      // Positional correction (authoritative = remote/GM)
+      const needJump =
+        !local ||
+        local.sectionName !== snapshot?.sectionName ||
+        local.modeName    !== snapshot?.modeName ||
+        local.clipName    !== snapshot?.clipName ||
+        Math.abs((local?.offsetSeconds || 0) - (snapshot?.offsetSeconds || 0)) > 0.06;
+
+      if (needJump) {
+        console.log("[VERIFY] position correction →", {
+          section: snapshot?.sectionName,
+          mode:    snapshot?.modeName,
+          clip:    snapshot?.clipName,
+          off:     snapshot?.offsetSeconds
+        });
+
+        // Clear any stale queues before we jump
+        engine.clearQueuedSection?.();
+        setQueuedSectionName(null);
+        engine.clearQueuedMode?.();
+        setQueuedModeName(null);
+
+        // Hydrate guard so any delayed QUEUE_* from STATE can’t fire right away
+        setHydrateGuard(3000);
+
+        engine.playAtPosition?.({
+          sectionName: snapshot?.sectionName,
+          modeName:    snapshot?.modeName || "base",
+          clipName:    snapshot?.clipName,
+          offsetSeconds: Math.max(0, Number(snapshot?.offsetSeconds) || 0),
+          warmStartDeltaSec: 0
+        });
+
+        // Schedule a follow-up verification
+        scheduleSyncVerificationRef.current?.();
+
+        // Re-allow queues after we’ve scheduled verification
+        ignoreQueueUntilMsRef.current = 0;
+      } else {
+        console.log("[VERIFY] already in sync.");
+      }
+      return;
+    }
+
+    // (C) Normal late-join hydrate
+    const name = snapshot?.trackName || snapshot?.name || snapshot?.selectedTrack || null;
+    if (!name) return;
+
+    // Don’t re-preload if we already have this track loaded
+    const sameTrackAndLoaded = (playingTrackName === name) && !!engine.isPreloaded;
+
+    // Apply seed + fast-forward RNG to the exact draw count in the snapshot.
+    if (Number.isFinite(snapshot?.seed)) {
+      engine.setRandomSeed?.(snapshot.seed);
+    }
+    const draws = (snapshot?.rngDrawCount | 0);
+    if (draws > 0) engine.fastForwardRng?.(draws);
+
+    if (sameTrackAndLoaded) {
+      // Clear any stale queues before the precise jump
+      engine.clearQueuedSection?.();
+      setQueuedSectionName(null);
+      engine.clearQueuedMode?.();
+      setQueuedModeName(null);
+
+      // Hydrate guard so queued items in STATE can't re-fire right away
+      setHydrateGuard(3000);
+
+      // Jump into exact musical position
+      engine.playAtPosition?.({
+        sectionName: snapshot.sectionName,
+        modeName:    snapshot.modeName || "base",
+        clipName:    snapshot.clipName,
+        offsetSeconds: Math.max(0, Number(snapshot.offsetSeconds) || 0),
+        warmStartDeltaSec: 0
+      });
+
+      // Verify on/after next boundary
+      scheduleSyncVerificationRef.current?.();
+      ignoreQueueUntilMsRef.current = 0;
+      return;
+    }
+
+    // Not preloaded yet: select & preload. Your preload path already re-requests a SYNC after load.
+    setSelectedTrack(name);
+    autoStartForRef.current = null; // exact jump after preload, not autoplay first section
+  }, [
+    engine,
+    playingTrackName,
+    isActiveRole,          // ⬅️ use this (your code’s “GM” boolean)
+    shouldIgnoreQueues,
+    setHydrateGuard,
+    scheduleSyncVerificationRef,
+    setSelectedTrack
+  ]);
 
   const room = useRoom({
     onlineEnabled,
@@ -832,12 +982,24 @@ export default function App() {
   });
   // room = { onlineActive, connected, users, roomId, setReady }
 
-    const roomState = {
+  // Keep latest measured latency without depending on `room` in callbacks
+  const latencyMsRef = useRef(0);
+  useEffect(() => {
+    latencyMsRef.current = Number(room?.latencyMs ?? 0);
+  }, [room?.latencyMs]);
+
+  const roomState = {
     isOnline: onlineEnabled,
     users: room?.users ?? [],
     latencyMs: room?.latencyMs ?? null,
     serverOffsetMs: room?.serverOffsetMs ?? null,
   };
+
+  // Proxies to avoid cyclic deps
+  const requestSyncRef = useRef(null);
+  useEffect(() => {
+    requestSyncRef.current = () => room?.requestSync?.();
+  }, [room]);
 
   // --- Boot logic: normalize room from localStorage on base URL ---
   useEffect(() => {
@@ -948,11 +1110,13 @@ export default function App() {
         engine.clearQueuedSection?.();
         engine.clearQueuedMode?.();
         engine.playSection(sectionName);
+        console.log("[WHO CALLED PLAYSECTION?] reason=", reasonString, "ignore?", shouldIgnoreQueues());
       }, delayMs);
     } catch (e) {
       console.error("scheduleSectionAtServerTime failed", e);
       // fallback: just play immediately
       engine.playSection(sectionName);
+      console.log("[WHO CALLED PLAYSECTION?] reason=", reasonString, "ignore?", shouldIgnoreQueues());
     }
   };
 
