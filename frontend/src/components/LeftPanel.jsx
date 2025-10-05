@@ -154,9 +154,9 @@ export default function LeftPanel({
                 background: "#0f172a", color: "white", border: "1px solid rgba(255,255,255,0.15)"
               }}
             >
-              <option value="GM">🎛️ Audio Manager</option>
-              <option value="PASSIVE_BTS">👁️ Passive (BTS)</option>
-              <option value="PASSIVE">🎧 Passive</option>
+              <option value="GM">🎛️ Audio Manager (GM/DJ)</option>
+              <option value="PASSIVE_BTS">👁️ Passive BTS (see what the Audio Manager sees)</option>
+              <option value="PASSIVE">🎧 Passive (Player/Listener)</option>
             </select>
             <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>Current: {displayRole}</div>
           </div>
