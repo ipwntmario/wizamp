@@ -23,6 +23,8 @@ export default defineConfig([
       },
     },
     rules: {
+      // Storage may be unavailable and audio nodes may already be stopped.
+      'no-empty': ['error', { allowEmptyCatch: true }],
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },

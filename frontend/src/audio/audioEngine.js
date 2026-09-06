@@ -1,3 +1,4 @@
+import { chooseNextClip } from "./transitions.js";
 // audioEngine.js
 export class AudioEngine {
   constructor({
@@ -6,8 +7,7 @@ export class AudioEngine {
     onQueueChange,
     onModeChange,
     onModeQueueChange,
-    onReady,
-    onPreloadComplete
+    onReady
   } = {}) {
     this.onStatus = onStatus || (() => {});
     this.onSectionChange = onSectionChange || (() => {});
@@ -15,7 +15,6 @@ export class AudioEngine {
     this.onModeChange = onModeChange || (() => {});
     this.onModeQueueChange = onModeQueueChange || (() => {});
     this.onReady = onReady || (() => {});
-    this.onPreloadComplete = typeof onPreloadComplete === "function" ? onPreloadComplete : () => {};
 
     this.audioCtx = null;
     this.masterGain = null;
@@ -62,7 +61,7 @@ export class AudioEngine {
     this._seed = null;
     this._rng = Math.random;
     this._rngDraws = 0;
-    this._rngDebug = true; // flip to false once things are stable
+    this._rngDebug = false; // flip to false once things are stable
     // After a mid-clip jump, force the first loopPoint to honor only clip.nextClip
     this._stayInSectionOnce = false;
 
@@ -197,104 +196,29 @@ export class AudioEngine {
    * then falls back to deterministic nextClip (seeded RNG).
    */
   _handleLoopPointForClip(currentClipName) {
-    // Auto-advance sections: honor section’s nextSection at the boundary (even if no queue)
-    const currSec = this.sectionData?.[this.currentSectionName];
-    if (currSec?.type === "auto" && currSec?.nextSection) {
-      const targets = Array.isArray(currSec.nextSection) ? currSec.nextSection : [currSec.nextSection];
-      const nextSectionName = targets[0];
-      const nextSection = this.sectionData?.[nextSectionName];
-      const nextClip = nextSection?.firstClip;
-      if (nextClip && this.clipData[nextClip]) {
-        // Select a compatible mode for the new section
-        const avail = this.getAvailableModes?.(nextSectionName) || ["base"];
-        let nextMode = this.currentModeName || "base";
-        if (!avail.includes(nextMode)) nextMode = "base";
-        this.setCurrentSection(nextSectionName);
-        this.setCurrentMode(nextMode);
-        this._stayInSectionOnce = false;       // do NOT suppress auto-advance
-        this._fadeOutAndStopClip(currentClipName);
-        this._clearWarmStart();
-        this.playClip(nextClip);
-        return;
-      }
-    }
-
-    const entry = this.activeClips?.[currentClipName];
-    const cd = this.clipData?.[currentClipName];
-    if (!entry || !cd) return;
-
-    // Convenience
-    const ctx = this.audioCtx;
-    const modesAvail = (section) => this.getAvailableModes?.(section) || ["base"];
-
-    // 1) On the first loop after a mid-clip jump, skip queued detours once
-    const skipHigherOnce = this._stayInSectionOnce === true;
-
-    // 2) Section queue takes precedence (unless we skip once)
-    if (!skipHigherOnce && this.queuedNextSectionName) {
-      const nextSectionName = this.queuedNextSectionName;
-      const nextSection = this.sectionData?.[nextSectionName];
-      const nextClip = nextSection?.firstClip;
-
-      // Mode for the new section:
-      let nextMode = this.currentModeName || "base";
-      const avail = modesAvail(nextSectionName);
-      if (!avail.includes(nextMode)) nextMode = "base";
-      if (this.queuedNextModeName && avail.includes(this.queuedNextModeName)) {
-        nextMode = this.queuedNextModeName;
-      }
-
-      // consume queues
-      this.queuedNextSectionName = null;
-      this.queuedNextModeName = null;
-
-      if (nextClip && this.clipData[nextClip]) {
-        this.setCurrentSection(nextSectionName);
-        this.setCurrentMode(nextMode);
-        this._stayInSectionOnce = false;
-        this._fadeOutAndStopClip(currentClipName);
-        this._clearWarmStart();
-        this.playClip(nextClip);
-        return;
-      }
-      // fallthrough if section invalid: just continue
-    }
-
-    // 3) Queued mode change at boundary (if not skipping)
-    if (!skipHigherOnce && this.queuedNextModeName) {
-      const newMode = this.queuedNextModeName;
-      const avail = modesAvail(this.currentSectionName);
-      if (avail.includes(newMode)) {
-        this.setCurrentMode(newMode);
-      }
-      this.queuedNextModeName = null;
-      // continue to nextClip logic in the (possibly) new mode
-    }
-
-    // Clear the one-shot guard after evaluating priorities once
+    const clip = this.clipData[currentClipName];
+    if (!clip) return;
+    const skipQueue = this._stayInSectionOnce;
     this._stayInSectionOnce = false;
-
-    // 4) Normal nextClip (deterministic RNG, sorted so all peers pick same index)
-    const arr = Array.isArray(cd.nextClip) ? cd.nextClip : [];
-    if (!arr.length) {
-      // No next clip: keep looping this clip; nothing to schedule.
-      // (If you want to fade out at clipEnd instead, do it here.)
+    if (!skipQueue && this.queuedNextSectionName) {
+      const sectionName = this.queuedNextSectionName;
+      const next = this.sectionData[sectionName]?.firstClip;
+      const modes = this.getAvailableModes(sectionName);
+      this.clearScheduled();
+      this.setCurrentSection(sectionName);
+      this.setCurrentMode(modes.includes(this.currentModeName) ? this.currentModeName : 'base');
+      this.clearQueuedSection();
+      this.clearQueuedMode();
+      if (next && this.activeClips[next]) this.playClip(next);
       return;
     }
-
-    const arr2 = arr.length > 1 ? [...arr].sort() : arr;
-    // draw from engine RNG (already in sync across clients)
-    const sample = this.rand();
-    const idx = Math.floor(sample * arr2.length);
-    const nextName = arr2[idx];
-
-    if (this.clipData[nextName]) {
-      this.playClip(nextName);
-    } else {
-      if (this._rngDebug) {
-        console.warn(`[ENGINE][XITION] chosen=${nextName} not available (clipData=${!!this.clipData[nextName]})`);
-      }
+    if (!skipQueue && this.queuedNextModeName) {
+      const modes = this.getAvailableModes(this.currentSectionName);
+      this.setCurrentMode(modes.includes(this.queuedNextModeName) ? this.queuedNextModeName : 'base');
+      this.clearQueuedMode();
     }
+    const next = chooseNextClip(clip.nextClip, () => this.rand());
+    if (next && this.activeClips[next]) this.playClip(next);
   }
 
   get isPlaying() {
@@ -484,6 +408,10 @@ export class AudioEngine {
   clearScheduled() {
     this.scheduledTimeouts.forEach(clearTimeout);
     this.scheduledTimeouts = [];
+    for (const entry of Object.values(this.activeClips)) {
+      clearTimeout(entry.timerId);
+      entry.timerId = null;
+    }
   }
 
   _clearActiveClipsSilently() {
@@ -577,7 +505,6 @@ export class AudioEngine {
     const ctx = this.ensureContext();
 
     this.lastTrackName = trackName;
-    this.currentTrackName = trackName;
 
     const { basePath, trackVolume } = opts || {};
     if (typeof trackVolume === "number") this.setTrackVolume(trackVolume);
@@ -596,6 +523,9 @@ export class AudioEngine {
     if (!this.isPlaying && this.currentTrackName && this.currentTrackName !== trackName) {
       this._bufferCache.clear(); // simple policy; or implement an LRU later
     }
+
+    this.currentTrackName = trackName;
+    this._isPreloaded = false;
 
     // Decode all clips + all mode files to buffers
     this.activeClips = {};
@@ -635,12 +565,6 @@ export class AudioEngine {
     this.onReady?.();
     console.log("[ENGINE] preloadTrack complete for", trackName,
                 "currentTrackName:", this.currentTrackName);
-    try {
-      this.onPreloadComplete?.(this.currentTrackName || trackName);
-    } catch (e) {
-      console.warn("[ENGINE] onPreloadComplete handler threw:", e);
-    }
-
     // ---- Warm-start: spin up first section's first clip muted (no scheduling) ----
     if (this.enablePreloadWarmStart) {
       try {
@@ -792,7 +716,7 @@ export class AudioEngine {
       if (this._rngDebug) console.warn("[ENGINE] playClip ignored: AudioContext suspended");
       return;
     }
-    const { offsetSeconds = null, skipFadeIn = false, usePauseFade = false } = opts || {};
+    const { offsetSeconds = null } = opts || {};
     console.log("[ENGINE] playClip", clipName,
                 "mode:", this.currentModeName, "section:", this.currentSectionName);
     const ctx = this.ensureContext();
@@ -804,7 +728,6 @@ export class AudioEngine {
     }
 
     // choose buffer by mode (fallback base)
-    const sectionName = this._sectionOfClip(clipName);
     const mode = this.currentModeName || "base";
     const buffer =
       entry.buffersByMode?.[mode] ??
@@ -929,82 +852,7 @@ export class AudioEngine {
         }
         const now2 = ctx.currentTime;
 
-        // On the *first* loop after a mid-clip jump, skip section/mode detours
-        const skipHigherPriorityOnce = this._stayInSectionOnce === true;
-        if (!skipHigherPriorityOnce) {
-          // (1) Section queued?
-          if (this.queuedNextSectionName) {
-            // We’re about to jump sections; stop any other pending callbacks.
-            this.clearScheduled();
-
-            const targetSection = this.sectionData[this.queuedNextSectionName];
-            const nextClipName = targetSection?.firstClip || null;
-
-            // mode selection on section change:
-            // default to base; if new section supports currentModeName, keep it
-            if (targetSection) {
-              const modes = this.getAvailableModes(this.queuedNextSectionName);
-              const nextMode = modes.includes(this.currentModeName) ? this.currentModeName : "base";
-              this.currentModeName = nextMode;
-              this.onModeChange?.(nextMode);
-              this.setCurrentSection(this.queuedNextSectionName);
-            }
-            this.clearQueuedSection();
-            this.clearQueuedMode(); // also clear any queued mode
-
-            if (nextClipName && this.clipData[nextClipName] && this.activeClips[nextClipName]) {
-              this.playClip(nextClipName);
-            }
-
-            // fade out this clip until clipEnd
-            const clipEndTime = clip.clipEnd ?? buffer.duration;
-            const delta = clipEndTime - (clip.loopPoint ?? buffer.duration);
-            gainNode.gain.setValueAtTime(0, now2 + Math.max(0, delta));
-            return;
-          }
-
-          // (2) Mode queued (same section)?
-          if (this.queuedNextModeName) {
-            // apply NOW: change currentMode, clear queue; continue normal nextClip transition below
-            const modes = this.getAvailableModes(this.currentSectionName);
-            const chosen = modes.includes(this.queuedNextModeName) ? this.queuedNextModeName : "base";
-            this.currentModeName = chosen;
-            this.onModeChange?.(chosen);
-            this.clearQueuedMode();
-            // do not return; allow clip.nextClip to proceed,
-            // but next playClip() will select buffer for new mode
-          }
-        }
-        // Clear the guard after evaluating priorities once
-        this._stayInSectionOnce = false;
-
-        // (3) Normal nextClip
-        if (hasNextInClip) {
-          const arr = clip.nextClip;
-          // Stable order across clients: sort before indexing
-          const arr2 = arr.length > 1 ? [...arr].sort() : arr;
-          const lpVal = (clip.loopPoint ?? buffer.duration);
-          if (this._rngDebug) {
-            console.log(`[ENGINE][XITION] clip=${clipName} loopPoint=${lpVal}s options=${JSON.stringify(arr2)} len=${arr2?.length ?? 0}`);
-          }
-          let next;
-          if (arr2.length > 1) {
-            const sample = this.rand();
-            const idx = Math.floor(sample * arr2.length);
-            next = arr2[idx];
-            if (this._rngDebug) console.log(`[ENGINE][XITION] choose idx=${idx} → ${next}`);
-          } else {
-            next = arr2[0];
-            if (this._rngDebug) console.log(`[ENGINE][XITION] single-option → ${next}`);
-          }
-          if (this.clipData[next] && this.activeClips[next]) {
-            this.playClip(next);
-          } else {
-            if (this._rngDebug) {
-              console.warn(`[ENGINE][XITION] chosen=${next} not available (clipData=${!!this.clipData[next]} active=${!!this.activeClips[next]})`);
-            }
-          }
-        }
+        this._handleLoopPointForClip(clipName);
 
         // fade remainder to 0 at clipEnd
         const clipEndTime = clip.clipEnd ?? buffer.duration;
@@ -1028,7 +876,7 @@ export class AudioEngine {
     // true end detection for "end" sections: when last clip has no nextClip
     const section = this.sectionData[this.currentSectionName];
     if (!hasNextInClip && section?.type === "end") {
-      const tail = (clip.clipEnd ?? buffer.duration) - (clip.loopStart || 0);
+      const tail = (clip.clipEnd ?? buffer.duration) - startOffset;
       const id2 = setTimeout(() => this._hardStopAtEnd(), tail * 1000);
       this.scheduledTimeouts.push(id2);
     }
@@ -1038,7 +886,7 @@ export class AudioEngine {
    * Start a clip at a specific AudioContext time with an offset.
    * Sample-accurate; no reliance on JS timers for the onset.
    */
-  _playClipAtAudioTime(clipName, { modeName = "base", offsetSeconds = 0, startAtAudioTime, skipFadeIn = true } = {}) {
+  _playClipAtAudioTime(clipName, { modeName = "base", offsetSeconds = 0, startAtAudioTime } = {}) {
     const ctx = this.ensureContext();
     const entry = this.activeClips?.[clipName];
     if (!entry) return;
@@ -1111,83 +959,11 @@ export class AudioEngine {
     this.onStatus?.(`Playing: ${clipName}`);
   }
 
-  /**
-   * Decide the next target at this clip's loop boundary and schedule it
-   * sample-accurately at boundaryTime (AudioContext time).
-   */
-  _scheduleNextAtBoundary(currentClipName, boundaryTime) {
-    const cd = this.clipData?.[currentClipName];
-    const entry = this.activeClips?.[currentClipName];
-    if (!cd || !entry) return;
-
-    // Section/mode priorities (respect one-shot guard, but NOT for auto-sections)
-    const isAuto = this._isAutoSectionTransitionPending(this.currentSectionName);
-    const skipHigherOnce = this._stayInSectionOnce === true && !isAuto;
-
-    // Section change?
-    if (!skipHigherOnce && this.queuedNextSectionName) {
-      const nextSectionName = this.queuedNextSectionName;
-      const nextSection = this.sectionData?.[nextSectionName];
-      const nextClip = nextSection?.firstClip;
-      let nextMode = this.currentModeName || "base";
-      const avail = this.getAvailableModes?.(nextSectionName) || ["base"];
-      if (!avail.includes(nextMode)) nextMode = "base";
-      if (this.queuedNextModeName && avail.includes(this.queuedNextModeName)) {
-        nextMode = this.queuedNextModeName;
-      }
-      this.queuedNextSectionName = null;
-      this.queuedNextModeName = null;
-      this._stayInSectionOnce = false;
-
-      if (nextClip && this.clipData[nextClip]) {
-        this.setCurrentSection(nextSectionName);
-        this.setCurrentMode(nextMode);
-        this._playClipAtAudioTime(nextClip, {
-          modeName: nextMode,
-          offsetSeconds: (this.clipData[nextClip]?.loopStart || 0),
-          startAtAudioTime: boundaryTime,
-          skipFadeIn: true
-        });
-        return;
-      }
-    }
-
-    // Queued mode?
-    if (!skipHigherOnce && this.queuedNextModeName) {
-      const newMode = this.queuedNextModeName;
-      const avail = this.getAvailableModes?.(this.currentSectionName) || ["base"];
-      if (avail.includes(newMode)) this.setCurrentMode(newMode);
-      this.queuedNextModeName = null;
-    }
-
-    // Clear one-shot guard after evaluating priorities once
-    this._stayInSectionOnce = false;
-
-    // Next clip via RNG (sorted for determinism)
-    const arr = Array.isArray(cd.nextClip) ? cd.nextClip : [];
-    if (!arr.length) return; // loop same clip
-    const arr2 = arr.length > 1 ? [...arr].sort() : arr;
-    const sample = this.rand();
-    const idx = Math.floor(sample * arr2.length);
-    const nextName = arr2[idx];
-
-    if (this.clipData[nextName]) {
-      this._playClipAtAudioTime(nextName, {
-        modeName: this.currentModeName || "base",
-        offsetSeconds: (this.clipData[nextName]?.loopStart || 0),
-        startAtAudioTime: boundaryTime,
-        skipFadeIn: true
-      });
-    } else if (this._rngDebug) {
-      console.warn(`[ENGINE][XITION] chosen=${nextName} not available`);
-    }
-  }
-
   _isAutoSectionTransitionPending(sectionName) {
     const s = this.sectionData?.[sectionName];
     if (!s) return false;
     // Try a few conventional keys; customize if your schema differs
-    return !!(s.autoNextSection || s.auto || s.autoAdvance || s.nextSection);
+    return s.type === "auto" && !!s.nextSection;
   }
 
   _stopAllExcept(keepClipName) {
@@ -1474,9 +1250,7 @@ export class AudioEngine {
         return { sectionName: sec, modeName: mode, clipName: clip, offsetSeconds: offset, rngDrawCount: draws };
       }
       const arr2 = arr.length > 1 ? [...arr].sort() : arr;
-      const sample = rng.next(); draws += 1;
-      const idx = Math.floor(sample * arr2.length);
-      clip = arr2[idx];
+      clip = chooseNextClip(arr2, () => { draws += 1; return rng.next(); });
       // loop: continue with new clip & same mode
     }
     // fallback if loop exits

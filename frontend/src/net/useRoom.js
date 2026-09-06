@@ -1,21 +1,12 @@
 // src/net/useRoom.js
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const ONLINE_ENV = (import.meta.env?.VITE_ONLINE_MODE === 'true');
 const WS_URL = import.meta.env?.VITE_WS_URL || "";
 const PING_INTERVAL_MS = 5000;
 
-function getRoomIdFromUrl() {
-  try {
-    const u = new URL(window.location.href);
-    return u.searchParams.get("room") || "";
-  } catch {
-    return "";
-  }
-}
-
 export function useRoom({
-  onlineEnabled, displayName, role,
+  onlineEnabled, roomId, displayName, role,
   onPlay, onSetTrack, onPause, onStop, onResume,
   onQueueSection, onClearSectionQueue, onQueueMode, onClearModeQueue,
   onSetTrackVolume,
@@ -23,7 +14,6 @@ export function useRoom({
   onSyncRequest, onSyncState
 } = {}) {
   const shouldOnline = ONLINE_ENV && onlineEnabled && !!WS_URL;
-  const roomId = useMemo(() => getRoomIdFromUrl(), []);
 
   // Keep refs so we don't reconnect on every render
   const onPlayRef = useRef(onPlay);
@@ -68,9 +58,8 @@ export function useRoom({
   const startedRef = useRef(false);
 
   // NTP-ish smoothing
-  const updateOffset = useCallback((rtt, serverTimeMs, clientSendMs) => {
+  const updateOffset = useCallback((rtt, serverTimeMs) => {
     const clientNow = Date.now();
-    const estLatency = Math.max(0, clientNow - clientSendMs - rtt); // just in case clock slip
     const oneWay = rtt / 2;
     const estimateServerNow = serverTimeMs + oneWay; // server timestamp likely at mid-RTT
     const newOffset = estimateServerNow - clientNow;
@@ -215,11 +204,15 @@ export function useRoom({
     if (startedRef.current) return;
     startedRef.current = true;
     connect();
+    const connectionGeneration = connIdRef;
     return () => {
       if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
       if (pingTimer.current) { clearInterval(pingTimer.current); pingTimer.current = null; }
+      ++connectionGeneration.current; // Invalidate handlers before closing; cleanup must not reconnect.
       const ws = wsRef.current;
       wsRef.current = null;
+      setConnected(false);
+      setUsers([]);
       if (ws) { try { ws.close(); } catch {} }
       startedRef.current = false;
     };

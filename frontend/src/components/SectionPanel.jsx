@@ -2,6 +2,7 @@ function toArray(x) { return Array.isArray(x) ? x : (x ? [x] : []); }
 
 export default function SectionPanel({
   sections,
+  disabled = false,
   currentSectionName,
   queuedSectionName,
   autoLockedTargets = [],
@@ -77,9 +78,9 @@ export default function SectionPanel({
             return (
               <button
                 key={name}
-                disabled={isAutoLocked}
+                disabled={disabled || isAutoLocked}
                 onClick={() => {
-                  if (isAutoLocked) return;
+                  if (disabled || isAutoLocked) return;
                   if (isQueued) onToggleQueuedSection(null);
                   else onToggleQueuedSection(name);
                 }}
@@ -122,7 +123,7 @@ export default function SectionPanel({
               <button
                 key={mode}
                 onClick={() => {
-                  if (isActive) return; // active mode: no-op
+                  if (disabled || isActive) return; // active mode: no-op
                   if (isQueued) onToggleQueuedMode?.(null);
                   else onToggleQueuedMode?.(mode);
                 }}

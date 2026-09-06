@@ -178,6 +178,7 @@ export class RoomHub {
             try { sock.send(payload); } catch {}
           }
         }
+        break;
       }
 
       case "PAUSE_REQUEST": {

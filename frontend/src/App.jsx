@@ -18,14 +18,13 @@
 import { useEffect, useMemo, useRef, useState, useCallback  } from "react";
 import { AudioEngine } from "./audio/audioEngine";
 import { useMusicData } from "./data/useMusicData";
-import { net, ONLINE, setOnlineEnabledRuntime } from "./net/netController";
+import { useSession } from "./net/useSession";
 import { useRoom } from "./net/useRoom";
 import LeftPanel from "./components/LeftPanel";
 import DatabaseModal from "./components/DatabaseModal";
 import SettingsModal from "./components/SettingsModal";
 import TrackSelector from "./components/TrackSelector";
 import SectionPanel from "./components/SectionPanel";
-import UsersPanel from "./components/UsersPanel";
 import Transport from "./components/Transport";
 import StatusBar from "./components/StatusBar";
 
@@ -40,7 +39,7 @@ const icons = Object.fromEntries(
 const allIconNames = Object.keys(icons).sort();
 
 export default function App() {
-  const { tracks, loading } = useMusicData();  // <- only rely on tracks here
+  const { tracks, loading, error: dataError } = useMusicData();  // <- only rely on tracks here
   const [clips, setClips] = useState({});
   const [sections, setSections] = useState({});
 
@@ -50,6 +49,7 @@ export default function App() {
   const [selectedTrack, setSelectedTrack] = useState(null);
   const [playingTrackName, setPlayingTrackName] = useState(null);
   const [isLoadingTrack, setIsLoadingTrack] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Section state used by the UI
   const [currentSectionName, setCurrentSectionName] = useState(null);
@@ -64,17 +64,16 @@ export default function App() {
   const selectedTrackRef = useRef(null);
   const playingTrackNameRef = useRef(null);
   const autoplayRef = useRef(false);
-  const tracksRef = useRef({});
-  const autoplayInFlightRef = useRef(false);
+  const roomRef = useRef(null);
+  const loadBusyRef = useRef(false);
+  const failedLoadRef = useRef(null);
 
   // Mirrors of state for net callbacks
-  const currentLoadIdRef = useRef(0);
-  const readyForTrackRef = useRef(null); // which track we’ve marked ready
 
   // After late-join hydrate, ignore any queued sections/modes from room STATE for a moment
   const ignoreQueueUntilMsRef = useRef(0);
-  const setHydrateGuard = (ms=3000) => { ignoreQueueUntilMsRef.current = Date.now() + ms; };
-  const shouldIgnoreQueues = () => Date.now() < (ignoreQueueUntilMsRef.current || 0);
+  const setHydrateGuard = useCallback((ms=3000) => { ignoreQueueUntilMsRef.current = Date.now() + ms; }, []);
+  const shouldIgnoreQueues = useCallback(() => Date.now() < (ignoreQueueUntilMsRef.current || 0), []);
 
   // Autoplay setting (persist)
   const [autoplay, setAutoplay] = useState(() => {
@@ -87,10 +86,7 @@ export default function App() {
   // Keep track of the last ended track for correct Autoplay functionality
   const lastEndedTrackRef = useRef(null);
 
-  // If non-null, we will auto-start this track AFTER its preload finishes.
-  const autoStartForRef = useRef(null);
-
-  // Mirror the ref into state just so we can show a badge in the UI
+  // Requested autoplay target, consumed after assets and room clients are ready.
   const [autoStartRequestedFor, setAutoStartRequestedFor] = useState(null);
 
   // Auto-start for late joiners
@@ -106,56 +102,9 @@ export default function App() {
     try { localStorage.setItem("wizamp_showStatus", showStatus ? "1" : "0"); } catch {}
   }, [showStatus]);
 
-  // Online (beta) – dark-launched via env + toggle
-  const [onlineEnabled, setOnlineEnabled] = useState(() => {
-    try { return localStorage.getItem("wizamp_onlineEnabled") === "1"; } catch { return false; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem("wizamp_onlineEnabled", onlineEnabled ? "1" : "0"); } catch {}
-    setOnlineEnabledRuntime(onlineEnabled);
-  }, [onlineEnabled]);
-
-  // Track the current room id from the URL (or null)
-  const [roomId, setRoomId] = useState(() => {
-    try {
-      const usp = new URLSearchParams(window.location.search);
-      return usp.get("room"); // "awc" or null
-    } catch {
-      return null;
-    }
-  });
-
-  // Role & Display Name
-  const [role, setRole] = useState(() => {
-    try { return localStorage.getItem("wizamp_role") || "GM"; } catch { return "GM"; }
-  });
-  useEffect(() => { try { localStorage.setItem("wizamp_role", role); } catch {} }, [role]);
-
-  // --- Role normalization ---
-
-  const normalizeRole = (r) => {
-    if (!r) return "GM";
-    // accept legacy & variants
-    const v = String(r).trim();
-    if (v === "GM" || v.toLowerCase() === "active" || v === "GM") return "GM";
-    if (v === "PASSIVE_BTS" || v.toLowerCase() === "passive-bts") return "PASSIVE_BTS";
-    if (v === "PASSIVE" || v.toLowerCase() === "passive" || v === "Player") return "PASSIVE";
-    return "GM";
-  };
-
-  const normRole = normalizeRole(role);
-  const isActiveRole = normRole === "GM";
-  const isPassiveBTSRole = normRole === "PASSIVE_BTS";
-  const isPassiveRole = normRole === "PASSIVE";
-
-  const displayRoleLabel = isActiveRole ? "GM" : (isPassiveBTSRole ? "PASSIVE_BTS" : "PASSIVE");
-  const displayRoleIcon  = isActiveRole ? "🎛️"     : (isPassiveBTSRole ? "👁️🎧"       : "🎧");
-
-
-  const [displayName, setDisplayName] = useState(() => {
-    try { return localStorage.getItem("wizamp_displayName") || ""; } catch { return ""; }
-  });
-  useEffect(() => { try { localStorage.setItem("wizamp_displayName", displayName); } catch {} }, [displayName]);
+  const { roomId, setRoomId, onlineEnabled, role, setRole, displayName, setDisplayName } = useSession();
+  const isActiveRole = !onlineEnabled || role === "GM";
+  const isPassiveRole = onlineEnabled && role === "PASSIVE";
 
   // Audio unlock for Chrome late-joiners
   const [audioLocked, setAudioLocked] = useState(false);
@@ -168,7 +117,6 @@ export default function App() {
   const [queuedModeName, setQueuedModeName] = useState(null);
 
   // Users panel
-  const [usersOpen, setUsersOpen] = useState(false);
 
   // Settings modal
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -205,9 +153,7 @@ export default function App() {
     });
   };
 
-  const [playDisabled, setPlayDisabled] = useState(false);
 
-  const [statusOpen, setStatusOpen] = useState(false);  // collapsible status
   const [clipProgress, setClipProgress] = useState(0);  // 0..1 visual bar
 
   // Volume settings
@@ -277,7 +223,6 @@ export default function App() {
         console.log("[STATUS]", s);
         setStatus(s);
         if (s === "Stopped") {
-          setPlayDisabled(false);
           setClipProgress(0);
 
           const playing = playingTrackNameRef.current;
@@ -289,13 +234,11 @@ export default function App() {
           // If Auto-Play is ON, and dropdown points to a *different* track,
           // request auto-start for that track (we will start AFTER preload completes).
           if (autoplayRef.current && sel && sel !== lastEndedTrackRef.current) {
-            autoStartForRef.current = sel;
             setAutoStartRequestedFor(sel);
             console.log("[AUTOPLAY] requested for", sel);
           } else {
             console.log("[AUTOPLAY] not requested (autoplay:", autoplayRef.current,
                         "selected:", sel, "lastEnded:", lastEndedTrackRef.current, ")");
-            autoStartForRef.current = null;
             setAutoStartRequestedFor(null);
           }
         }
@@ -305,43 +248,7 @@ export default function App() {
       onQueueChange: (nameOrNull) => setQueuedSectionName(nameOrNull),
       onModeChange: (modeName) => setCurrentModeName(modeName || "base"),
       onModeQueueChange: (nameOrNull) => setQueuedModeName(nameOrNull),
-      onReady: () => { setPlayDisabled(false); setClipProgress(0); },  // when engine finished resetting
-      onPreloadComplete: async (trackName) => {
-        console.log("[PRELOAD_COMPLETE] engine reports:", trackName,
-                    "autoStartForRef:", autoStartForRef.current);
-        // mark which track's assets are now loaded
-        setPlayingTrackName(trackName);
-        setClipProgress(0);
-        setPlayDisabled(false);
-
-        // If an auto-start was requested for this track, do it now
-        if (autoStartForRef.current === trackName && !autoplayInFlightRef.current) {
-          autoplayInFlightRef.current = true;
-          console.log("[AUTOPLAY] all-local-ready barrier start for", trackName);
-          await awaitAllClientsReady(trackName); // local no-op; future: wait for all clients
-          const first = tracksRef.current?.[trackName]?.firstSection;
-          console.log("[AUTOPLAY] barrier passed; first section:", first);
-          if (first) {
-            engine.playSection(first);
-            console.log("[WHO CALLED PLAYSECTION?] reason=", reasonString, "ignore?", shouldIgnoreQueues());
-          }
-          autoStartForRef.current = null; // consume the request
-          setAutoStartRequestedFor(null);
-          console.log("[AUTOPLAY] started and request consumed");
-          autoplayInFlightRef.current = false;
-        }
-
-        // If we have a pending network-driven start for this track, honor it now.
-        if (pendingPlayRef.current && pendingPlayRef.current.trackName === trackName) {
-          // Ask active user for exact position (section/mode/clip/offset)
-          console.log("[SYNC] requesting precise state from active user after preload");
-          room?.requestSetAutoplay?.(autoplay); // benign; keeps UI aligned for joiner too
-          // One-shot request:
-          room?.requestSync?.(); // we'll define this below (or call ws directly via a helper)
-          // We'll consume the reply in onSyncStateMsg
-          return;
-        }
-      },
+      onReady: () => { setClipProgress(0); },  // when engine finished resetting
     });
   }
   const engine = engineRef.current;
@@ -352,14 +259,6 @@ export default function App() {
   const verifyingRef = useRef(false);
 
   const scheduleSyncVerificationRef = useRef(null);
-
-  // Given a clip name, return its loopPoint (sec) from current clips state
-  const getLoopPointSec = useCallback((clipName) => {
-    const c = clips?.[clipName];
-    if (!c) return null;
-    const lp = Number(c?.loopPoint);
-    return Number.isFinite(lp) ? lp : null;
-  }, [clips]);
 
   // Audio unlock for late joiners
   useEffect(() => {
@@ -378,20 +277,8 @@ export default function App() {
     }
 
     // If we arrived mid-session, re-request sync to jump in immediately
-    try { room?.requestSync?.(); } catch {}
+    if (!pendingNetStart) room.requestSync();
   };
-
-  // Placeholder: in the future, replace this with a networked "all clients ready" await.
-  // For now, it's immediate.
-  const awaitAllClientsReady = async (trackName) => {
-    // e.g., in MP mode you'd await a signal that all players preloaded 'trackName'
-    return;
-  };
-
-  // Keep engine data in sync (optional safety when clips/sections set)
-  useEffect(() => {
-    engine.setData({ clips, sections, tracks });
-  }, [engine, clips, sections, tracks]);
 
   // Keep engine fade setting in sync
   useEffect(() => {
@@ -407,7 +294,6 @@ export default function App() {
   useEffect(() => { selectedTrackRef.current = selectedTrack; }, [selectedTrack]);
   useEffect(() => { playingTrackNameRef.current = playingTrackName; }, [playingTrackName]);
   useEffect(() => { autoplayRef.current = autoplay; }, [autoplay]);
-  useEffect(() => { tracksRef.current = tracks; }, [tracks]);
 
   // Track select menu persist (optional)
   useEffect(() => { localStorage.setItem("wizamp_dbSort", dbSort); }, [dbSort]);
@@ -463,32 +349,22 @@ export default function App() {
   }, [engine, isPaused]);
 
   // derive if not "simple" track
-  const isDynamicTrack = tracks[selectedTrack]?.simple === false;
   const isDynamicPlayingTrack = playingTrackName && tracks[playingTrackName]?.simple === false;
 
   // Handlers
   const handlePlay = async () => {
+    await engine.unlockAudio();
     // If audio is locked, don't start or advance RNG. Defer until unlock, then re-sync.
     if (engine.getAudioState?.() !== "running") {
       setAudioLocked(true);           // show the banner if you have it
-      setPendingNetStart({ type: "PLAY", msg, ts: Date.now() });
+      setPendingNetStart({ type: "PLAY", ts: Date.now() });
       // Do not call engine.play... here. Just wait for unlock.
       return;
     }
 
     if (isLoadingTrack) return;  // <-- early bail
 
-    // If we’re idle or stopped and the selected track isn’t loaded, load it now
-    const needLoad =
-      !isPlaying &&
-      selectedTrack &&
-      (playingTrackName !== selectedTrack ||
-        !sections || !Object.keys(sections).length ||
-        !clips || !Object.keys(clips).length);
-
-    if (needLoad) {
-      await loadTrackAssets(selectedTrack); // serialized by isLoadingTrack
-    }
+    if (!engine.isPreloaded || playingTrackName !== selectedTrack) return;
 
     const target = currentSectionName || firstSection;
     if (target) {
@@ -504,7 +380,6 @@ export default function App() {
         room.requestPlay({ trackName: selectedTrack, sectionName: target, delayMs: 2000 });
       } else {
         engine.playSection(target);
-        console.log("[WHO CALLED PLAYSECTION?] reason=", reasonString, "ignore?", shouldIgnoreQueues());
       }
     }
   };
@@ -514,14 +389,15 @@ export default function App() {
     if (room.onlineActive && isActiveRole) {
       room.requestPause();
     } else {
-      net.pause(simple); engine.pause(simple);
+      engine.pause(simple);
     }
   };
 
-  const handleResume = () => {
+  const handleResume = async () => {
+    await engine.unlockAudio();
     if (engine.getAudioState?.() !== "running") {
       setAudioLocked(true);
-      setPendingNetStart({ type: "RESUME", msg, ts: Date.now() });
+      setPendingNetStart({ type: "RESUME", ts: Date.now() });
       return;
     }
 
@@ -529,37 +405,31 @@ export default function App() {
     if (room.onlineActive && isActiveRole) {
       room.requestResume({ delayMs: 1000 }); // small lead time like Play
     } else {
-      net.resume(simple); engine.resume(simple);
+      engine.resume(simple);
     }
   };
 
   const handleStop = async () => {
-    setPlayDisabled(true);
 
     if (room.onlineActive && isActiveRole) {
       // Tell everyone to stop (with fade)
       room.requestStop(true);
     } else {
       // Local stop only
-      net.stop(true);
-      // Use the same method you already had for fading out
-      if (engine.stopTrack) {
-        engine.stopTrack(true);
-      } else {
-        engine.stop(true);
-      }
+
+      engine.stopTrack(true);
     }
   };
 
 
-  const loadSavedTrackVolume = (name) => {
+  const loadSavedTrackVolume = useCallback((name) => {
     try {
       const k = `wizamp:trackVolume:${name}`;
       const v = localStorage.getItem(k);
       const num = v == null ? 1 : Math.max(0, Math.min(1, Number(v)));
       return Number.isFinite(num) ? num : 1;
     } catch { return 1; }
-  };
+  }, []);
 
   const saveTrackVolume = (name, vol) => {
     try {
@@ -568,16 +438,16 @@ export default function App() {
     } catch {}
   };
 
-  const handleSelectTrack = async (name) => {
-    console.log("[SELECT_TRACK]", name, "isPlaying:", isPlaying,
-                "playingTrackName:", playingTrackName);
+  const handleSelectTrack = useCallback((name) => {
+
     // Only update selection + volume now; actual loading is deferred until STOP.
+    if (failedLoadRef.current === name) setLoadAttempt(attempt => attempt + 1);
+    selectedTrackRef.current = name;
+    failedLoadRef.current = null;
     setSelectedTrack(name);
     const savedVol = loadSavedTrackVolume(name);
     setTrackVolume(savedVol);
-    // Mirror to net (no-op until online is on)
-    net.setTrack(name);
-  };
+  }, [loadSavedTrackVolume]);
 
   // Called when server sends STATE { name, seed, ... }.
   // It should ONLY select/preload, never start playback here.
@@ -603,105 +473,79 @@ export default function App() {
       engine.setRandomSeed?.(seed >>> 0);
     }
     handleSelectTrack(name); // this triggers the preload effect below
-  }, [engine, selectedTrack, handleSelectTrack]);
+  }, [engine, selectedTrack, handleSelectTrack, isPlaying]);
 
 
-  // Helper: load assets for a given track (called when fully stopped)
-  const loadTrackAssets = async (name) => {
-    if (!name) return;
-    if (isPlaying) return;          // never load mid-play
-    if (isLoadingTrack) return;     // already loading
-    const online = onlineEnabled && !!roomId;   // 👈 add this
-    // isGM already computed in your component (normRole === "GM")
-
+  const loadTrackAssets = useCallback(async (name) => {
+    if (!name || engine.isPlaying || loadBusyRef.current) return;
+    loadBusyRef.current = true;
     setIsLoadingTrack(true);
+    roomRef.current?.setReady(false);
     try {
-      console.log("[LOAD] begin", name);
       const basePath = tracks[name]?.basePath || `/tracks/${name}`;
-      const [clipRes, sectRes] = await Promise.all([
-        fetch(`${basePath}/clipData.json`),
-        fetch(`${basePath}/sectionData.json`)
-      ]);
-      console.log("[LOAD] fetched JSON for", name, "basePath:", basePath);
-      const clipJson = await clipRes.json();
-      const sectJson = await sectRes.json();
-      const nextClips    = clipJson?.clips    || clipJson || {};
-      const nextSections = sectJson?.sections || sectJson || {};
-
+      const responses = await Promise.all(['clipData', 'sectionData'].map(file => fetch(`${basePath}/${file}.json`)));
+      if (responses.some(response => !response.ok)) throw new Error('Could not load track metadata');
+      const [clipJson, sectionJson] = await Promise.all(responses.map(response => response.json()));
+      if (selectedTrackRef.current !== name) return;
+      const nextClips = clipJson.clips || clipJson;
+      const nextSections = sectionJson.sections || sectionJson;
+      engine.setData({ clips: nextClips, sections: nextSections, tracks });
+      await engine.preloadTrack(name, { trackVolume: loadSavedTrackVolume(name), basePath });
+      if (selectedTrackRef.current !== name) {
+        setPlayingTrackName(null);
+        return;
+      }
       setClips(nextClips);
       setSections(nextSections);
-      engine.setData({ clips: nextClips, sections: nextSections, tracks });
-
-      const savedVol = loadSavedTrackVolume(name);
-      console.log("[LOAD] calling engine.preloadTrack", name, "vol:", savedVol);
-      const loadId = Date.now();
-      currentLoadIdRef.current = loadId;
-      try {
-        // Only clear ready if we’re switching to a different track
-        if (readyForTrackRef.current !== name) {
-          room.setReady(false);
-        }
-      } catch {}
-
-      await engine.preloadTrack(name, { trackVolume: savedVol, basePath });
-
-      setPlayingTrackName(name); // reflect what's actually loaded/ready
-      setClipProgress(0); // start progress at 0 for newly loaded track
-
-      console.log("[LOAD] completed preload for", name,
-                  "autoStartForRef:", autoStartForRef.current);
-      try {
-        if (currentLoadIdRef.current === loadId) {
-          room.setReady(true);
-          readyForTrackRef.current = name; // remember which track is ready
-        }
-      } catch {}
-
-      // If this preload was requested for auto-start, only allow local start when OFFLINE.
-      // Online starts should be driven by the GM via PLAY broadcast from the server.
-      if (autoStartForRef.current === name) {
-        const allowLocalAutoStart = !online; // keep starts server-driven when online
-        if (allowLocalAutoStart) {
-          console.log("[AUTOPLAY] offline → start first section after barrier:", name);
-          await awaitAllClientsReady(name);
-          const first = tracks[name]?.firstSection;
-          if (first) {
-            engine.playSection(first);
-            console.log("[WHO CALLED PLAYSECTION?] reason=", reasonString, "ignore?", shouldIgnoreQueues());
-          }
-        } else {
-          console.log("[AUTOPLAY] online → wait for PLAY from server (no local start)");
-        }
-        autoStartForRef.current = null; // always consume the request
+      setPlayingTrackName(name);
+      setClipProgress(0);
+      failedLoadRef.current = null;
+      roomRef.current?.setReady(true);
+      if (pendingPlayRef.current?.trackName === name) {
+        pendingPlayRef.current = null;
+        roomRef.current?.requestSync();
       }
+    } catch (err) {
+      failedLoadRef.current = name;
+      setStatus(`Failed to load ${name}: ${err.message}. Select the track again to retry.`);
     } finally {
+      loadBusyRef.current = false;
       setIsLoadingTrack(false);
-      console.log("[LOAD] end", name);
     }
-  };
+  }, [engine, tracks, loadSavedTrackVolume]);
+
+  const scheduledCommandsRef = useRef(new Set());
+  const cancelScheduledCommands = useCallback(() => {
+    scheduledCommandsRef.current.forEach(clearTimeout);
+    scheduledCommandsRef.current.clear();
+  }, []);
+  const scheduleAtServerTime = useCallback((serverMs, fn) => {
+    const delay = Math.max(0, serverMs - (roomRef.current?.serverNowMs() ?? Date.now()));
+    const id = setTimeout(() => { scheduledCommandsRef.current.delete(id); fn(); }, delay);
+    scheduledCommandsRef.current.add(id);
+  }, []);
+  useEffect(() => cancelScheduledCommands, [cancelScheduledCommands, roomId, onlineEnabled]);
 
   const onPauseMsg = useCallback(() => {
+    cancelScheduledCommands();
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
-    net.pause(simple);
+
     engine.pause(simple);
-  }, [tracks, playingTrackName, selectedTrack, net, engine]);
+  }, [tracks, playingTrackName, selectedTrack, engine, cancelScheduledCommands]);
 
   const onStopMsg = useCallback((fade = true) => {
-    // Keep UI behavior consistent with local handleStop:
-    setPlayDisabled?.(true);
-    // Your net layer's existing stop (use the signature you already use locally)
-    try { net.stop?.(true); } catch {}
-    // Fade the engine out; engine.stopTrack handles the fade
-    if (engine.stopTrack) engine.stopTrack(fade);
-  }, [setPlayDisabled, net, engine]);
+    cancelScheduledCommands();
+    pendingPlayRef.current = null;
+    engine.stopTrack(fade);
+  }, [engine, cancelScheduledCommands]);
 
   const onResumeMsg = useCallback((serverMs) => {
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
     scheduleAtServerTime(serverMs, () => {
-      net.resume(simple);
+
       engine.resume(simple);
     });
-  }, [tracks, playingTrackName, selectedTrack, net, engine]);
+  }, [tracks, playingTrackName, selectedTrack, engine, scheduleAtServerTime]);
 
   const onQueueSectionMsg = useCallback((name) => {
     if (shouldIgnoreQueues()) {
@@ -710,7 +554,7 @@ export default function App() {
     }
     setQueuedSectionName(name || null);
     if (name) engine.queueSectionTransition?.(name);
-  }, [engine]);
+  }, [engine, shouldIgnoreQueues]);
 
   const onClearSectionQueueMsg = useCallback(() => {
     setQueuedSectionName(null);
@@ -719,12 +563,12 @@ export default function App() {
 
   const onQueueModeMsg = useCallback((name) => {
     if (shouldIgnoreQueues()) {
-      console.log("[SYNC][IGNORE] dropping stale QUEUE_MODE during hydrate window:", mode);
+      console.log("[SYNC][IGNORE] dropping stale QUEUE_MODE during hydrate window:", name);
       return;
     }
     setQueuedModeName(name || null);
     if (name) engine.queueModeTransition?.(name);
-  }, [engine]);
+  }, [engine, shouldIgnoreQueues]);
 
   const onClearModeQueueMsg = useCallback(() => {
     setQueuedModeName(null);
@@ -741,15 +585,6 @@ export default function App() {
   const onSetAutoplayMsg = useCallback((val) => {
     setAutoplay(!!val);
   }, []);
-
-  // // Joiner asks GM for an exact position once ready:
-  // const sendSyncRequest = useCallback(() => {
-  //   // we’ll send via useRoom by exposing a simple method; or directly:
-  //   try {
-  //     // useRoom exposes no-arg wrapper here:
-  //     room?.requestSync?.();
-  //   } catch {}
-  // }, [room]);
 
   const onSyncRequestMsg = useCallback((requesterId) => {
     // Build a precise snapshot from the engine (GM side)
@@ -928,8 +763,8 @@ export default function App() {
     }
 
     // Not preloaded yet: select & preload. Your preload path already re-requests a SYNC after load.
-    setSelectedTrack(name);
-    autoStartForRef.current = null; // exact jump after preload, not autoplay first section
+    pendingPlayRef.current = { trackName: name };
+    handleSelectTrack(name);
   }, [
     engine,
     playingTrackName,
@@ -937,15 +772,17 @@ export default function App() {
     shouldIgnoreQueues,
     setHydrateGuard,
     scheduleSyncVerificationRef,
-    setSelectedTrack
+    handleSelectTrack
   ]);
 
   const room = useRoom({
     onlineEnabled,
+    roomId,
     displayName,
     role,
     onSetTrack,
     onPlay: ({ trackName, sectionName, serverMs }) => {
+      setAutoStartRequestedFor(null);
       // Late-join friendliness:
       // 1) If assets not ready, ensure selection + preload first.
       // 2) After preload, schedule at max(serverMs, serverNow + 1500ms) so everyone lines up.
@@ -955,16 +792,10 @@ export default function App() {
       if (!sectionName || !serverMs) return;
       if (needPreload || isLoadingTrack) {
         pendingPlayRef.current = { trackName, sectionName, serverMs };
-        // kick off preload if not already happening
-        if (!isLoadingTrack && selectedTrack === trackName) {
-          // If we’re fully stopped, your effect will call loadTrackAssets(selectedTrack)
-          // If we’re not stopped yet, we can force load here as a safety:
-          if (!isPlaying) loadTrackAssets(trackName);
-        }
       } else {
         // We are ready: schedule with a safety lead time if serverMs already passed
         const now = room.serverNowMs ? room.serverNowMs() : Date.now();
-        const target = Math.max(serverMs, now + 1500);
+        const target = Math.max(serverMs, now);
         scheduleSectionAtServerTime(sectionName, target);
       }
     },
@@ -980,19 +811,13 @@ export default function App() {
     onSyncRequest: onSyncRequestMsg,
     onSyncState: onSyncStateMsg,
   });
-  // room = { onlineActive, connected, users, roomId, setReady }
-
-  // Keep latest measured latency without depending on `room` in callbacks
-  const latencyMsRef = useRef(0);
-  useEffect(() => {
-    latencyMsRef.current = Number(room?.latencyMs ?? 0);
-  }, [room?.latencyMs]);
+  useEffect(() => { roomRef.current = room; }, [room]);
 
   const roomState = {
     isOnline: onlineEnabled,
     users: room?.users ?? [],
     latencyMs: room?.latencyMs ?? null,
-    serverOffsetMs: room?.serverOffsetMs ?? null,
+    serverOffsetMs: room?.offsetMs ?? null,
   };
 
   // Proxies to avoid cyclic deps
@@ -1001,55 +826,37 @@ export default function App() {
     requestSyncRef.current = () => room?.requestSync?.();
   }, [room]);
 
-  // --- Boot logic: normalize room from localStorage on base URL ---
-  useEffect(() => {
-    try {
-      const usp = new URLSearchParams(window.location.search);
-      const hasRoom = usp.has("room");
-      const lastChoice = localStorage.getItem("ui.roomChoice") || "awc"; // "awc" | "private"
-
-      if (!hasRoom) {
-        const url = new URL(window.location.href);
-        if (lastChoice === "awc") {
-          url.searchParams.set("room", "awc");
-          setOnlineEnabled?.(true);
-          setRoomId?.("awc");
-        } else {
-          url.searchParams.delete("room");
-          setOnlineEnabled?.(false);
-          setRoomId?.(null);
-        }
-        window.history.replaceState({}, "", url);
-      } else {
-        // If URL says room=..., honor it and persist it as "awc"
-        const rm = usp.get("room");
-        if (rm) {
-          localStorage.setItem("ui.roomChoice", "awc");
-          setOnlineEnabled?.(true);
-          setRoomId?.(rm);
-        }
-      }
-    } catch {
-      // ignore
-    }
-    // Run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useEffect(() => {
     sendSyncResponseRef.current = room.sendSyncResponse;
     return () => { sendSyncResponseRef.current = null; };
   }, [room.sendSyncResponse]);
 
-  // When fully stopped (end of fade or true end), load whichever track is selected.
+  // Selection changes during playback take effect only after a complete stop.
   useEffect(() => {
-    if (!isPlaying && selectedTrack && (!playingTrackName || selectedTrack !== playingTrackName)) {
-      console.log("[EFFECT loadTrackAssets] trigger",
-                  "isPlaying:", isPlaying, "selectedTrack:", selectedTrack,
-                  "playingTrackName:", playingTrackName);
+    if (!isActive && !isLoadingTrack && selectedTrack && failedLoadRef.current !== selectedTrack
+        && (!playingTrackName || selectedTrack !== playingTrackName)) {
       loadTrackAssets(selectedTrack);
     }
-  }, [isPlaying, selectedTrack, playingTrackName]);  // will only run after a real STOP
+  }, [isActive, isLoadingTrack, selectedTrack, playingTrackName, loadTrackAssets, loadAttempt]);
+
+  // One autoplay decision, after preload and (online) the room readiness barrier.
+  useEffect(() => {
+    const name = autoStartRequestedFor;
+    if (name && (!autoplay || name !== selectedTrack)) {
+      setAutoStartRequestedFor(null);
+      return;
+    }
+    if (!name || name !== selectedTrack || name !== playingTrackName || isLoadingTrack || isActive) return;
+    const sectionName = tracks[name]?.firstSection;
+    if (!sectionName) return;
+    if (room.onlineActive) {
+      if (!isActiveRole || !room.connected || !room.allReady) return;
+      room.requestPlay({ trackName: name, sectionName });
+    } else {
+      engine.playSection(sectionName);
+    }
+    setAutoStartRequestedFor(null);
+  }, [autoplay, autoStartRequestedFor, selectedTrack, playingTrackName, isLoadingTrack, isActive, tracks, room, isActiveRole, engine]);
 
   // Set user volume
   useEffect(() => {
@@ -1074,7 +881,7 @@ export default function App() {
       const v = loadSavedTrackVolume(playingTrackName);
       engine.setTrackVolume?.(v);
     }
-  }, [engine, playingTrackName, selectedTrack, trackVolume]);
+  }, [engine, playingTrackName, selectedTrack, trackVolume, loadSavedTrackVolume]);
 
   // Persist app icon
   useEffect(() => {
@@ -1087,37 +894,18 @@ export default function App() {
     localStorage.setItem("wizamp_appIcon", appIconName);
   }, [appIconName]);
 
-  const scheduleAtServerTime = (serverMs, fn) => {
-    try {
-      const now = room.serverNowMs ? room.serverNowMs() : Date.now();
-      const delay = Math.max(0, serverMs - now);
-      setTimeout(fn, delay);
-    } catch {
-      fn();
-    }
-  };
-
-  // helper: schedule a section at a server timestamp
   const scheduleSectionAtServerTime = (sectionName, serverMs) => {
-    try {
-      const ctx = engine.ensureContext ? engine.ensureContext() : engine.audioCtx;
-      const audioNow = ctx?.currentTime ?? 0;
-      const serverNow = room.serverNowMs ? room.serverNowMs() : Date.now();
-      const deltaSec = Math.max(0, (serverMs - serverNow) / 1000);
-      // Nudge a tiny safety margin for timers (20ms)
-      const delayMs = Math.max(0, (deltaSec - 0.02) * 1000);
-      setTimeout(() => {
-        engine.clearQueuedSection?.();
-        engine.clearQueuedMode?.();
-        engine.playSection(sectionName);
-        console.log("[WHO CALLED PLAYSECTION?] reason=", reasonString, "ignore?", shouldIgnoreQueues());
-      }, delayMs);
-    } catch (e) {
-      console.error("scheduleSectionAtServerTime failed", e);
-      // fallback: just play immediately
+    cancelScheduledCommands();
+    scheduleAtServerTime(serverMs, () => {
+      if (engine.getAudioState() !== 'running') {
+        setAudioLocked(true);
+        setPendingNetStart({ type: 'PLAY' });
+        return;
+      }
+      engine.clearQueuedSection();
+      engine.clearQueuedMode();
       engine.playSection(sectionName);
-      console.log("[WHO CALLED PLAYSECTION?] reason=", reasonString, "ignore?", shouldIgnoreQueues());
-    }
+    });
   };
 
   function onTrackChosen(name) {
@@ -1137,9 +925,7 @@ export default function App() {
       }}>
 
       <LeftPanel
-        engine={engine}
         roomState={roomState}
-        setOnlineEnabled={setOnlineEnabled}
         setRoomId={setRoomId}
         currentRoomId={roomId}
         role={role}
@@ -1152,46 +938,6 @@ export default function App() {
       {/* Top-right controls: DB (left) + Settings (right) */}
       <div style={{ position: "absolute", top: 16, right: 16, display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{ display: "flex", gap: 8 }}>
-          {false && (
-            <span
-              title={`You are ${displayRoleLabel}`}
-              style={{
-                marginRight: 8,
-                padding: "4px 8px",
-                borderRadius: 999,
-                fontSize: 12,
-                background: "rgba(0,0,0,0.5)",
-                color: "#fff",
-                opacity: room.onlineActive ? 1 : 0.6,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <span>{displayRoleIcon}</span>
-              <span style={{ fontWeight: 600 }}>{displayRoleLabel}</span>
-            </span>
-          )}
-          {room.onlineActive && false && (
-            <button
-              aria-label="Users"
-              onClick={() => setUsersOpen(v => !v)}
-              style={{
-              width: 32,
-              height: 32,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: "none",
-              fontSize: 20,
-              cursor: "pointer",
-            }}
-            title="Users"
-            >
-              👥
-            </button>
-          )}
           {isActiveRole &&
             <button
               aria-label="Database"
@@ -1370,8 +1116,6 @@ export default function App() {
                         if (playingTrackName) {
                           if (room.onlineActive && isActiveRole) {
                             room.requestSetTrackVolume(v); // sync to others + snapshot
-                          } else {
-                            net.setTrackVolume?.(playingTrackName, v);
                           }
                         }
                       }}
@@ -1410,10 +1154,10 @@ export default function App() {
                 else room.requestClearSectionQueue();
               } else {
                 if (nameOrNull) {
-                  net.queueSection?.(nameOrNull);
+
                   engine.queueSectionTransition?.(nameOrNull);
                 } else {
-                  net.clearQueuedSection?.();
+
                   engine.clearQueuedSection?.();
                 }
               }
@@ -1437,10 +1181,10 @@ export default function App() {
                 else room.requestClearModeQueue();
               } else {
                 if (nameOrNull) {
-                  net.queueMode?.(nameOrNull);
+
                   engine.queueModeTransition?.(nameOrNull);
                 } else {
-                  net.clearQueuedMode?.();
+
                   engine.clearQueuedMode?.();
                 }
               }
@@ -1502,7 +1246,7 @@ export default function App() {
           border: "1px solid #555", borderRadius: 10,
           padding: "8px 12px", zIndex: 1, maxWidth: "40vw"
         }}>
-          <StatusBar text={loading ? "Loading data…" : status} />
+          <StatusBar text={loading ? "Loading data…" : dataError || status} />
         </div>
       )}
 
@@ -1519,12 +1263,6 @@ export default function App() {
         appIconName={appIconName}
         setAppIconName={setAppIconName}
         allIconNames={allIconNames}
-        onlineEnabled={onlineEnabled && ONLINE}   // gated by env + user toggle
-        setOnlineEnabled={(v) => setOnlineEnabled(v)}
-        role={role}
-        setRole={setRole}
-        displayName={displayName}
-        setDisplayName={setDisplayName}
       />
 
       {/* Database modal */}
@@ -1558,12 +1296,6 @@ export default function App() {
               next.sections ||= {};
               next.sections[target.trackName] ||= {};
               next.sections[target.trackName][target.sectionKey] ||= {};
-              const s = /* original section obj */ (() => {
-                // Sections live per-track; in DB modal we fetch sectionData by track
-                // but app also has a master 'sections' map; for defaults use DB modal-provided fields
-                return null; // we’ll rely on defaults passed in fields.defaults
-              })();
-
               const defName = target.defaults?.nameDefault ?? target.sectionKey;
               const defButton = target.defaults?.buttonDefault ?? "";
 

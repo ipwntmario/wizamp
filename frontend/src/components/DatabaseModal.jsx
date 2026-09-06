@@ -1,3 +1,4 @@
+import { orderTracks, trackTitle } from "../data/trackOrdering";
 import { useMemo, useRef, useState } from "react";
 
 /** Helper: consider a track "dynamic" when simple === false */
@@ -34,7 +35,7 @@ export default function DatabaseModal({
 
   // Rename reading
   const titleForTrack = (name, t) =>
-    names?.tracks?.[name]?.displayName ?? t?.defaultDisplayName ?? name;
+    trackTitle(name, t, names);
 
   // Clicking outside of modal functionality
   const overlayRef = useRef(null);
@@ -52,53 +53,21 @@ export default function DatabaseModal({
     overlayMouseDownRef.current = false;
   };
 
-  // --- Sorting (tracks only) ---
-  // group → sorted group → concat
-  const sortedTrackNames = useMemo(() => {
-    if (!tracks) return [];
-    const entries = Object.entries(tracks);
-
-    // Filter out tests if requested, but keep pinned ones visible
-    const filtered = entries.filter(([n, t]) =>
-      hideTests ? (!t?.test || pinned?.has(n)) : true
-    );
-
-    // Sort comparator (alpha asc/desc) using override-aware titles
-    const cmp = (a, b) =>
-      titleForTrack(a[0], a[1]).localeCompare(titleForTrack(b[0], b[1]));
-
-    if (sortMode === "alpha-asc") filtered.sort(cmp);
-    else if (sortMode === "alpha-desc") filtered.sort((a, b) => -cmp(a, b));
-
-    // Partition
-    const pinnedDyn = [], pinnedSimple = [], unpinnedDyn = [], unpinnedSimple = [];
-    for (const [name, t] of filtered) {
-      const p = pinned?.has(name);
-      const d = t?.simple === false;
-      if (p && d) pinnedDyn.push(name);
-      else if (p && !d) pinnedSimple.push(name);
-      else if (!p && d) unpinnedDyn.push(name);
-      else unpinnedSimple.push(name);
-    }
-
-    // Group ordering
-    const unpinnedOrdered = dynamicFirst ? [...unpinnedDyn, ...unpinnedSimple]
-                                        : [...unpinnedSimple, ...unpinnedDyn];
-    const pinnedOrdered   = dynamicFirst ? [...pinnedDyn, ...pinnedSimple]
-                                        : [...pinnedSimple, ...pinnedDyn];
-
-    return [...pinnedOrdered, ...unpinnedOrdered];
-  }, [tracks, sortMode, dynamicFirst, hideTests, pinned, names]);
+  const sortedTrackNames = useMemo(() => orderTracks(tracks, {
+    sortMode, dynamicFirst, hideTests, pinned, names,
+  }), [tracks, sortMode, dynamicFirst, hideTests, pinned, names]);
 
   const fetchSectionsIfNeeded = async (trackName) => {
-    if (sectionsByTrack[trackName]) return;
+    if (sectionsByTrack[trackName]) return sectionsByTrack[trackName];
     try {
       setLoadingTrack(trackName);
       const basePath = tracks[trackName]?.basePath || `/tracks/${trackName}`;
       const res = await fetch(`${basePath}/sectionData.json`);
+      if (!res.ok) throw new Error(`Failed to load sections: ${res.status}`);
       const json = await res.json();
       const sections = json?.sections || json || {};
       setSectionsByTrack((prev) => ({ ...prev, [trackName]: sections }));
+      return sections;
     } catch (e) {
       console.error("Failed to load sectionData for", trackName, e);
     } finally {
@@ -128,19 +97,9 @@ export default function DatabaseModal({
 
   const expandAll = async () => {
     // expand all tracks (and load each if needed), then all sections
-    const allTracks = sortedTrackNames;
-    for (const name of allTracks) {
-      await fetchSectionsIfNeeded(name);
-    }
-    setExpandedTracks(new Set(allTracks));
-    // expand every section for each track
-    const allSectionKeys = [];
-    for (const name of allTracks) {
-      const secs = sectionsByTrack[name] || {};
-      for (const sKey of Object.keys(secs)) {
-        allSectionKeys.push(`${name}::${sKey}`);
-      }
-    }
+    const loaded = await Promise.all(sortedTrackNames.map(async name => [name, await fetchSectionsIfNeeded(name)]));
+    setExpandedTracks(new Set(sortedTrackNames));
+    const allSectionKeys = loaded.flatMap(([name, sections]) => Object.keys(sections || {}).map(key => `${name}::${key}`));
     setExpandedSections(new Set(allSectionKeys));
   };
 
@@ -155,7 +114,6 @@ export default function DatabaseModal({
     const nameDefault = t?.defaultDisplayName || trackName;
     // current = override OR default
     const nameCurrent = names?.tracks?.[trackName]?.displayName ?? nameDefault;
-    setRenameTarget({ type: "track", trackName });
     setRenameDefaults({ nameDefault });
     setRenameFields({ name: nameCurrent });
     setRenameOpen(true);
@@ -170,7 +128,6 @@ export default function DatabaseModal({
     const secOverrides = names?.sections?.[trackName]?.[sectionKey] || {};
     const nameCurrent   = secOverrides.displayName ?? nameDefault;
     const buttonCurrent = (secOverrides.buttonName != null ? secOverrides.buttonName : buttonDefault);
-    setRenameTarget({ type: "section", trackName, sectionKey });
     setRenameDefaults({ nameDefault, buttonDefault });
     setRenameFields({ name: nameCurrent, button: buttonCurrent });
     setRenameTarget({ type: "section", trackName, sectionKey, defaults: { nameDefault, buttonDefault }});
@@ -184,7 +141,6 @@ export default function DatabaseModal({
     const nameCurrent = isBase
       ? (names?.sections?.[trackName]?.[sectionKey]?.baseModeName ?? nameDefault)
       : (names?.modes?.[trackName]?.[sectionKey]?.[modeName]?.displayName ?? nameDefault);
-    setRenameTarget({ type: "mode", trackName, sectionKey, modeName, isBase: !!isBase });
     setRenameDefaults({ nameDefault });
     setRenameFields({ name: nameCurrent });
     setRenameTarget({ type: "mode", trackName, sectionKey, modeName, isBase: !!isBase, defaults: { nameDefault }});
@@ -206,8 +162,6 @@ export default function DatabaseModal({
     }));
   };
 
-  const nameChanged = renameFields.name !== renameDefaults.nameDefault;
-  const buttonChanged = (renameTarget?.type === "section") && (renameFields.button !== (renameDefaults.buttonDefault ?? ""));
 
   if (!open) return null;
 
