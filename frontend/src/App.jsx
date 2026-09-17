@@ -1027,7 +1027,7 @@ export default function App() {
         </div>
       )}
 
-      <main style={{ width: "100%", maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column" }}>
+      <main className="app-main" style={{ width: "100%", maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column" }}>
       {/* Title with icon */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 0, marginBottom: 16 }}>
         <img
@@ -1057,6 +1057,7 @@ export default function App() {
         </div>
       </section>
 
+      <div className="playback-dock">
       {/* Now Playing (shows what's actually loaded/ready) */}
       {playingTrackName && (
         <div style={{ marginTop: -8, marginBottom: 12, display: "flex", justifyContent: "center", alignItems: "baseline", gap: 8, flexWrap: "wrap", textAlign: "center" }}>
@@ -1225,6 +1226,7 @@ export default function App() {
           unlockAudio={() => engine.unlockAudio?.()}
         />
       )}
+      </div>
       </main>
 
       {autoStartRequestedFor && (

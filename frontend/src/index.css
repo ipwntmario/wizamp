@@ -35,6 +35,16 @@ body {
   min-height: 100vh;
 }
 
+.app-main {
+  box-sizing: border-box;
+  min-height: calc(100vh - 40px);
+}
+
+.playback-dock {
+  margin-top: auto;
+  padding-bottom: 76px;
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
@@ -70,6 +80,12 @@ button:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .loading-indicator { animation-duration: 2.5s; }
+}
+
+@media (max-width: 760px) {
+  .app-main {
+    padding-top: 56px;
+  }
 }
 
 @media (prefers-color-scheme: light) {
