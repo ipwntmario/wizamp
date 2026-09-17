@@ -63,7 +63,11 @@ export default function Transport({
             display: "inline-flex", alignItems: "center", justifyContent: "center",
           }}
         >
-          <Icon name={primaryIcon} size={isLoadingTrack ? 20 : 22} />
+          {isLoadingTrack ? (
+            <span className="loading-indicator"><Icon name="loading" size={20} /></span>
+          ) : (
+            <Icon name={primaryIcon} size={22} />
+          )}
         </button>
 
         {/* Stop */}

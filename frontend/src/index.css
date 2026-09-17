@@ -54,6 +54,19 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+.loading-indicator {
+  display: inline-flex;
+  animation: loading-spin 0.9s linear infinite;
+}
+
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-indicator { animation-duration: 2.5s; }
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
