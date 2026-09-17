@@ -30,10 +30,10 @@ export default function SectionPanel({
   const showModes = modes.length > 1;    // <-- no longer depends on handler type
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
       {/* Section transition buttons */}
       {nextSections.length > 0 && (
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
           {nextSections.map((name) => {
             const isQueued = queuedSectionName === name;
             const isAutoLocked = autoLockedTargets.includes(name);
@@ -103,7 +103,7 @@ export default function SectionPanel({
 
       {/* Modes row (if multiple) */}
       {showModes && (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
           {modes.map((mode) => {
             const isActive = currentModeName === mode;
             const isQueued = queuedModeName === mode && !isActive;

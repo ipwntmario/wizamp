@@ -1027,8 +1027,9 @@ export default function App() {
         </div>
       )}
 
+      <main style={{ width: "100%", maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column" }}>
       {/* Title with icon */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 0, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 0, marginBottom: 16 }}>
         <img
           src={icons[appIconName] || icons[allIconNames[0]]}
           alt="Wizamp icon"
@@ -1039,7 +1040,7 @@ export default function App() {
 
       {/* Track Controls */}
       <section style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
           {!isPassiveRole && (
             <TrackSelector
               tracks={tracks}
@@ -1058,7 +1059,7 @@ export default function App() {
 
       {/* Now Playing (shows what's actually loaded/ready) */}
       {playingTrackName && (
-        <div style={{ marginTop: -8, marginBottom: 12, display: "flex", alignItems: "baseline", gap: 8 }}>
+        <div style={{ marginTop: -8, marginBottom: 12, display: "flex", justifyContent: "center", alignItems: "baseline", gap: 8, flexWrap: "wrap", textAlign: "center" }}>
           <span style={{ color: "#aaa", fontSize: 14, fontWeight: 400 }}>Track:</span>
           <span style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>
             {getTrackTitle(playingTrackName)}
@@ -1131,7 +1132,7 @@ export default function App() {
       {currentSectionName && !isPassiveRole && (
         <section style={{ marginBottom: 16 }}>
           {isDynamicPlayingTrack && (
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "baseline", gap: 8, marginBottom: 8, textAlign: "center" }}>
               <span style={{ color: "#aaa", fontSize: 14, fontWeight: 400 }}>Section:</span>
               <span style={{ color: "#fff", fontSize: 18, fontWeight: 700 }}>
                 {currentSectionName ? getSectionTitle(playingTrackName || selectedTrack, currentSectionName) : null}
@@ -1224,6 +1225,7 @@ export default function App() {
           unlockAudio={() => engine.unlockAudio?.()}
         />
       )}
+      </main>
 
       {autoStartRequestedFor && (
         <div style={{
