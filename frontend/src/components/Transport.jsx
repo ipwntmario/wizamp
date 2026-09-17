@@ -12,7 +12,7 @@ export default function Transport({
   isSimpleTrackPlaying, // boolean, true if currently playing track is "simple"
   unlockAudio,
 }) {
-  const primaryLabel = isLoadingTrack ? "⏳" : (isPlaying ? "⏸" : (isPaused ? "⏵" : "⏵"));
+  const primaryIcon = isLoadingTrack ? "loading" : (isPlaying ? "pause" : "play");
   const primaryTitle = isLoadingTrack
     ? "Loading… please wait"
     : (isPlaying ? "Pause" : (isPaused ? "Resume" : "Play"));
@@ -31,7 +31,7 @@ export default function Transport({
         {/* Auto-Play toggle */}
         <button
           onClick={() => setAutoplay?.(a => !a)}
-          title={autoplay ? "Auto-Play is ON (↠)" : "Auto-Play is OFF (⇥)"}
+          title={autoplay ? "Auto-Play is ON" : "Auto-Play is OFF"}
           aria-pressed={autoplay}
           disabled={disabled}
           style={{
@@ -43,7 +43,7 @@ export default function Transport({
             display: "inline-flex", alignItems: "center", justifyContent: "center"
           }}
         >
-          {autoplay ? "↠" : "⇥"}
+          <Icon name={autoplay ? "autoplayOn" : "autoplayOff"} size={20} />
         </button>
 
         {/* Play/Pause/Resume */}
@@ -63,7 +63,7 @@ export default function Transport({
             display: "inline-flex", alignItems: "center", justifyContent: "center",
           }}
         >
-          {primaryLabel}
+          <Icon name={primaryIcon} size={isLoadingTrack ? 20 : 22} />
         </button>
 
         {/* Stop */}
@@ -80,9 +80,10 @@ export default function Transport({
             display: "inline-flex", alignItems: "center", justifyContent: "center"
           }}
         >
-          ⏹
+          <Icon name="stop" size={18} />
         </button>
       </div>
     </section>
   );
 }
+import Icon from "./Icon";

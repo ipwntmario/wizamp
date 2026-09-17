@@ -14,6 +14,12 @@ const paths = {
   mixer: <><path d="M5 4v16M12 4v16M19 4v16"/><path d="M3 8h4M10 15h4M17 10h4"/></>,
   eye: <><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.5"/></>,
   headphones: <><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><path d="M4 14h3v6H5a1 1 0 0 1-1-1v-5ZM20 14h-3v6h2a1 1 0 0 0 1-1v-5Z"/></>,
+  play: <path d="m8 5 11 7-11 7V5Z" fill="currentColor" stroke="none"/>,
+  pause: <><path d="M8 5v14M16 5v14" strokeWidth="3.5"/></>,
+  stop: <rect x="7" y="7" width="10" height="10" rx="1" fill="currentColor" stroke="none"/>,
+  autoplayOn: <><path d="m4 7 4-3v6L4 7ZM8 7h8a4 4 0 0 1 0 8h-1"/><path d="m16 12 3 3-3 3"/></>,
+  autoplayOff: <><path d="m4 7 4-3v6L4 7ZM8 7h8a4 4 0 0 1 0 8h-1"/><path d="m16 12 3 3-3 3" strokeOpacity=".45"/><path d="m5 19 14-14"/></>,
+  loading: <path d="M12 3a9 9 0 1 0 9 9"/>,
 };
 
 export default function Icon({ name, size = 20, title, style }) {
