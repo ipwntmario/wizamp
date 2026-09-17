@@ -17,8 +17,8 @@ const paths = {
   play: <path d="m8 5 11 7-11 7V5Z" fill="currentColor" stroke="none"/>,
   pause: <><path d="M8 5v14M16 5v14" strokeWidth="3.5"/></>,
   stop: <rect x="7" y="7" width="10" height="10" rx="1" fill="currentColor" stroke="none"/>,
-  autoplayOn: <><path d="m4 7 4-3v6L4 7ZM8 7h8a4 4 0 0 1 0 8h-1"/><path d="m16 12 3 3-3 3"/></>,
-  autoplayOff: <><path d="m4 7 4-3v6L4 7ZM8 7h8a4 4 0 0 1 0 8h-1"/><path d="m16 12 3 3-3 3" strokeOpacity=".45"/><path d="m5 19 14-14"/></>,
+  autoplayOn: <><path d="M3 12h8m-3-3 3 3-3 3"/><path d="m14 7 7 5-7 5V7Z" fill="currentColor" stroke="none"/></>,
+  autoplayOff: <><path d="M3 12h8m-3-3 3 3-3 3"/><rect x="14" y="8" width="7" height="8" rx="1" fill="currentColor" stroke="none"/></>,
   loading: <path d="M12 3a9 9 0 1 0 9 9"/>,
 };
 
