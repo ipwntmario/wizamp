@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import UsersPanel from "./UsersPanel";
+import Icon from "./Icon";
 
 const LS_PANEL_OPEN = "ui.panelOpen";
 function persist(key, val) { try { localStorage.setItem(key, val); } catch {} }
@@ -22,7 +23,6 @@ export default function LeftPanel({
   const latencyMs = roomState?.latencyMs ?? null;
   const offsetMs = roomState?.serverOffsetMs ?? null;
   const isOnline = choice === "awc";
-  const Triangle = open ? "△" : "▽";
 
   return (
     <div
@@ -51,10 +51,11 @@ export default function LeftPanel({
           color: "white", border: "none", textAlign: "left",
         }}
       >
-        <div style={{ flex: 1, fontWeight: 700, fontSize: 16 }}>
-            {isOnline ? "🪄 A Wizard's Chronicle (AWC)" : "🚪 Private Session (offline)"}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 16 }}>
+            <Icon name={isOnline ? "wand" : "door"} size={19} />
+            {isOnline ? "A Wizard's Chronicle (AWC)" : "Private Session (offline)"}
         </div>
-        <div style={{ fontSize: 16, opacity: 0.9 }}>{Triangle}</div>
+        <div style={{ width: 10, height: 10, opacity: 0.9, borderRight: "2px solid currentColor", borderBottom: "2px solid currentColor", transform: open ? "rotate(225deg) translate(-2px, -2px)" : "rotate(45deg) translate(-2px, -2px)" }} />
       </button>
 
       {/* Divider */}
@@ -88,11 +89,11 @@ export default function LeftPanel({
                 background: "#0f172a", color: "white", border: "1px solid rgba(255,255,255,0.15)"
               }}
             >
-              <option value="awc">🪄 A Wizard&apos;s Chronicle (AWC)</option>
-              <option value="private">🚪 Private Session (offline)</option>
+              <option value="awc">A Wizard&apos;s Chronicle (AWC)</option>
+              <option value="private">Private Session (offline)</option>
             </select>
             <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
-              {isOnline ? "🌐 Online" : "Offline"}
+              <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}><Icon name={isOnline ? "globe" : "door"} size={13} />{isOnline ? "Online" : "Offline"}</span>
             </div>
           </div>
 
@@ -107,9 +108,9 @@ export default function LeftPanel({
                 background: "#0f172a", color: "white", border: "1px solid rgba(255,255,255,0.15)"
               }}
             >
-              <option value="GM">🎛️ Audio Manager (GM/DJ)</option>
-              <option value="PASSIVE_BTS">👁️ BTS (no touching!)</option>
-              <option value="PASSIVE">🎧 Player (passive listening)</option>
+              <option value="GM">Audio Manager (GM/DJ)</option>
+              <option value="PASSIVE_BTS">BTS (no touching!)</option>
+              <option value="PASSIVE">Player (passive listening)</option>
             </select>
             <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>Current: {displayRole}</div>
           </div>

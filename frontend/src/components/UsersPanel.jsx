@@ -1,10 +1,11 @@
 import React from "react";
+import Icon from "./Icon";
 
 const roleIcon = (role) => {
   switch (role) {
-    case "GM": return "🎛️";              // Audio Manager
-    case "PASSIVE_BTS": return "👁️";   // Passive BTS
-    default: return "🎧";                 // Passive
+    case "GM": return "mixer";
+    case "PASSIVE_BTS": return "eye";
+    default: return "headphones";
   }
 };
 
@@ -27,7 +28,7 @@ export default function UsersPanel({ users = [], latencyMs, offsetMs }) {
         )}
         {users.map((u) => (
           <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 18, textAlign: "center" }}>{roleIcon(u.role)}</span>
+            <span style={{ width: 18, display: "inline-flex", justifyContent: "center" }}><Icon name={roleIcon(u.role)} size={17} /></span>
             <span style={{ fontWeight: 500 }}>{u.name || "Unknown"}</span>
             <span style={{
               marginLeft: "auto",

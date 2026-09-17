@@ -1,5 +1,6 @@
 import { orderTracks, trackTitle } from "../data/trackOrdering";
 import { useMemo, useRef, useState } from "react";
+import Icon from "./Icon";
 
 /** Helper: consider a track "dynamic" when simple === false */
 const isDynamic = (t) => t?.simple === false;
@@ -202,7 +203,7 @@ export default function DatabaseModal({
             style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "white" }}
             aria-label="Close"
           >
-            ✕
+            <Icon name="close" size={20} />
           </button>
         </div>
 
@@ -290,7 +291,7 @@ export default function DatabaseModal({
                       userSelect: "none"
                     }}
                   >
-                    {/* 📌 pin button (blank when not pinned) */}
+                    {/* Pin button (blank when not pinned) */}
                     <button
                       onClick={() => onTogglePin?.(trackName)}
                       style={{
@@ -306,7 +307,7 @@ export default function DatabaseModal({
                       }}
                       title={pinned?.has(trackName) ? "Unpin" : "Pin"}
                     >
-                      {pinned?.has(trackName) ? "📌" : ""}
+                      {pinned?.has(trackName) && <Icon name="pin" size={13} />}
                     </button>
 
                     {/* +/- expand — borderless */}
@@ -327,16 +328,18 @@ export default function DatabaseModal({
                       {expanded ? "−" : "+"}
                     </button>
 
-                    {/* label with 📌 (pinned), 🧪 (test), 🔷 (dynamic) */}
+                    {/* Label with pinned, test, and dynamic markers */}
                     <div
                       style={{ fontWeight: 700, cursor: "pointer", padding: "2px 0" }}
                       onClick={() => toggleTrack(trackName)}
                       onDoubleClick={() => openRenameForTrack(trackName)}
                       title="Click to expand/collapse • Double-click to rename"
                     >
-                      {pinned?.has(trackName) ? "📌 " : ""}
-                      {test ? "🧪 " : ""}
-                      {dyn ? "🔷 " : ""}
+                      <span style={{ display: "inline-flex", verticalAlign: "middle", gap: 4, marginRight: pinned?.has(trackName) || test || dyn ? 6 : 0 }}>
+                        {pinned?.has(trackName) && <Icon name="pin" size={14} />}
+                        {test && <Icon name="flask" size={14} />}
+                        {dyn && <Icon name="diamond" size={14} />}
+                      </span>
                       {titleForTrack(trackName, t)}
                     </div>
                   </div>
@@ -672,7 +675,7 @@ function RenameModal({ target, fields, defaults, onChangeFields, onResetField, o
             style={{ background: "transparent", border: "none", color: "white", fontSize: 18, cursor: "pointer" }}
             aria-label="Close"
           >
-            ✕
+            <Icon name="close" size={18} />
           </button>
         </div>
 

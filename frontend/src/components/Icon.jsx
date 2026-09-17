@@ -1,0 +1,21 @@
+const paths = {
+  archive: <><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9Z"/><path d="M10 13h4"/></>,
+  settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.3 2.3-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.04 1.56v.1h-3.25v-.1a1.7 1.7 0 0 0-1.04-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-2.3-2.3.06-.06A1.7 1.7 0 0 0 6.4 15a1.7 1.7 0 0 0-1.56-1.04h-.1v-3.25h.1A1.7 1.7 0 0 0 6.4 9.67a1.7 1.7 0 0 0-.34-1.88L6 7.73l2.3-2.3.06.06a1.7 1.7 0 0 0 1.88.34 1.7 1.7 0 0 0 1.04-1.56v-.1h3.25v.1a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.3 2.3-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.04h.1v3.25h-.1A1.7 1.7 0 0 0 19.4 15Z"/></>,
+  volume: <><path d="M4 10v4h4l5 4V6L8 10H4Z"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M18.5 6.5a7.5 7.5 0 0 1 0 11"/></>,
+  volumeLow: <><path d="M4 10v4h4l5 4V6L8 10H4Z"/><path d="M16 10a3 3 0 0 1 0 4"/></>,
+  volumeMute: <><path d="M4 10v4h4l5 4V6L8 10H4Z"/><path d="m16 10 4 4m0-4-4 4"/></>,
+  close: <path d="m6 6 12 12M18 6 6 18"/>,
+  pin: <><path d="m9 4 6 6M7 10l7-7 3 3-7 7-2 4-2-2 4-2Z"/><path d="m8 16-4 4"/></>,
+  flask: <><path d="M9 3h6M10 3v6l-5 8a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-8V3"/><path d="M8 15h8"/></>,
+  diamond: <path d="m12 3 8 9-8 9-8-9 8-9Z"/>,
+  wand: <><path d="m5 19 10-10"/><path d="m15 3 .7 1.8L18 5.5l-2.3.7L15 8.5l-.7-2.3L12 5.5l2.3-.7L15 3Z"/><path d="m19 10 .45 1.05L21 11.5l-1.55.45L19 13l-.45-1.05L17 11.5l1.55-.45L19 10Z"/></>,
+  door: <><path d="M5 21V4h12v17"/><path d="M17 21h2V3H7"/><circle cx="14" cy="12" r=".7" fill="currentColor" stroke="none"/></>,
+  globe: <><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></>,
+  mixer: <><path d="M5 4v16M12 4v16M19 4v16"/><path d="M3 8h4M10 15h4M17 10h4"/></>,
+  eye: <><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.5"/></>,
+  headphones: <><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><path d="M4 14h3v6H5a1 1 0 0 1-1-1v-5ZM20 14h-3v6h2a1 1 0 0 0 1-1v-5Z"/></>,
+};
+
+export default function Icon({ name, size = 20, title, style }) {
+  return <svg aria-hidden={title ? undefined : true} aria-label={title} role={title ? "img" : undefined} viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block", flex: "0 0 auto", ...style }}><>{title && <title>{title}</title>}{paths[name]}</></svg>;
+}

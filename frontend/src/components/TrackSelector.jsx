@@ -30,11 +30,12 @@ export default function TrackSelector({
       <option value="" disabled>— choose a track —</option>
       {orderedNames.map((name) => {
         const t = tracks[name];
-        const label =
-          `${pinned?.has(name) ? "📌 " : ""}` +
-          `${t?.test ? "🧪 " : ""}` +
-          `${t?.simple === false ? "🔷 " : ""}` +
-          `${titleFor(name, t)}`;
+        const labels = [
+          pinned?.has(name) && "pinned",
+          t?.test && "test",
+          t?.simple === false && "dynamic",
+        ].filter(Boolean);
+        const label = `${labels.length ? `[${labels.join(", ")}] ` : ""}${titleFor(name, t)}`;
         return (
           <option key={name} value={name}>
             {label}

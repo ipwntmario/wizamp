@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import Icon from "./Icon";
 
 // Top-anchored settings modal with "close on outside press" that only
 // triggers if both mousedown AND mouseup occur on the overlay.
@@ -66,7 +67,7 @@ export default function SettingsModal({
             style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "white" }}
             aria-label="Close"
           >
-            ✕
+            <Icon name="close" size={20} />
           </button>
         </div>
 

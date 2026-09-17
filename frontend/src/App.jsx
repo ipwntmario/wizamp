@@ -23,6 +23,7 @@ import { useRoom } from "./net/useRoom";
 import LeftPanel from "./components/LeftPanel";
 import DatabaseModal from "./components/DatabaseModal";
 import SettingsModal from "./components/SettingsModal";
+import Icon from "./components/Icon";
 import TrackSelector from "./components/TrackSelector";
 import SectionPanel from "./components/SectionPanel";
 import Transport from "./components/Transport";
@@ -955,7 +956,7 @@ export default function App() {
               }}
               title="Database"
             >
-              🗄️
+              <Icon name="archive" size={20} />
             </button>
           }
           <button
@@ -974,7 +975,7 @@ export default function App() {
             }}
             title="Settings"
           >
-            ⚙️
+            <Icon name="settings" size={20} />
           </button>
         </div>
       </div>
@@ -1063,7 +1064,7 @@ export default function App() {
             {getTrackTitle(playingTrackName)}
           </span>
 
-          {/* 🔊 Track volume toggle */}
+          {/* Track volume toggle */}
           {selectedTrack && !isPassiveRole && (
             <div style={{ position: "relative" }}>
               <button
@@ -1083,10 +1084,7 @@ export default function App() {
                 }}
                 title="Track volume (set for all players)"
               >
-                {trackVolume === 1
-                  ? "🔊"
-                  : "🔈"
-                }
+                <Icon name={trackVolume === 1 ? "volume" : "volumeLow"} size={21} />
               </button>
 
               {trackVolUIOpen && (
@@ -1393,7 +1391,7 @@ export default function App() {
               opacity: userMuted ? 0.9 : 1
             }}
           >
-            {userMuted ? "🔇" : "🔊"}
+            <Icon name={userMuted ? "volumeMute" : "volume"} size={21} />
           </button>
         </div>
       </div>
