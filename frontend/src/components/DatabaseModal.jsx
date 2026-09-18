@@ -171,6 +171,7 @@ export default function DatabaseModal({
       ref={overlayRef}
       onMouseDown={handleOverlayMouseDown}
       onMouseUp={handleOverlayMouseUp}
+      className="database-overlay"
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
         display: "flex",
@@ -183,6 +184,7 @@ export default function DatabaseModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="database-modal"
         style={{
           width: 720, maxHeight: "84vh",
           background: "#2d2d2d", color: "white",
@@ -191,15 +193,19 @@ export default function DatabaseModal({
         }}
       >
         {/* Sticky header */}
-        <div style={{
+        <div className="database-modal__header" style={{
           position: "sticky", top: 0,
           background: "#2d2d2d", zIndex: 2,
           borderBottom: "1px solid #444", padding: 12,
           display: "flex", alignItems: "center", justifyContent: "space-between"
         }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Database</h2>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 18 }}>Database</h2>
+            <p className="database-modal__subtitle">Manage tracks, sections, modes, and display names</p>
+          </div>
           <button
             onClick={onClose}
+            className="database-icon-button"
             style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "white" }}
             aria-label="Close"
           >
@@ -208,13 +214,13 @@ export default function DatabaseModal({
         </div>
 
         {/* Sticky controls bar */}
-        <div style={{
+        <div className="database-toolbar" style={{
           position: "sticky", top: 48, // immediately under the header
           background: "#2d2d2d", zIndex: 1,
           borderBottom: "1px solid #444", padding: "8px 12px",
           display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap"
         }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <label className="database-toolbar__sort" style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ color: "#bbb" }}>Sort:</span>
             <select
               value={sortMode}
@@ -226,7 +232,7 @@ export default function DatabaseModal({
             </select>
           </label>
 
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <label className="database-check" style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <input
               type="checkbox"
               checked={dynamicFirst}
@@ -236,7 +242,7 @@ export default function DatabaseModal({
             <span style={{ color: "#bbb" }}>keep dynamic on top</span>
           </label>
 
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <label className="database-check" style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <input
               type="checkbox"
               checked={hideTests}
@@ -245,15 +251,17 @@ export default function DatabaseModal({
             <span style={{ color: "#bbb" }}>hide test tracks</span>
           </label>
 
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <div className="database-toolbar__actions" style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             <button
               onClick={expandAll}
+              className="database-button database-button--quiet"
               style={{ background: "transparent", border: "1px solid #555", borderRadius: 6, padding: "4px 8px", color: "white", cursor: "pointer" }}
             >
               expand all
             </button>
             <button
               onClick={collapseAll}
+              className="database-button database-button--quiet"
               style={{ background: "transparent", border: "1px solid #555", borderRadius: 6, padding: "4px 8px", color: "white", cursor: "pointer" }}
             >
               collapse all
@@ -262,9 +270,9 @@ export default function DatabaseModal({
         </div>
 
         {/* Scrollable body */}
-        <div style={{ overflow: "auto" }}>
+        <div className="database-modal__body" style={{ overflow: "auto" }}>
           {/* Header row */}
-          <div style={{ display: "grid", gridTemplateColumns: "24px 1fr", padding: "6px 12px", borderBottom: "1px solid #444", color: "#bbb" }}>
+          <div className="database-list-heading" style={{ display: "grid", gridTemplateColumns: "24px 1fr", padding: "6px 12px", borderBottom: "1px solid #444", color: "#bbb" }}>
             <div />
             <div>Name</div>
           </div>
@@ -282,6 +290,7 @@ export default function DatabaseModal({
                 <div key={trackName}>
                   {/* Track row */}
                   <div
+                    className={`database-row database-row--track ${expanded ? "is-expanded" : ""}`}
                     style={{
                       display: "grid",
                       gridTemplateColumns: "24px 24px 1fr", // pin, expand, label
@@ -294,6 +303,7 @@ export default function DatabaseModal({
                     {/* Pin button (blank when not pinned) */}
                     <button
                       onClick={() => onTogglePin?.(trackName)}
+                      className={`database-pin ${pinned?.has(trackName) ? "is-pinned" : ""}`}
                       style={{
                         width: 20, height: 20,
                         display: "flex", alignItems: "center", justifyContent: "center",
@@ -313,6 +323,7 @@ export default function DatabaseModal({
                     {/* +/- expand — borderless */}
                     <button
                       onClick={() => toggleTrack(trackName)}
+                      className="database-expand"
                       style={{
                         width: 20, height: 20,
                         display: "flex", alignItems: "center", justifyContent: "center",
@@ -329,11 +340,11 @@ export default function DatabaseModal({
                     </button>
 
                     {/* Label with pinned, test, and dynamic markers */}
-                    <div
-                      style={{ fontWeight: 700, cursor: "pointer", padding: "2px 0" }}
-                      onClick={() => toggleTrack(trackName)}
-                      onDoubleClick={() => openRenameForTrack(trackName)}
-                      title="Click to expand/collapse • Double-click to rename"
+                    <RenameableLabel
+                      className="database-label database-label--track"
+                      onPrimaryClick={() => toggleTrack(trackName)}
+                      onRename={() => openRenameForTrack(trackName)}
+                      title="Click to expand or collapse. Double-click, long-press, or use the pencil to rename."
                     >
                       <span style={{ display: "inline-flex", verticalAlign: "middle", gap: 4, marginRight: pinned?.has(trackName) || test || dyn ? 6 : 0 }}>
                         {pinned?.has(trackName) && <Icon name="pin" size={14} />}
@@ -341,14 +352,14 @@ export default function DatabaseModal({
                         {dyn && <Icon name="diamond" size={14} />}
                       </span>
                       {titleForTrack(trackName, t)}
-                    </div>
+                    </RenameableLabel>
                   </div>
 
                   {/* Sections */}
                   {expanded && (
                     <div>
                       {loadingTrack === trackName && (
-                        <div style={{ padding: "6px 12px", color: "#bbb" }}>Loading sections…</div>
+                        <div className="database-loading" style={{ padding: "6px 12px", color: "#bbb" }}><span className="loading-indicator"><Icon name="loading" size={14} /></span> Loading sections…</div>
                       )}
                       {sections && Object.entries(sections).map(([sectionKey, s]) => {
                         const secKey = `${trackName}::${sectionKey}`;
@@ -367,6 +378,7 @@ export default function DatabaseModal({
                           <div key={sectionKey}>
                             {/* Section row: ↳ • +/- • label */}
                             <div
+                              className="database-row database-row--section"
                               style={{
                                 display: "grid",
                                 gridTemplateColumns: "24px 24px 1fr", // arrow, expand, label
@@ -385,6 +397,7 @@ export default function DatabaseModal({
                               {/* expand */}
                               <button
                                 onClick={() => toggleSection(trackName, sectionKey)}
+                                className="database-expand"
                                 style={{
                                   width: 20, height: 20,
                                   display: "flex", alignItems: "center", justifyContent: "center",
@@ -401,11 +414,11 @@ export default function DatabaseModal({
                               </button>
 
                               {/* label (click/ dblclick) */}
-                              <div
-                                style={{ cursor: "pointer", padding: "2px 0" }}
-                                onClick={() => toggleSection(trackName, sectionKey)}
-                                onDoubleClick={() => openRenameForSection(trackName, sectionKey)}
-                                title="Click to expand/collapse • Double-click to rename"
+                              <RenameableLabel
+                                className="database-label database-label--section"
+                                onPrimaryClick={() => toggleSection(trackName, sectionKey)}
+                                onRename={() => openRenameForSection(trackName, sectionKey)}
+                                title="Click to expand or collapse. Double-click, long-press, or use the pencil to rename."
                               >
                                 <span style={{ fontWeight: 400 }}>{titleLabel}</span>
                                 {buttonLabel && (
@@ -414,7 +427,7 @@ export default function DatabaseModal({
                                     <span>{buttonLabel}</span>
                                   </>
                                 )}
-                              </div>
+                              </RenameableLabel>
                             </div>
 
                             {/* Modes list (aligned) */}
@@ -495,6 +508,7 @@ function ModeRows({ trackName, sectionKey, section, onRenameMode, names }) {
       {rows.map((r, idx) => (
         <div
           key={r.key}
+          className="database-row database-row--mode"
           style={{
             display: "grid",
             gridTemplateColumns: "24px 24px 1fr", // arrow, (no expand), label
@@ -511,10 +525,10 @@ function ModeRows({ trackName, sectionKey, section, onRenameMode, names }) {
           {/* empty cell to align with expand button column */}
           <div />
           {/* label (dblclick to rename) */}
-          <div
-            style={{ cursor: "pointer", color: r.dim ? "#9a9a9a" : "white" }}
-            onDoubleClick={() => onRenameMode(trackName, sectionKey, r.key === "__base__" ? "base" : r.key, r.isBase)}
-            title="Double-click to rename"
+          <RenameableLabel
+            className={`database-label database-label--mode ${r.dim ? "is-dimmed" : ""}`}
+            onRename={() => onRenameMode(trackName, sectionKey, r.key === "__base__" ? "base" : r.key, r.isBase)}
+            title="Double-click, long-press, or use the pencil to rename."
           >
             {r.isBase && !hasOnlyBase ? (
               <>
@@ -523,9 +537,71 @@ function ModeRows({ trackName, sectionKey, section, onRenameMode, names }) {
             ) : (
               r.label
             )}
-          </div>
+          </RenameableLabel>
         </div>
       ))}
+    </div>
+  );
+}
+
+const RENAME_LONG_PRESS_MS = 550;
+
+function RenameableLabel({ children, className = "", onPrimaryClick, onRename, title }) {
+  const pressTimer = useRef(null);
+  const pressStart = useRef(null);
+  const suppressClick = useRef(false);
+
+  const clearPress = () => {
+    clearTimeout(pressTimer.current);
+    pressTimer.current = null;
+    pressStart.current = null;
+  };
+
+  return (
+    <div
+      className={`database-renameable ${className}`}
+      title={title}
+      onClick={() => {
+        if (!suppressClick.current) onPrimaryClick?.();
+      }}
+      onDoubleClick={() => {
+        if (window.matchMedia("(hover: hover)").matches) onRename?.();
+      }}
+      onPointerDown={(event) => {
+        if (event.pointerType !== "touch") return;
+        pressStart.current = { x: event.clientX, y: event.clientY };
+        pressTimer.current = setTimeout(() => {
+          suppressClick.current = true;
+          onRename?.();
+          navigator.vibrate?.(12);
+          setTimeout(() => { suppressClick.current = false; }, 700);
+        }, RENAME_LONG_PRESS_MS);
+      }}
+      onPointerMove={(event) => {
+        if (!pressStart.current) return;
+        if (Math.hypot(event.clientX - pressStart.current.x, event.clientY - pressStart.current.y) > 10) clearPress();
+      }}
+      onPointerUp={() => {
+        const didLongPress = suppressClick.current;
+        clearPress();
+        if (didLongPress) setTimeout(() => { suppressClick.current = false; }, 0);
+      }}
+      onPointerCancel={clearPress}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      <span className="database-renameable__content">{children}</span>
+      <button
+        type="button"
+        className="database-edit-button"
+        aria-label="Rename"
+        title="Rename"
+        onClick={(event) => {
+          event.stopPropagation();
+          onRename?.();
+        }}
+      >
+        <Icon name="pencil" size={14} />
+      </button>
     </div>
   );
 }
@@ -655,6 +731,7 @@ function RenameModal({ target, fields, defaults, onChangeFields, onResetField, o
       ref={overlayRef}
       onMouseDown={handleOverlayMouseDown}
       onMouseUp={handleOverlayMouseUp}
+      className="rename-overlay"
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -663,15 +740,17 @@ function RenameModal({ target, fields, defaults, onChangeFields, onResetField, o
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="rename-modal"
         style={{
           width: 520, background: "#2b2b2b", color: "white",
           borderRadius: 12, padding: 16, boxShadow: "0 10px 30px rgba(0,0,0,0.35)"
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="rename-modal__header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>{title}</h3>
           <button
             onClick={onClose}
+            className="database-icon-button"
             style={{ background: "transparent", border: "none", color: "white", fontSize: 18, cursor: "pointer" }}
             aria-label="Close"
           >
@@ -680,22 +759,24 @@ function RenameModal({ target, fields, defaults, onChangeFields, onResetField, o
         </div>
 
         {/* FORM */}
-        <div style={{ marginTop: 12 }}>
+        <div className="rename-modal__form" style={{ marginTop: 12 }}>
           {target.type === "track"   && renderTrackForm()}
           {target.type === "section" && renderSectionForm()}
           {target.type === "mode"    && renderModeForm()}
         </div>
 
         {/* ACTIONS */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+        <div className="rename-modal__actions" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
           <button
             onClick={onClose}
+            className="database-button database-button--quiet"
             style={{ border: "1px solid #555", background: "transparent", color: "white", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
           >
             cancel
           </button>
           <button
             onClick={onSave}
+            className="database-button database-button--primary"
             style={{ border: "none", background: "#0aa", color: "#002", fontWeight: 700, borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
           >
             save

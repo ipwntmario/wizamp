@@ -174,7 +174,7 @@ export default function LeftPanel({
                   <div
                     className={`session-identity ${editingRoomId === room.id ? "is-visible" : ""}`}
                     aria-hidden={editingRoomId !== room.id}
-                    inert={editingRoomId !== room.id ? "" : undefined}
+                    inert={editingRoomId !== room.id}
                   >
                     <label>
                       <span>Display name</span>
