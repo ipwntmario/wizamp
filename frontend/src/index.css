@@ -310,7 +310,6 @@ button:focus-visible {
   }
   .session-panel { top: 8px; left: 8px; --panel-width: calc(100vw - 16px); }
   .session-panel__hint { display: inline; }
-  .session-room__more { display: none; }
 }
 
 @media (min-width: 761px) {
