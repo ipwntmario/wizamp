@@ -103,7 +103,7 @@ export default function App() {
     try { localStorage.setItem("wizamp_showStatus", showStatus ? "1" : "0"); } catch {}
   }, [showStatus]);
 
-  const { roomId, setRoomId, onlineEnabled, role, setRole, displayName, setDisplayName } = useSession();
+  const { roomId, setRoomId, onlineEnabled, role, setRole, displayName, setDisplayName, roomIdentities, setRoomIdentity } = useSession();
   const isActiveRole = !onlineEnabled || role === "GM";
   const isPassiveRole = onlineEnabled && role === "PASSIVE";
 
@@ -933,6 +933,8 @@ export default function App() {
         setRole={setRole}
         displayName={displayName}
         setDisplayName={setDisplayName}
+        roomIdentities={roomIdentities}
+        setRoomIdentity={setRoomIdentity}
         room={room}
       />
 

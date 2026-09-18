@@ -20,6 +20,8 @@ const paths = {
   autoplayOn: <><path d="M3 12h8m-3-3 3 3-3 3"/><path d="m14 7 7 5-7 5V7Z" fill="currentColor" stroke="none"/></>,
   autoplayOff: <><path d="M3 12h8m-3-3 3 3-3 3"/><rect x="14" y="8" width="7" height="8" rx="1" fill="currentColor" stroke="none"/></>,
   loading: <path d="M12 3a9 9 0 1 0 9 9"/>,
+  menu: <path d="M4 6h16M4 12h16M4 18h16"/>,
+  moreVertical: <><circle cx="12" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></>,
 };
 
 export default function Icon({ name, size = 20, title, style }) {
