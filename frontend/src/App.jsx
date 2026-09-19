@@ -28,23 +28,16 @@ import TrackSelector from "./components/TrackSelector";
 import SectionPanel from "./components/SectionPanel";
 import Transport from "./components/Transport";
 import StatusBar from "./components/StatusBar";
+import icon1Url from "./assets/icons/icon1.png";
+import icon2bUrl from "./assets/icons/icon2b.png";
 
-// Auto-import all PNGs in /assets/icons at build time
-const _iconModules = import.meta.glob("./assets/icons/*.png", { eager: true });
-const icons = Object.fromEntries(
-  Object.entries(_iconModules).map(([path, mod]) => [
-    path.split("/").pop(),            // "icon1.png"
-    mod.default ?? mod,               // the URL
-  ])
-);
-const allIconNames = Object.keys(icons).sort();
-
+const icons = { "icon1.png": icon1Url, "icon2b.png": icon2bUrl };
 export default function App() {
   const { tracks, loading, error: dataError } = useMusicData();  // <- only rely on tracks here
   const [clips, setClips] = useState({});
   const [sections, setSections] = useState({});
 
-  const [appIconName, setAppIconName] = useState(() => allIconNames[0] ?? "");
+  const [appIconName, setAppIconName] = useState("icon1.png");
 
   const [status, setStatus] = useState("Idle");
   const [selectedTrack, setSelectedTrack] = useState(null);
@@ -884,17 +877,6 @@ export default function App() {
     }
   }, [engine, playingTrackName, selectedTrack, trackVolume, loadSavedTrackVolume]);
 
-  // Persist app icon
-  useEffect(() => {
-    const saved = localStorage.getItem("wizamp_appIcon");
-    if (saved && icons[saved]) setAppIconName(saved);
-    else if (allIconNames.length && !saved) setAppIconName(allIconNames[0]);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("wizamp_appIcon", appIconName);
-  }, [appIconName]);
-
   const scheduleSectionAtServerTime = (sectionName, serverMs) => {
     cancelScheduledCommands();
     scheduleAtServerTime(serverMs, () => {
@@ -938,32 +920,13 @@ export default function App() {
         room={room}
       />
 
-      {/* Top-right controls: DB (left) + Settings (right) */}
+      {/* Top-right settings access */}
       <div style={{ position: "absolute", top: 16, right: 16, display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{ display: "flex", gap: 8 }}>
-          {isActiveRole &&
-            <button
-              aria-label="Database"
-              onClick={() => setDbOpen(true)}
-              style={{
-                width: 32,
-                height: 32,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "transparent",
-                border: "none",
-                fontSize: 20,
-                cursor: "pointer",
-              }}
-              title="Database"
-            >
-              <Icon name="archive" size={20} />
-            </button>
-          }
           <button
             aria-label="Settings"
             onClick={() => setSettingsOpen(true)}
+            className="app-settings-button"
             style={{
               width: 32,
               height: 32,
@@ -1033,7 +996,7 @@ export default function App() {
       {/* Title with icon */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 0, marginBottom: 16 }}>
         <img
-          src={icons[appIconName] || icons[allIconNames[0]]}
+          src={icons[appIconName] || icons["icon1.png"]}
           alt="Wizamp icon"
           style={{ width: 64, height: 64, borderRadius: 6, objectFit: "cover" }}
         />
@@ -1264,9 +1227,12 @@ export default function App() {
         setPauseFadeSeconds={setPauseFadeSeconds}
         showStatus={showStatus}
         setShowStatus={setShowStatus}
-        appIconName={appIconName}
-        setAppIconName={setAppIconName}
-        allIconNames={allIconNames}
+        canAccessDatabase={isActiveRole}
+        onOpenDatabase={() => {
+          setSettingsOpen(false);
+          setDbOpen(true);
+        }}
+        onUnlockIcon={() => setAppIconName("icon2b.png")}
       />
 
       {/* Database modal */}

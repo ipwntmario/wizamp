@@ -29,3 +29,6 @@ frontend/public/tracks/_WAV/
 # ignore all wavs anywhere
 *.wav
 *.[Ww][Aa][Vv]
+
+# Wrangler Files
+worker/.wrangler/
