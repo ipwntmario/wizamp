@@ -5,7 +5,7 @@ const paths = {
   volumeLow: <><path d="M4 10v4h4l5 4V6L8 10H4Z"/><path d="M16 10a3 3 0 0 1 0 4"/></>,
   volumeMute: <><path d="M4 10v4h4l5 4V6L8 10H4Z"/><path d="m16 10 4 4m0-4-4 4"/></>,
   close: <path d="m6 6 12 12M18 6 6 18"/>,
-  pin: <><path d="m9 4 6 6M7 10l7-7 3 3-7 7-2 4-2-2 4-2Z"/><path d="m8 16-4 4"/></>,
+  pin: <><path d="M8 4h8l-1 5 3 3v2H6v-2l3-3-1-5Z"/><path d="M12 14v6"/></>,
   flask: <><path d="M9 3h6M10 3v6l-5 8a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-8V3"/><path d="M8 15h8"/></>,
   diamond: <path d="m12 3 8 9-8 9-8-9 8-9Z"/>,
   wand: <><path d="m5 19 10-10"/><path d="m15 3 .7 1.8L18 5.5l-2.3.7L15 8.5l-.7-2.3L12 5.5l2.3-.7L15 3Z"/><path d="m19 10 .45 1.05L21 11.5l-1.55.45L19 13l-.45-1.05L17 11.5l1.55-.45L19 10Z"/></>,
