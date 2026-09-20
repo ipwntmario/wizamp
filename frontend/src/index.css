@@ -779,6 +779,7 @@ button:focus-visible {
   .app-main {
     padding-top: 56px;
   }
+  .playback-dock { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
   .session-panel { top: 8px; left: 8px; --panel-width: calc(100vw - 16px); }
   .session-panel__hint { display: inline; }
   .settings-overlay { align-items: flex-end; padding: 0; }
@@ -810,7 +811,7 @@ button:focus-visible {
   .database-edit-button { display: none; }
   .database-track-menu-button { opacity: 1; transform: none; pointer-events: auto; }
   .database-loading { padding-left: 57px !important; }
-  .utility-dock { right: 8px; bottom: 8px; left: 8px; }
+  .utility-dock { right: 8px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); left: 8px; }
   .utility-dock.status-hidden { left: auto; }
   .status-bar__label { display: none; }
   .status-bar__current { gap: 7px; padding: 0 10px; }
