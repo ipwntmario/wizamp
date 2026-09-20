@@ -1,5 +1,5 @@
 import { orderTracks, trackTitle } from "../data/trackOrdering";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "./Icon";
 
 /** Helper: consider a track "dynamic" when simple === false */
@@ -27,6 +27,16 @@ export default function DatabaseModal({
   const [expandedSections, setExpandedSections] = useState(() => new Set()); // keys: `${track}::${sectionKey}`
   const [sectionsByTrack, setSectionsByTrack] = useState({});               // cache: { trackName: { sections } }
   const [loadingTrack, setLoadingTrack] = useState(null);
+  const [trackMenuOpen, setTrackMenuOpen] = useState(null);
+
+  useEffect(() => {
+    if (!trackMenuOpen) return;
+    const closeMenu = (event) => {
+      if (!event.target.closest(".database-track-actions")) setTrackMenuOpen(null);
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    return () => document.removeEventListener("pointerdown", closeMenu);
+  }, [trackMenuOpen]);
 
   // Rename modal state
   const [renameOpen, setRenameOpen] = useState(false);
@@ -290,36 +300,16 @@ export default function DatabaseModal({
                 <div key={trackName}>
                   {/* Track row */}
                   <div
-                    className={`database-row database-row--track ${expanded ? "is-expanded" : ""}`}
+                    className={`database-row database-row--track ${expanded ? "is-expanded" : ""} ${trackMenuOpen === trackName ? "is-menu-open" : ""}`}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "24px 24px 1fr", // pin, expand, label
+                      gridTemplateColumns: "24px 1fr 32px", // expand, label, actions
                       padding: "6px 12px",
                       borderBottom: "1px solid #3a3a3a",
                       alignItems: "center",
                       userSelect: "none"
                     }}
                   >
-                    {/* Pin button (blank when not pinned) */}
-                    <button
-                      onClick={() => onTogglePin?.(trackName)}
-                      className={`database-pin ${pinned?.has(trackName) ? "is-pinned" : ""}`}
-                      style={{
-                        width: 20, height: 20,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        background: "transparent",
-                        border: "1px solid #666",          // subtle square
-                        color: "white",
-                        borderRadius: 4,
-                        fontSize: 12, lineHeight: 1, padding: 0,
-                        cursor: "pointer",
-                        opacity: 0.95
-                      }}
-                      title={pinned?.has(trackName) ? "Unpin" : "Pin"}
-                    >
-                      {pinned?.has(trackName) && <Icon name="pin" size={13} />}
-                    </button>
-
                     {/* +/- expand — borderless */}
                     <button
                       onClick={() => toggleTrack(trackName)}
@@ -340,11 +330,10 @@ export default function DatabaseModal({
                     </button>
 
                     {/* Label with pinned, test, and dynamic markers */}
-                    <RenameableLabel
-                      className="database-label database-label--track"
-                      onPrimaryClick={() => toggleTrack(trackName)}
-                      onRename={() => openRenameForTrack(trackName)}
-                      title="Click to expand or collapse. Double-click, long-press, or use the pencil to rename."
+                    <div
+                      className="database-label database-label--track database-track-label"
+                      onClick={() => toggleTrack(trackName)}
+                      title="Click to expand or collapse"
                     >
                       <span style={{ display: "inline-flex", verticalAlign: "middle", gap: 4, marginRight: pinned?.has(trackName) || test || dyn ? 6 : 0 }}>
                         {pinned?.has(trackName) && <Icon name="pin" size={14} />}
@@ -352,7 +341,43 @@ export default function DatabaseModal({
                         {dyn && <Icon name="diamond" size={14} />}
                       </span>
                       {titleForTrack(trackName, t)}
-                    </RenameableLabel>
+                    </div>
+
+                    <div className="database-track-actions">
+                      <button
+                        type="button"
+                        className="database-track-menu-button"
+                        aria-label={`Actions for ${titleForTrack(trackName, t)}`}
+                        aria-expanded={trackMenuOpen === trackName}
+                        onClick={() => setTrackMenuOpen((current) => current === trackName ? null : trackName)}
+                      >
+                        <Icon name="moreVertical" size={19} />
+                      </button>
+                      {trackMenuOpen === trackName && (
+                        <div className="database-track-menu" role="menu">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              onTogglePin?.(trackName);
+                              setTrackMenuOpen(null);
+                            }}
+                          >
+                            {pinned?.has(trackName) ? "Unpin" : "Pin"}
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setTrackMenuOpen(null);
+                              openRenameForTrack(trackName);
+                            }}
+                          >
+                            Rename
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Sections */}
