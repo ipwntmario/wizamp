@@ -24,6 +24,9 @@ const paths = {
   moreVertical: <><circle cx="12" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></>,
   pencil: <><path d="m4 20 4.2-1 10.9-10.9a2.1 2.1 0 0 0-3-3L5.2 16 4 20Z"/><path d="m14.7 6.5 3 3"/></>,
   chevronDown: <path d="m7 10 5 5 5-5"/>,
+  chevronLeft: <path d="m15 18-6-6 6-6"/>,
+  chevronRight: <path d="m9 18 6-6-6-6"/>,
+  history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></>,
 };
 
 export default function Icon({ name, size = 20, title, style }) {

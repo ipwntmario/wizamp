@@ -28,6 +28,7 @@ import TrackSelector from "./components/TrackSelector";
 import SectionPanel from "./components/SectionPanel";
 import Transport from "./components/Transport";
 import StatusBar from "./components/StatusBar";
+import VolumeControl from "./components/VolumeControl";
 import icon1Url from "./assets/icons/icon1.png";
 import icon2bUrl from "./assets/icons/icon2b.png";
 
@@ -40,6 +41,7 @@ export default function App() {
   const [appIconName, setAppIconName] = useState("icon1.png");
 
   const [status, setStatus] = useState("Idle");
+  const [statusHistory, setStatusHistory] = useState([]);
   const [selectedTrack, setSelectedTrack] = useState(null);
   const [playingTrackName, setPlayingTrackName] = useState(null);
   const [isLoadingTrack, setIsLoadingTrack] = useState(false);
@@ -155,6 +157,19 @@ export default function App() {
   const [trackVolume, setTrackVolume] = useState(1); // 0..1
   const [userVolume, setUserVolume] = useState(1);   // 0..1 (local)
   const [userMuted, setUserMuted] = useState(false);
+  const [userVolumeOpen, setUserVolumeOpen] = useState(false);
+
+  const displayedStatus = loading ? "Loading data…" : dataError || status;
+  useEffect(() => {
+    setStatusHistory(previous => {
+      if (previous.at(-1)?.text === displayedStatus) return previous;
+      return [...previous, {
+        id: `${Date.now()}-${previous.length}`,
+        text: displayedStatus,
+        timestamp: Date.now(),
+      }];
+    });
+  }, [displayedStatus]);
 
   // Rename registry (persisted)
   // Shape:
@@ -1195,27 +1210,22 @@ export default function App() {
       </main>
 
       {autoStartRequestedFor && (
-        <div style={{
-          position: "fixed", left: 20, bottom: showStatus ? 64 : 20,
-          background: "#2a2a2a", color: "white",
-          border: "1px solid #555", borderRadius: 10,
-          padding: "6px 10px", zIndex: 1
-        }}>
+        <div className="autoplay-pending">
           Autoplay pending… <span style={{ opacity: 0.8 }}>{autoStartRequestedFor}</span>
         </div>
       )}
 
-      {/* Fixed bottom status bar (left), if enabled */}
-      {showStatus && (
-        <div style={{
-          position: "fixed", left: 20, bottom: 20,
-          background: "#2a2a2a", color: "white",
-          border: "1px solid #555", borderRadius: 10,
-          padding: "8px 12px", zIndex: 1, maxWidth: "40vw"
-        }}>
-          <StatusBar text={loading ? "Loading data…" : dataError || status} />
-        </div>
-      )}
+      <div className={`utility-dock ${showStatus ? "" : "status-hidden"}`}>
+        {showStatus && <StatusBar text={displayedStatus} history={statusHistory} />}
+        <VolumeControl
+          expanded={userVolumeOpen}
+          onExpandedChange={setUserVolumeOpen}
+          volume={userVolume}
+          onVolumeChange={setUserVolume}
+          muted={userMuted}
+          onMutedChange={setUserMuted}
+        />
+      </div>
 
       {/* Settings modal */}
       <SettingsModal
@@ -1311,62 +1321,6 @@ export default function App() {
         }}
       />
 
-      {/* Per-user volume (local) */}
-      <div
-        style={{
-          position: "fixed",
-          right: 20,
-          bottom: 20,
-          background: "#2a2a2a",
-          color: "white",
-          border: "1px solid #555",
-          borderRadius: 10,
-          padding: "8px 8px",
-          zIndex: 1
-        }}
-        title="This affects only your device"
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 36, textAlign: "right", opacity: 0.9 }}>
-            {Math.round(userVolume * 100)}
-          </div>
-
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={Math.round(userVolume * 100)}
-            onChange={(e) => setUserVolume(Number(e.target.value) / 100)}
-            style={{
-              width: 180,
-              // grey-out while muted (still adjustable)
-              filter: userMuted ? "grayscale(1)" : "none",
-              opacity: userMuted ? 0.6 : 1
-            }}
-            aria-label="Your volume"
-          />
-
-          <button
-            onClick={() => setUserMuted(m => !m)}
-            aria-label={userMuted ? "Unmute" : "Mute"}
-            title={userMuted ? "Unmute" : "Mute"}
-            style={{
-              width: 36,
-              height: 36,
-              background: "transparent",
-              color: "white",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              opacity: userMuted ? 0.9 : 1
-            }}
-          >
-            <Icon name={userMuted ? "volumeMute" : "volume"} size={21} />
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
