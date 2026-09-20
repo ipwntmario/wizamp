@@ -95,7 +95,11 @@ export default function SectionPanel({
     <div className="section-controls" ref={rootRef}>
       {hasSectionControls && (
         <section className="section-controls__region" aria-label="Section transitions">
-          <div className="section-controls__heading">Sections</div>
+          <div className="section-controls__heading section-controls__heading--section">
+            <span>Sections</span>
+            <strong>{getSectionTitle ? getSectionTitle(currentSectionName) : (current?.defaultDisplayName ?? currentSectionName)}</strong>
+            <span aria-hidden="true" />
+          </div>
           <div className="section-controls__body" style={{ minHeight: reservedHeights.sections || undefined }}>
             <div className="section-controls__buttons section-controls__buttons--sections">
               {nextSections.map((name) => {

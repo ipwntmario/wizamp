@@ -357,9 +357,6 @@ export default function App() {
     return () => cancelAnimationFrame(raf);
   }, [engine, isPaused]);
 
-  // derive if not "simple" track
-  const isDynamicPlayingTrack = playingTrackName && tracks[playingTrackName]?.simple === false;
-
   // Handlers
   const handlePlay = async () => {
     await engine.unlockAudio();
@@ -1038,88 +1035,9 @@ export default function App() {
       </section>
 
       <div className="playback-dock">
-      {/* Now Playing (shows what's actually loaded/ready) */}
-      {playingTrackName && (
-        <div style={{ marginTop: -8, marginBottom: 12, display: "flex", justifyContent: "center", alignItems: "baseline", gap: 8, flexWrap: "wrap", textAlign: "center" }}>
-          <span style={{ color: "#aaa", fontSize: 14, fontWeight: 400 }}>Track:</span>
-          <span style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>
-            {getTrackTitle(playingTrackName)}
-          </span>
-
-          {/* Track volume toggle */}
-          {selectedTrack && !isPassiveRole && (
-            <div style={{ position: "relative" }}>
-              <button
-                aria-label="Track volume"
-                onClick={() => setTrackVolUIOpen(o => !o)}
-                disabled={!isActiveRole}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "white",
-                  borderRadius: 8,
-                  width: 36, height: 36,                 // square 🔲
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: (!isActiveRole) ? "not-allowed" : "pointer",
-                }}
-                title="Track volume (set for all players)"
-              >
-                <Icon name={trackVolume === 1 ? "volume" : "volumeLow"} size={21} />
-              </button>
-
-              {trackVolUIOpen && (
-                <div
-                  style={{
-                    position: "absolute", top: "110%", left: 0,
-                    background: "#2a2a2a", color: "white", border: "1px solid #555", borderRadius: 8,
-                    padding: 10, minWidth: 220, zIndex: 2
-                  }}
-                >
-                  <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 6 }}>Track volume (set for all players)</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 36, textAlign: "right", opacity: 0.9 }}>
-                      {Math.round(trackVolume * 100)}
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={Math.round(trackVolume * 100)}
-                      onChange={(e) => {
-                        const v = Number(e.target.value) / 100;
-                        setTrackVolume(v);
-                        // Always apply locally right away for zero-latency feedback
-                        engine.setTrackVolume?.(v);
-                        if (playingTrackName) {
-                          if (room.onlineActive && isActiveRole) {
-                            room.requestSetTrackVolume(v); // sync to others + snapshot
-                          }
-                        }
-                      }}
-                      style={{ flex: 1 }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Section Controls */}
       {currentSectionName && !isPassiveRole && (
         <section style={{ marginBottom: 16 }}>
-          {isDynamicPlayingTrack && (
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "baseline", gap: 8, marginBottom: 8, textAlign: "center" }}>
-              <span style={{ color: "#aaa", fontSize: 14, fontWeight: 400 }}>Section:</span>
-              <span style={{ color: "#fff", fontSize: 18, fontWeight: 700 }}>
-                {currentSectionName ? getSectionTitle(playingTrackName || selectedTrack, currentSectionName) : null}
-              </span>
-            </div>
-          )}
           {!isPassiveRole && (
           <SectionPanel
             disabled={!isActiveRole && room.onlineActive}
@@ -1181,6 +1099,56 @@ export default function App() {
             <div style={{ width: `${Math.round(clipProgress * 100)}%`, height: "100%", background: "#E0C766", transition: "width 80ms linear" }} />
           </div>
         </section>
+      )}
+
+      {/* Current track title and shared track-volume control */}
+      {playingTrackName && (
+        <div className="now-playing">
+          <span className="now-playing__title">{getTrackTitle(playingTrackName)}</span>
+
+          {selectedTrack && !isPassiveRole && (
+            <div style={{ position: "relative" }}>
+              <button
+                aria-label="Track volume"
+                onClick={() => setTrackVolUIOpen(open => !open)}
+                disabled={!isActiveRole}
+                className="now-playing__volume"
+                title="Track volume (set for all players)"
+              >
+                <Icon name={trackVolume === 1 ? "volume" : "volumeLow"} size={19} />
+              </button>
+
+              {trackVolUIOpen && (
+                <div style={{
+                  position: "absolute", right: 0, bottom: "110%",
+                  background: "#2a2a2a", color: "white", border: "1px solid #555", borderRadius: 8,
+                  padding: 10, minWidth: 220, zIndex: 2
+                }}>
+                  <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 6 }}>Track volume (set for all players)</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 36, textAlign: "right", opacity: 0.9 }}>{Math.round(trackVolume * 100)}</div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={Math.round(trackVolume * 100)}
+                      onChange={(event) => {
+                        const volume = Number(event.target.value) / 100;
+                        setTrackVolume(volume);
+                        engine.setTrackVolume?.(volume);
+                        if (playingTrackName && room.onlineActive && isActiveRole) {
+                          room.requestSetTrackVolume(volume);
+                        }
+                      }}
+                      style={{ flex: 1 }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Transport Controls */}
