@@ -45,6 +45,51 @@ body {
   padding-bottom: 72px;
 }
 
+/* Stable section and mode control regions */
+.section-controls { display: grid; width: 100%; gap: 10px; }
+.section-controls__region {
+  width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgba(255,255,255,.025), rgba(8,9,14,.13));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.018);
+}
+.section-controls__heading {
+  padding: 7px 12px 6px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  color: rgba(255,255,255,.34);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.section-controls__body {
+  position: relative;
+  display: grid;
+  box-sizing: content-box;
+  place-items: center;
+  padding: 10px 12px;
+  transition: min-height .24s cubic-bezier(.2,.8,.2,1);
+}
+.section-controls__buttons { display: flex; width: 100%; flex-wrap: wrap; align-items: center; justify-content: center; }
+.section-controls__buttons--sections { gap: 12px; }
+.section-controls__buttons--modes { gap: 10px; }
+.section-control-button { border: 1px solid #555; border-radius: 8px; color: #fff; }
+.section-control-button--section { min-width: 120px; padding: 8px 14px; font-size: 14px; }
+.section-control-button--section.is-large { padding: 10px 20px; font-size: 16px; }
+.section-control-button--mode { min-width: 90px; padding: 6px 12px; font-size: 13px; }
+.section-control-button--mode.is-large { padding: 8px 14px; font-size: 15px; }
+.section-controls__measurement {
+  position: absolute;
+  z-index: -1;
+  inset: 10px 12px auto;
+  visibility: hidden;
+  pointer-events: none;
+}
+.section-controls__measurement .section-controls__buttons { position: absolute; inset: 0 0 auto; }
+
 /* Bottom status and device-volume dock */
 .utility-dock {
   position: fixed;
@@ -773,6 +818,7 @@ button:focus-visible {
   .session-panel *, .session-panel *::before, .session-panel *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
   .database-overlay, .database-modal, .rename-modal, .settings-overlay, .settings-modal { animation-duration: .01ms !important; }
   .status-bar *, .volume-control, .volume-control * { transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  .section-controls__body { transition-duration: .01ms !important; }
 }
 
 @media (max-width: 760px) {
