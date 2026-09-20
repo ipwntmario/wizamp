@@ -93,6 +93,53 @@ export default function SectionPanel({
 
   return (
     <div className="section-controls" ref={rootRef}>
+      {hasModeControls && (
+        <section className="section-controls__region" aria-label="Modes">
+          <div className="section-controls__heading">Modes</div>
+          <div className="section-controls__body" style={{ minHeight: reservedHeights.modes || undefined }}>
+            <div className="section-controls__buttons section-controls__buttons--modes">
+              {modes.map((mode) => {
+                const isActive = currentModeName === mode;
+                const isQueued = queuedModeName === mode && !isActive;
+                let background = "#8A4F9F";
+                let color = "white";
+                if (isQueued) { background = "#9E6FB4"; color = "black"; }
+                if (isActive) { background = "#E0C8E9"; color = "black"; }
+
+                const label = modeLabel(currentSectionName, mode);
+                return (
+                  <button
+                    className={`section-control-button section-control-button--mode${buttonSizeClass}`}
+                    key={mode}
+                    disabled={disabled}
+                    onClick={() => {
+                      if (disabled || isActive) return;
+                      onToggleQueuedMode(isQueued ? null : mode);
+                    }}
+                    style={{ background, color, cursor: isActive ? "default" : undefined }}
+                    title={label}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="section-controls__measurement" aria-hidden="true">
+              {layouts.map(layout => (
+                <div className="section-controls__buttons section-controls__buttons--modes" data-measure-modes key={layout.sectionKey}>
+                  {layout.modes.map(mode => (
+                    <button className={`section-control-button section-control-button--mode${buttonSizeClass}`} tabIndex={-1} key={mode}>
+                      {modeLabel(layout.sectionKey, mode)}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {hasSectionControls && (
         <section className="section-controls__region" aria-label="Section transitions">
           <div className="section-controls__heading section-controls__heading--section">
@@ -155,52 +202,6 @@ export default function SectionPanel({
         </section>
       )}
 
-      {hasModeControls && (
-        <section className="section-controls__region" aria-label="Modes">
-          <div className="section-controls__heading">Modes</div>
-          <div className="section-controls__body" style={{ minHeight: reservedHeights.modes || undefined }}>
-            <div className="section-controls__buttons section-controls__buttons--modes">
-              {modes.map((mode) => {
-                const isActive = currentModeName === mode;
-                const isQueued = queuedModeName === mode && !isActive;
-                let background = "#8A4F9F";
-                let color = "white";
-                if (isQueued) { background = "#9E6FB4"; color = "black"; }
-                if (isActive) { background = "#E0C8E9"; color = "black"; }
-
-                const label = modeLabel(currentSectionName, mode);
-                return (
-                  <button
-                    className={`section-control-button section-control-button--mode${buttonSizeClass}`}
-                    key={mode}
-                    disabled={disabled}
-                    onClick={() => {
-                      if (disabled || isActive) return;
-                      onToggleQueuedMode(isQueued ? null : mode);
-                    }}
-                    style={{ background, color, cursor: isActive ? "default" : undefined }}
-                    title={label}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="section-controls__measurement" aria-hidden="true">
-              {layouts.map(layout => (
-                <div className="section-controls__buttons section-controls__buttons--modes" data-measure-modes key={layout.sectionKey}>
-                  {layout.modes.map(mode => (
-                    <button className={`section-control-button section-control-button--mode${buttonSizeClass}`} tabIndex={-1} key={mode}>
-                      {modeLabel(layout.sectionKey, mode)}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
     </div>
   );
 }

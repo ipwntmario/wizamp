@@ -1035,6 +1035,15 @@ export default function App() {
       </section>
 
       <div className="playback-dock">
+      {/* Clip Information (progress bar from 0 to loopPoint) */}
+      {!isPassiveRole && (
+        <section style={{ marginBottom: 16 }}>
+          <div style={{ height: 10, background: "#363119", borderRadius: 6, overflow: "hidden" }} aria-label="Clip position">
+            <div style={{ width: `${Math.round(clipProgress * 100)}%`, height: "100%", background: "#E0C766", transition: "width 80ms linear" }} />
+          </div>
+        </section>
+      )}
+
       {/* Section Controls */}
       {currentSectionName && !isPassiveRole && (
         <section style={{ marginBottom: 16 }}>
@@ -1090,15 +1099,6 @@ export default function App() {
           />
         )}
       </section>
-      )}
-
-      {/* Clip Information (progress bar from 0 to loopPoint) */}
-      {!isPassiveRole && (
-        <section style={{ marginBottom: 16 }}>
-          <div style={{ height: 10, background: "#363119", borderRadius: 6, overflow: "hidden" }} aria-label="Clip position">
-            <div style={{ width: `${Math.round(clipProgress * 100)}%`, height: "100%", background: "#E0C766", transition: "width 80ms linear" }} />
-          </div>
-        </section>
       )}
 
       {/* Current track title and shared track-volume control */}
