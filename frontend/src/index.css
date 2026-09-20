@@ -506,12 +506,13 @@ body {
   transition: background .16s ease, color .16s ease;
 }
 .database-row:hover { background: rgba(255,255,255,.035); }
-.database-row--track { grid-template-columns: 28px 28px minmax(0,1fr) !important; padding-left: 20px !important; padding-right: 20px !important; }
+.database-row--track { grid-template-columns: 28px minmax(0,1fr) !important; padding-left: 20px !important; padding-right: 16px !important; }
 .database-row--track.is-expanded { background: rgba(125,105,225,.055); }
+.database-row--track.is-menu-open { z-index: 4; background: rgba(255,255,255,.045); }
 .database-row--section { grid-template-columns: 20px 28px minmax(0,1fr) !important; padding-left: 50px !important; padding-right: 20px !important; color: rgba(255,255,255,.82); }
 .database-row--mode { grid-template-columns: 18px 18px minmax(0,1fr) !important; min-height: 36px; padding-left: 77px !important; padding-right: 20px !important; color: rgba(255,255,255,.72); background: rgba(0,0,0,.08); }
 
-.database-pin, .database-expand {
+.database-expand {
   display: grid !important;
   width: 24px !important;
   height: 24px !important;
@@ -522,15 +523,15 @@ body {
   background: transparent !important;
   transition: color .16s ease, background .16s ease, border-color .16s ease, transform .16s ease;
 }
-.database-pin { border: 1px solid rgba(255,255,255,.12) !important; }
-.database-pin.is-pinned { border-color: rgba(143,124,255,.4) !important; color: #b8acff !important; background: rgba(143,124,255,.12) !important; }
 .database-expand { border: 0 !important; font-size: 16px !important; }
-.database-pin:hover, .database-expand:hover { color: #fff !important; background: rgba(255,255,255,.08) !important; }
-.database-pin:active, .database-expand:active { transform: scale(.9); }
+.database-expand:hover { color: #fff !important; background: rgba(255,255,255,.08) !important; }
+.database-expand:active { transform: scale(.9); }
 
 .database-renameable { display: flex; min-width: 0; align-items: center; gap: 7px; padding: 3px 0; cursor: pointer; touch-action: pan-y; }
 .database-renameable__content { min-width: 0; overflow-wrap: anywhere; }
 .database-label--track { font-weight: 720; }
+.database-track-main { display: flex; min-width: 0; align-items: center; gap: 5px; }
+.database-track-label { display: flex; min-width: 0; align-items: center; padding: 3px 0; cursor: pointer; overflow-wrap: anywhere; }
 .database-label--section { font-size: 13px; }
 .database-label--mode { font-size: 12px; }
 .database-label.is-dimmed { color: rgba(255,255,255,.38); }
@@ -552,6 +553,57 @@ body {
 }
 .database-renameable:hover .database-edit-button, .database-edit-button:focus-visible { opacity: 1; transform: translateX(0); pointer-events: auto; }
 .database-edit-button:hover { color: #fff; background: rgba(143,124,255,.16); border-color: transparent; }
+.database-track-actions { position: relative; display: grid; flex: 0 0 30px; place-items: center; }
+.database-track-menu-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: rgba(255,255,255,.55);
+  background: transparent;
+  opacity: 0;
+  transform: translateX(5px);
+  pointer-events: none;
+  transition: opacity .16s ease, transform .16s ease, color .16s ease, background .16s ease;
+}
+.database-row--track:hover .database-track-menu-button,
+.database-row--track.is-menu-open .database-track-menu-button,
+.database-track-menu-button:focus-visible {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+.database-track-menu-button:hover { border-color: transparent; color: #fff; background: rgba(255,255,255,.09); }
+.database-track-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  display: grid;
+  width: 124px;
+  overflow: hidden;
+  padding: 5px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 11px;
+  background: rgba(20,21,28,.98);
+  box-shadow: 0 14px 35px rgba(0,0,0,.48);
+  backdrop-filter: blur(16px);
+  animation: database-track-menu-in .15s ease both;
+}
+.database-track-menu button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  color: rgba(255,255,255,.78);
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+}
+.database-track-menu button:hover, .database-track-menu button:focus-visible { border-color: transparent; outline: none; color: #fff; background: rgba(143,124,255,.16); }
 .database-loading { display: flex; align-items: center; gap: 7px; padding-left: 78px !important; color: rgba(255,255,255,.5) !important; font-size: 12px; }
 
 .rename-overlay { padding: 16px; background: rgba(4,5,9,.7) !important; backdrop-filter: blur(7px); }
@@ -590,6 +642,7 @@ body {
 
 @keyframes database-backdrop-in { from { opacity: 0; } }
 @keyframes database-modal-in { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes database-track-menu-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
 
 h1 {
   font-size: 3.2em;
@@ -663,6 +716,7 @@ button:focus-visible {
   .database-row--section { padding-right: 14px !important; padding-left: 35px !important; }
   .database-row--mode { padding-right: 14px !important; padding-left: 57px !important; }
   .database-edit-button { display: none; }
+  .database-track-menu-button { opacity: 1; transform: none; pointer-events: auto; }
   .database-loading { padding-left: 57px !important; }
   .rename-overlay { align-items: flex-end !important; padding: 0 !important; }
   .rename-modal { width: 100% !important; border-radius: 18px 18px 0 0 !important; }
