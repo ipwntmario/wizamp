@@ -93,6 +93,46 @@ test('changing tracks releases the previous decoded buffer cache', async () => {
   assert.equal(engine._bufferCache.size, 0);
 });
 
+test('queued tracks decode into cache without replacing live playback data', async () => {
+  const engine = fixture();
+  engine.currentTrackName = 'Live';
+  engine.lastPlayingClipName = 'A';
+  const originalClips = engine.clipData;
+  const loaded = [];
+  engine._loadBufferWithCache = async (url, _context, meta) => {
+    loaded.push({ url, meta });
+    engine._bufferCache.set(url, {});
+  };
+
+  await engine.cacheTrackBuffers('Queued', {
+    Q: { file: { base: 'quiet song.ogg', intense: 'loud&fast.ogg' } },
+  }, { basePath: '/tracks/Queued Track' });
+
+  assert.equal(engine.currentTrackName, 'Live');
+  assert.equal(engine.lastPlayingClipName, 'A');
+  assert.equal(engine.clipData, originalClips);
+  assert.deepEqual(loaded.map(entry => entry.url), [
+    '/tracks/Queued%20Track/audio/quiet%20song.ogg',
+    '/tracks/Queued%20Track/audio/loud%26fast.ogg',
+  ]);
+});
+
+test('activating a queued track reuses its decoded buffers and prunes stale cache entries', async () => {
+  const engine = fixture();
+  engine.lastPlayingClipName = null;
+  engine.currentTrackName = 'Old';
+  engine.trackBase = '/tracks/Queued';
+  engine.setData({ clips: { Q: { file: 'ready.ogg' } }, sections: {}, tracks: {} });
+  const readyBuffer = { duration: 5 };
+  engine._bufferCache.set('/tracks/Queued/audio/ready.ogg', readyBuffer);
+  engine._bufferCache.set('/tracks/Old/audio/stale.ogg', {});
+
+  await engine.preloadTrack('Queued', { basePath: '/tracks/Queued', preserveCache: true });
+
+  assert.equal(engine.activeClips.Q.buffersByMode.base, readyBuffer);
+  assert.deepEqual([...engine._bufferCache.keys()], ['/tracks/Queued/audio/ready.ogg']);
+});
+
 test('catalog ordering keeps pinned tests and honors renamed titles', () => {
   const tracks = { A: { simple: true }, B: { simple: false }, C: { simple: false, test: true }, D: { test: true } };
   assert.deepEqual(orderTracks(tracks, { pinned: new Set(['C']), hideTests: true, dynamicFirst: true, sortMode: 'alpha-asc' }), ['C', 'B', 'A']);

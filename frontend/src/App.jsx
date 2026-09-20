@@ -24,7 +24,7 @@ import LeftPanel from "./components/LeftPanel";
 import DatabaseModal from "./components/DatabaseModal";
 import SettingsModal from "./components/SettingsModal";
 import Icon from "./components/Icon";
-import TrackSelector from "./components/TrackSelector";
+import TrackList from "./components/TrackList";
 import SectionPanel from "./components/SectionPanel";
 import Transport from "./components/Transport";
 import StatusBar from "./components/StatusBar";
@@ -85,6 +85,13 @@ export default function App() {
 
   // Requested autoplay target, consumed after assets and room clients are ready.
   const [autoStartRequestedFor, setAutoStartRequestedFor] = useState(null);
+  const [playRequestedFor, setPlayRequestedFor] = useState(null);
+  const playRequestedForRef = useRef(null);
+  const [queuedTrack, setQueuedTrack] = useState(null);
+  const queuedTrackRef = useRef(null);
+  const [releasedQueuedTrack, setReleasedQueuedTrack] = useState(null);
+  const preparedTracksRef = useRef(new Map());
+  const trackAssetPromisesRef = useRef(new Map());
 
   // Auto-start for late joiners
   const pendingPlayRef = useRef(null); // { trackName, sectionName, serverMs } or null
@@ -241,9 +248,19 @@ export default function App() {
           lastEndedTrackRef.current = playing || null;
           setPlayingTrackName(null);
 
+          const queued = queuedTrackRef.current;
+          if (queued) {
+            queuedTrackRef.current = null;
+            setQueuedTrack(null);
+            setAutoStartRequestedFor(null);
+            setReleasedQueuedTrack({ name: queued, shouldPlay: autoplayRef.current, id: Date.now() });
+            return;
+          }
+
           // If Auto-Play is ON, and dropdown points to a *different* track,
           // request auto-start for that track (we will start AFTER preload completes).
-          if (autoplayRef.current && sel && sel !== lastEndedTrackRef.current) {
+          if (autoplayRef.current && sel && sel !== lastEndedTrackRef.current
+              && playRequestedForRef.current !== sel) {
             setAutoStartRequestedFor(sel);
             console.log("[AUTOPLAY] requested for", sel);
           } else {
@@ -456,6 +473,20 @@ export default function App() {
     setTrackVolume(savedVol);
   }, [loadSavedTrackVolume]);
 
+  const requestPlaybackAfterLoad = useCallback((name) => {
+    playRequestedForRef.current = name;
+    setPlayRequestedFor(name);
+  }, []);
+
+  useEffect(() => {
+    if (!releasedQueuedTrack) return;
+    const { name, shouldPlay } = releasedQueuedTrack;
+    handleSelectTrack(name);
+    roomRef.current?.requestSetTrack?.(name);
+    if (shouldPlay) requestPlaybackAfterLoad(name);
+    setReleasedQueuedTrack(null);
+  }, [releasedQueuedTrack, handleSelectTrack, requestPlaybackAfterLoad]);
+
   // Called when server sends STATE { name, seed, ... }.
   // It should ONLY select/preload, never start playback here.
   const onSetTrack = useCallback(({ name, seed }) => {
@@ -483,21 +514,51 @@ export default function App() {
   }, [engine, selectedTrack, handleSelectTrack, isPlaying]);
 
 
+  const getTrackAssets = useCallback(async (name) => {
+    const cached = preparedTracksRef.current.get(name);
+    if (cached) return cached;
+    const pending = trackAssetPromisesRef.current.get(name);
+    if (pending) return pending;
+
+    const request = (async () => {
+      const basePath = tracks[name]?.basePath || `/tracks/${name}`;
+      const responses = await Promise.all(["clipData", "sectionData"].map(file => fetch(`${basePath}/${file}.json`)));
+      if (responses.some(response => !response.ok)) throw new Error("Could not load track metadata");
+      const [clipJson, sectionJson] = await Promise.all(responses.map(response => response.json()));
+      const assets = {
+        basePath,
+        clips: clipJson.clips || clipJson,
+        sections: sectionJson.sections || sectionJson,
+        buffersReady: false,
+      };
+      preparedTracksRef.current.set(name, assets);
+      return assets;
+    })();
+
+    trackAssetPromisesRef.current.set(name, request);
+    try {
+      return await request;
+    } finally {
+      trackAssetPromisesRef.current.delete(name);
+    }
+  }, [tracks]);
+
   const loadTrackAssets = useCallback(async (name) => {
     if (!name || engine.isPlaying || loadBusyRef.current) return;
     loadBusyRef.current = true;
     setIsLoadingTrack(true);
     roomRef.current?.setReady(false);
     try {
-      const basePath = tracks[name]?.basePath || `/tracks/${name}`;
-      const responses = await Promise.all(['clipData', 'sectionData'].map(file => fetch(`${basePath}/${file}.json`)));
-      if (responses.some(response => !response.ok)) throw new Error('Could not load track metadata');
-      const [clipJson, sectionJson] = await Promise.all(responses.map(response => response.json()));
+      const assets = await getTrackAssets(name);
       if (selectedTrackRef.current !== name) return;
-      const nextClips = clipJson.clips || clipJson;
-      const nextSections = sectionJson.sections || sectionJson;
+      const { clips: nextClips, sections: nextSections, basePath } = assets;
       engine.setData({ clips: nextClips, sections: nextSections, tracks });
-      await engine.preloadTrack(name, { trackVolume: loadSavedTrackVolume(name), basePath });
+      await engine.preloadTrack(name, {
+        trackVolume: loadSavedTrackVolume(name),
+        basePath,
+        preserveCache: assets.buffersReady,
+      });
+      assets.buffersReady = false;
       if (selectedTrackRef.current !== name) {
         setPlayingTrackName(null);
         return;
@@ -519,7 +580,7 @@ export default function App() {
       loadBusyRef.current = false;
       setIsLoadingTrack(false);
     }
-  }, [engine, tracks, loadSavedTrackVolume]);
+  }, [engine, tracks, loadSavedTrackVolume, getTrackAssets]);
 
   const scheduledCommandsRef = useRef(new Set());
   const cancelScheduledCommands = useCallback(() => {
@@ -865,6 +926,23 @@ export default function App() {
     setAutoStartRequestedFor(null);
   }, [autoplay, autoStartRequestedFor, selectedTrack, playingTrackName, isLoadingTrack, isActive, tracks, room, isActiveRole, engine]);
 
+  // Explicit Play actions are honored after selection/preloading, regardless of Auto-Play.
+  useEffect(() => {
+    const name = playRequestedFor;
+    if (!name || name !== selectedTrack || name !== playingTrackName || isLoadingTrack || isActive) return;
+    const sectionName = tracks[name]?.firstSection;
+    if (!sectionName) return;
+    if (room.onlineActive) {
+      if (!isActiveRole || !room.connected || !room.allReady) return;
+      room.requestPlay({ trackName: name, sectionName });
+    } else {
+      engine.playSection(sectionName);
+    }
+    playRequestedForRef.current = null;
+    setPlayRequestedFor(null);
+    setAutoStartRequestedFor(null);
+  }, [playRequestedFor, selectedTrack, playingTrackName, isLoadingTrack, isActive, tracks, room, isActiveRole, engine]);
+
   // Set user volume
   useEffect(() => {
     engine.setUserVolume?.(userMuted ? 0 : userVolume);
@@ -904,13 +982,60 @@ export default function App() {
     });
   };
 
-  function onTrackChosen(name) {
-    // local select for snappy UI
+  function selectTrackForRoom(name) {
     handleSelectTrack(name);
-
-    // if online GM, announce to room so players mirror & preload
     if (room.onlineActive && isActiveRole) {
       room.requestSetTrack?.(name);
+    }
+  }
+
+  function clearTrackQueue() {
+    queuedTrackRef.current = null;
+    setQueuedTrack(null);
+  }
+
+  async function requestTrackPlayback(name, { alwaysStop = false } = {}) {
+    if (!name || (!isActiveRole && room.onlineActive)) return;
+    await engine.unlockAudio?.();
+    clearTrackQueue();
+    selectTrackForRoom(name);
+    requestPlaybackAfterLoad(name);
+
+    if (!isActive) return;
+    if (alwaysStop || isPaused) {
+      handleStop();
+      return;
+    }
+
+    const currentSection = sections[currentSectionName];
+    if (currentSection?.type === "end") return;
+    const nextSections = Array.isArray(currentSection?.nextSection)
+      ? currentSection.nextSection
+      : (currentSection?.nextSection ? [currentSection.nextSection] : []);
+    const endSection = nextSections.find(sectionName => sections[sectionName]?.type === "end");
+    if (endSection) {
+      setQueuedSectionName(endSection);
+      if (room.onlineActive && isActiveRole) room.requestQueueSection(endSection);
+      else engine.queueSectionTransition?.(endSection);
+    } else {
+      handleStop();
+    }
+  }
+
+  async function addTrackToQueue(name) {
+    if (!name || (!isActiveRole && room.onlineActive)) return;
+    queuedTrackRef.current = name;
+    setQueuedTrack(name);
+    try {
+      const assets = await getTrackAssets(name);
+      await engine.cacheTrackBuffers(name, assets.clips, { basePath: assets.basePath });
+      assets.buffersReady = true;
+    } catch (error) {
+      if (queuedTrackRef.current === name) {
+        clearTrackQueue();
+        if (!isActive) setStatus(`Failed to queue ${getTrackTitle(name)}: ${error.message}`);
+        console.error(`[QUEUE] Failed to prepare ${name}`, error);
+      }
     }
   }
 
@@ -1025,21 +1150,23 @@ export default function App() {
 
       {/* Track Controls */}
       <section style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
-          {!isPassiveRole && (
-            <TrackSelector
-              tracks={tracks}
-              value={selectedTrack}
-              onChange={onTrackChosen}
-              disabled={!isActiveRole && room.onlineActive}
-              sortMode={dbSort}
-              dynamicFirst={dbDynamicFirst}
-              hideTests={dbHideTests}
-              pinned={pinned}
-              names={names}
-            />
-          )}
-        </div>
+        {!isPassiveRole && (
+          <TrackList
+            tracks={tracks}
+            selectedTrack={selectedTrack}
+            playingTrack={isActive ? playingTrackName : null}
+            queuedTrack={queuedTrack}
+            disabled={!isActiveRole && room.onlineActive}
+            sortMode={dbSort}
+            dynamicFirst={dbDynamicFirst}
+            hideTests={dbHideTests}
+            pinned={pinned}
+            names={names}
+            onPlay={(name) => requestTrackPlayback(name)}
+            onStopThenPlay={(name) => requestTrackPlayback(name, { alwaysStop: true })}
+            onAddToQueue={addTrackToQueue}
+          />
+        )}
       </section>
 
       <div className="playback-dock">
@@ -1113,6 +1240,7 @@ export default function App() {
       {playingTrackName && (
         <div className="now-playing">
           <span className="now-playing__title">{getTrackTitle(playingTrackName)}</span>
+          {queuedTrack && <span className="now-playing__queued">queued: {getTrackTitle(queuedTrack)}</span>}
 
           {selectedTrack && !isPassiveRole && (
             <div style={{ position: "relative" }}>

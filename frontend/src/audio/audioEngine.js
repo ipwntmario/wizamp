@@ -253,7 +253,11 @@ export class AudioEngine {
 
   // Build a safe URL for audio files: encode base path (keeps slashes) and filename.
   _buildAudioUrl(filename) {
-    const base = this.trackBase ? String(this.trackBase) : "";
+    return this._buildAudioUrlForBase(filename, this.trackBase);
+  }
+
+  _buildAudioUrlForBase(filename, basePath) {
+    const base = basePath ? String(basePath) : "";
     // encodeURI keeps "/" intact for the base path; it encodes spaces etc.
     const safeBase = encodeURI(base.replace(/([^:])\/{2,}/g, "$1/"));
     // encodeURIComponent for the file segment to handle "&", spaces, etc.
@@ -501,12 +505,25 @@ export class AudioEngine {
   }
 
   // ----- preload -----
+  async cacheTrackBuffers(trackName, clipData, { basePath } = {}) {
+    const ctx = this.ensureContext();
+    const entries = Object.entries(clipData || {});
+    for (const [clipName, clipObj] of entries) {
+      const fileMap = this._normalizeFileMap(clipObj?.file);
+      for (const [mode, filename] of Object.entries(fileMap)) {
+        if (!filename) continue;
+        const url = this._buildAudioUrlForBase(filename, basePath || `/tracks/${trackName}`);
+        await this._loadBufferWithCache(url, ctx, { trackName, clipName, mode });
+      }
+    }
+  }
+
   async preloadTrack(trackName, opts = {}) {
     const ctx = this.ensureContext();
 
     this.lastTrackName = trackName;
 
-    const { basePath, trackVolume } = opts || {};
+    const { basePath, trackVolume, preserveCache = false } = opts || {};
     if (typeof trackVolume === "number") this.setTrackVolume(trackVolume);
     this.trackBase = basePath ? String(basePath) : this.trackBase;
 
@@ -520,7 +537,7 @@ export class AudioEngine {
       return;
     }
 
-    if (!this.isPlaying && this.currentTrackName && this.currentTrackName !== trackName) {
+    if (!preserveCache && !this.isPlaying && this.currentTrackName && this.currentTrackName !== trackName) {
       this._bufferCache.clear(); // simple policy; or implement an LRU later
     }
 
@@ -529,6 +546,7 @@ export class AudioEngine {
 
     // Decode all clips + all mode files to buffers
     this.activeClips = {};
+    const activeUrls = new Set();
     const clipEntries = Object.entries(this.clipData);
 
     for (const [clipName, clipObj] of clipEntries) {
@@ -543,6 +561,7 @@ export class AudioEngine {
 
         // NEW: build a safe URL and pass clip/mode meta for precise error logs
         const url = this._buildAudioUrl(fname);
+        activeUrls.add(url);
         const buf = await this._loadBufferWithCache(url, this.audioCtx || ctx, {
           clipName,
           mode: modeKey
@@ -558,6 +577,12 @@ export class AudioEngine {
         startedAt: 0,
         offsetAtStart: 0
       };
+    }
+
+    if (preserveCache) {
+      for (const url of this._bufferCache.keys()) {
+        if (!activeUrls.has(url)) this._bufferCache.delete(url);
+      }
     }
 
     this._isPreloaded = true;
