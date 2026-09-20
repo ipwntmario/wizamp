@@ -329,54 +329,56 @@ export default function DatabaseModal({
                       {expanded ? "−" : "+"}
                     </button>
 
-                    {/* Label with pinned, test, and dynamic markers */}
-                    <div
-                      className="database-label database-label--track database-track-label"
-                      onClick={() => toggleTrack(trackName)}
-                      title="Click to expand or collapse"
-                    >
-                      <span style={{ display: "inline-flex", verticalAlign: "middle", gap: 4, marginRight: pinned?.has(trackName) || test || dyn ? 6 : 0 }}>
-                        {pinned?.has(trackName) && <Icon name="pin" size={14} />}
-                        {test && <Icon name="flask" size={14} />}
-                        {dyn && <Icon name="diamond" size={14} />}
-                      </span>
-                      {titleForTrack(trackName, t)}
-                    </div>
-
-                    <div className="database-track-actions">
-                      <button
-                        type="button"
-                        className="database-track-menu-button"
-                        aria-label={`Actions for ${titleForTrack(trackName, t)}`}
-                        aria-expanded={trackMenuOpen === trackName}
-                        onClick={() => setTrackMenuOpen((current) => current === trackName ? null : trackName)}
+                    <div className="database-track-main">
+                      {/* Label with pinned, test, and dynamic markers */}
+                      <div
+                        className="database-label database-label--track database-track-label"
+                        onClick={() => toggleTrack(trackName)}
+                        title="Click to expand or collapse"
                       >
-                        <Icon name="moreVertical" size={19} />
-                      </button>
-                      {trackMenuOpen === trackName && (
-                        <div className="database-track-menu" role="menu">
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              onTogglePin?.(trackName);
-                              setTrackMenuOpen(null);
-                            }}
-                          >
-                            {pinned?.has(trackName) ? "Unpin" : "Pin"}
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setTrackMenuOpen(null);
-                              openRenameForTrack(trackName);
-                            }}
-                          >
-                            Rename
-                          </button>
-                        </div>
-                      )}
+                        <span style={{ display: "inline-flex", verticalAlign: "middle", gap: 4, marginRight: pinned?.has(trackName) || test || dyn ? 6 : 0 }}>
+                          {pinned?.has(trackName) && <Icon name="pin" size={14} />}
+                          {test && <Icon name="flask" size={14} />}
+                          {dyn && <Icon name="diamond" size={14} />}
+                        </span>
+                        {titleForTrack(trackName, t)}
+                      </div>
+
+                      <div className="database-track-actions">
+                        <button
+                          type="button"
+                          className="database-track-menu-button"
+                          aria-label={`Actions for ${titleForTrack(trackName, t)}`}
+                          aria-expanded={trackMenuOpen === trackName}
+                          onClick={() => setTrackMenuOpen((current) => current === trackName ? null : trackName)}
+                        >
+                          <Icon name="moreVertical" size={19} />
+                        </button>
+                        {trackMenuOpen === trackName && (
+                          <div className="database-track-menu" role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                onTogglePin?.(trackName);
+                                setTrackMenuOpen(null);
+                              }}
+                            >
+                              {pinned?.has(trackName) ? "Unpin" : "Pin"}
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setTrackMenuOpen(null);
+                                openRenameForTrack(trackName);
+                              }}
+                            >
+                              Rename
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
