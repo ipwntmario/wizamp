@@ -39,6 +39,7 @@ export default function App() {
   const [sections, setSections] = useState({});
 
   const [appIconName, setAppIconName] = useState("icon1.png");
+  const [showSplash, setShowSplash] = useState(true);
 
   const [status, setStatus] = useState("Idle");
   const [statusHistory, setStatusHistory] = useState([]);
@@ -919,6 +920,21 @@ export default function App() {
       padding: 20
       }}>
 
+      {showSplash && (
+        <button
+          type="button"
+          className="app-splash"
+          onClick={() => setShowSplash(false)}
+          onAnimationEnd={() => setShowSplash(false)}
+          aria-label="Dismiss Wizamp splash screen"
+        >
+          <span className="app-splash__brand">
+            <img src={icons[appIconName] || icons["icon1.png"]} alt="" />
+            <span>Wizamp</span>
+          </span>
+        </button>
+      )}
+
       <LeftPanel
         roomState={roomState}
         setRoomId={setRoomId}
@@ -1005,15 +1021,7 @@ export default function App() {
       )}
 
       <main className="app-main" style={{ width: "100%", maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column" }}>
-      {/* Title with icon */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 0, marginBottom: 16 }}>
-        <img
-          src={icons[appIconName] || icons["icon1.png"]}
-          alt="Wizamp icon"
-          style={{ width: 64, height: 64, borderRadius: 6, objectFit: "cover" }}
-        />
-        <h1 style={{ margin: 0, color: "white" }}>Wizamp</h1>
-      </div>
+      <h1 className="visually-hidden">Wizamp</h1>
 
       {/* Track Controls */}
       <section style={{ marginBottom: 16 }}>
