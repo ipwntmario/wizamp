@@ -25,6 +25,7 @@ import DatabaseModal from "./components/DatabaseModal";
 import SettingsModal from "./components/SettingsModal";
 import Icon from "./components/Icon";
 import TrackList from "./components/TrackList";
+import QueueIndicator from "./components/QueueIndicator";
 import SectionPanel from "./components/SectionPanel";
 import Transport from "./components/Transport";
 import StatusBar from "./components/StatusBar";
@@ -40,6 +41,8 @@ export default function App() {
 
   const [appIconName, setAppIconName] = useState("icon1.png");
   const [showSplash, setShowSplash] = useState(true);
+  const [libraryExpanded, setLibraryExpanded] = useState(true);
+  const [mobileView, setMobileView] = useState("controls");
 
   const [status, setStatus] = useState("Idle");
   const [statusHistory, setStatusHistory] = useState([]);
@@ -1218,7 +1221,7 @@ export default function App() {
   }
 
   return (
-    <div style={{
+    <div className={`app-shell ${libraryExpanded ? "is-library-expanded" : "is-library-collapsed"} ${showStatus ? "" : "is-status-hidden"}`} style={{
       fontFamily: "sans-serif",
       padding: 20
       }}>
@@ -1249,7 +1252,43 @@ export default function App() {
         roomIdentities={roomIdentities}
         setRoomIdentity={setRoomIdentity}
         room={room}
+        libraryDocked={libraryExpanded && !isPassiveRole}
       />
+
+      {!isPassiveRole && (
+        <>
+          <aside className={`track-library-shell ${mobileView === "library" ? "is-mobile-active" : ""}`}>
+            <TrackList
+              tracks={tracks}
+              selectedTrack={selectedTrack}
+              playingTrack={isActive ? playingTrackName : null}
+              queuedTrack={queuedTrack}
+              autoplay={autoplay}
+              undoEffect={undoEffect}
+              disabled={!isActiveRole && room.onlineActive}
+              sortMode={dbSort}
+              dynamicFirst={dbDynamicFirst}
+              hideTests={dbHideTests}
+              pinned={pinned}
+              names={names}
+              onPlay={(name) => requestTrackPlayback(name)}
+              onStopThenPlay={(name) => requestTrackPlayback(name, { alwaysStop: true })}
+              onAddToQueue={addTrackToQueue}
+              onCollapse={() => setLibraryExpanded(false)}
+              onNavigateToControls={() => setMobileView("controls")}
+              onAutoplayChange={(next) => {
+                setAutoplay(!!next);
+                if (room.onlineActive && isActiveRole) room.requestSetAutoplay?.(!!next);
+              }}
+            />
+          </aside>
+          {!libraryExpanded && (
+            <button type="button" className="track-library-restore" onClick={() => setLibraryExpanded(true)} aria-label="Expand track library" title="Expand track library">
+              <Icon name="chevronRight" size={19} />
+            </button>
+          )}
+        </>
+      )}
 
       {/* Top-right settings access */}
       <div style={{ position: "absolute", top: 16, right: 16, display: "flex", alignItems: "center", gap: 8 }}>
@@ -1323,35 +1362,8 @@ export default function App() {
         </div>
       )}
 
-      <main className="app-main" style={{ width: "100%", maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column" }}>
+      <main className={`app-main ${mobileView === "controls" ? "is-mobile-active" : ""}`} style={{ width: "100%", maxWidth: 760, margin: "0 auto", flexDirection: "column" }}>
       <h1 className="visually-hidden">Wizamp</h1>
-
-      {/* Track Controls */}
-      <section style={{ marginBottom: 16 }}>
-        {!isPassiveRole && (
-          <TrackList
-            tracks={tracks}
-            selectedTrack={selectedTrack}
-            playingTrack={isActive ? playingTrackName : null}
-            queuedTrack={queuedTrack}
-            autoplay={autoplay}
-            undoEffect={undoEffect}
-            disabled={!isActiveRole && room.onlineActive}
-            sortMode={dbSort}
-            dynamicFirst={dbDynamicFirst}
-            hideTests={dbHideTests}
-            pinned={pinned}
-            names={names}
-            onPlay={(name) => requestTrackPlayback(name)}
-            onStopThenPlay={(name) => requestTrackPlayback(name, { alwaysStop: true })}
-            onAddToQueue={addTrackToQueue}
-            onAutoplayChange={(next) => {
-              setAutoplay(!!next);
-              if (room.onlineActive && isActiveRole) room.requestSetAutoplay?.(!!next);
-            }}
-          />
-        )}
-      </section>
 
       <div className="playback-dock">
       {/* Clip Information (progress bar from 0 to loopPoint) */}
@@ -1393,13 +1405,37 @@ export default function App() {
       </section>
       )}
 
-      {/* Current track title and shared track-volume control */}
-      {playingTrackName && (
-        <div className="now-playing">
-          <span className={`now-playing__copy ${undoEffect?.kind === "track" ? "is-undoing" : ""}`}>
-            {queuedTrack && <span className="now-playing__queued">queued: {getTrackTitle(queuedTrack)}</span>}
-            <span className="now-playing__title">{getTrackTitle(playingTrackName)}</span>
-          </span>
+      {/* Transport Controls */}
+      {!isPassiveRole && (
+        <Transport
+          disabled={!isActiveRole && room.onlineActive}
+          isLoadingTrack={isLoadingTrack}
+          isPlaying={isPlaying}
+          isPaused={isPaused}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onResume={handleResume}
+          onStop={handleStop}
+          onUndo={undoLastQueuedChange}
+          undoDisabled={undoHistory.length === 0}
+          isSimpleTrackPlaying={tracks[playingTrackName]?.simple === true}
+          unlockAudio={() => engine.unlockAudio?.()}
+          volumeControl={(
+            <VolumeControl
+              expanded={userVolumeOpen}
+              onExpandedChange={setUserVolumeOpen}
+              volume={userVolume}
+              onVolumeChange={setUserVolume}
+              muted={userMuted}
+              onMutedChange={setUserMuted}
+            />
+          )}
+        />
+      )}
+
+      {/* Playback queue and shared track-volume control */}
+        <div className={`now-playing desktop-now-playing ${undoEffect?.kind === "track" ? "is-undoing" : ""}`}>
+          <QueueIndicator currentTrack={playingTrackName} queuedTrack={queuedTrack} titleFor={getTrackTitle} />
 
           {selectedTrack && !isPassiveRole && (
             <div style={{ position: "relative" }}>
@@ -1444,27 +1480,16 @@ export default function App() {
             </div>
           )}
         </div>
-      )}
-
-      {/* Transport Controls */}
-      {!isPassiveRole && (
-        <Transport
-          disabled={!isActiveRole && room.onlineActive}
-          isLoadingTrack={isLoadingTrack}
-          isPlaying={isPlaying}
-          isPaused={isPaused}
-          onPlay={handlePlay}
-          onPause={handlePause}
-          onResume={handleResume}
-          onStop={handleStop}
-          onUndo={undoLastQueuedChange}
-          undoDisabled={undoHistory.length === 0}
-          isSimpleTrackPlaying={tracks[playingTrackName]?.simple === true}
-          unlockAudio={() => engine.unlockAudio?.()}
-        />
-      )}
       </div>
       </main>
+
+      {!isPassiveRole && (
+        <section className={`mobile-playlists-view ${mobileView === "playlists" ? "is-mobile-active" : ""}`} aria-label="Playlists">
+          <Icon name="playlist" size={32} />
+          <strong>Playlists</strong>
+          <span>Playlist support is coming later.</span>
+        </section>
+      )}
 
       {autoStartRequestedFor && (
         <div className="autoplay-pending">
@@ -1474,15 +1499,46 @@ export default function App() {
 
       <div className={`utility-dock ${showStatus ? "" : "status-hidden"}`}>
         {showStatus && <StatusBar text={displayedStatus} history={statusHistory} />}
-        <VolumeControl
-          expanded={userVolumeOpen}
-          onExpandedChange={setUserVolumeOpen}
-          volume={userVolume}
-          onVolumeChange={setUserVolume}
-          muted={userMuted}
-          onMutedChange={setUserMuted}
-        />
+        <div className="utility-dock__volume">
+          <VolumeControl
+            expanded={userVolumeOpen}
+            onExpandedChange={setUserVolumeOpen}
+            volume={userVolume}
+            onVolumeChange={setUserVolume}
+            muted={userMuted}
+            onMutedChange={setUserMuted}
+          />
+        </div>
       </div>
+
+      {!isPassiveRole && (
+        <div className="mobile-queue-shortcut">
+          <QueueIndicator
+            currentTrack={playingTrackName}
+            queuedTrack={queuedTrack}
+            titleFor={getTrackTitle}
+            expandable={false}
+            onActivate={() => setMobileView("controls")}
+          />
+        </div>
+      )}
+
+      {!isPassiveRole && (
+        <nav className="mobile-tab-bar" aria-label="Primary views">
+          <button type="button" className={mobileView === "library" ? "is-active" : ""} onClick={() => setMobileView("library")} aria-pressed={mobileView === "library"}>
+            <Icon name="library" size={18} />
+            <span>Track Library</span>
+          </button>
+          <button type="button" className={mobileView === "controls" ? "is-active" : ""} onClick={() => setMobileView("controls")} aria-pressed={mobileView === "controls"}>
+            <Icon name="controls" size={18} />
+            <span>Play Controls</span>
+          </button>
+          <button type="button" className={mobileView === "playlists" ? "is-active" : ""} onClick={() => setMobileView("playlists")} aria-pressed={mobileView === "playlists"}>
+            <Icon name="playlist" size={18} />
+            <span>Playlists</span>
+          </button>
+        </nav>
+      )}
 
       {/* Settings modal */}
       <SettingsModal

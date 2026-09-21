@@ -11,6 +11,7 @@ export default function Transport({
   undoDisabled = true,
   isSimpleTrackPlaying, // boolean, true if currently playing track is "simple"
   unlockAudio,
+  volumeControl,
 }) {
   const primaryIcon = isLoadingTrack ? "loading" : (isPlaying ? "pause" : "play");
   const primaryTitle = isLoadingTrack
@@ -26,8 +27,8 @@ export default function Transport({
   };
 
   return (
-    <section style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+    <section className="transport-row">
+      <div className="transport-controls">
         {/* Undo the most recently queued change */}
         <button
           onClick={() => onUndo?.()}
@@ -80,6 +81,7 @@ export default function Transport({
           <Icon name="stop" size={18} />
         </button>
       </div>
+      {volumeControl && <div className="transport-volume">{volumeControl}</div>}
     </section>
   );
 }

@@ -18,6 +18,7 @@ export default function LeftPanel({
   currentRoomId,
   roomIdentities,
   setRoomIdentity,
+  libraryDocked = false,
 }) {
   const [open, setOpen] = useState(() => readStr(LS_PANEL_OPEN, "true") === "true");
   const [editingRoomId, setEditingRoomId] = useState(null);
@@ -84,7 +85,7 @@ export default function LeftPanel({
 
   return (
     <aside
-      className={`session-panel ${open ? "is-open" : "is-closed"}`}
+      className={`session-panel ${open ? "is-open" : "is-closed"} ${libraryDocked ? "is-library-docked" : ""}`}
       aria-label="Session rooms"
       onPointerMove={moveTouch}
       onPointerCancel={endTouch}

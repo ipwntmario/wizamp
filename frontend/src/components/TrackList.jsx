@@ -19,26 +19,17 @@ export default function TrackList({
   onPlay,
   onStopThenPlay,
   onAddToQueue,
+  onCollapse,
+  onNavigateToControls,
 }) {
-  const [open, setOpen] = useState(false);
   const [menuTrack, setMenuTrack] = useState(null);
-  const [drawerTop, setDrawerTop] = useState(90);
   const rootRef = useRef(null);
-  const headerRef = useRef(null);
 
   const orderedNames = useMemo(() => orderTracks(tracks, {
     sortMode, dynamicFirst, hideTests, pinned, names,
   }), [tracks, sortMode, dynamicFirst, hideTests, pinned, names]);
 
   const titleFor = (name) => trackTitle(name, tracks[name], names);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const updateTop = () => setDrawerTop((headerRef.current?.getBoundingClientRect().bottom ?? 82) + 7);
-    updateTop();
-    window.addEventListener("resize", updateTop);
-    return () => window.removeEventListener("resize", updateTop);
-  }, [open]);
 
   useEffect(() => {
     if (!menuTrack) return undefined;
@@ -49,10 +40,10 @@ export default function TrackList({
     return () => document.removeEventListener("pointerdown", closeMenu);
   }, [menuTrack]);
 
-  const runAction = (action, name) => {
+  const runAction = (action, name, { navigate = true } = {}) => {
     action?.(name);
     setMenuTrack(null);
-    setOpen(false);
+    if (navigate) onNavigateToControls?.();
   };
 
   const activateFromPointer = (event, name) => {
@@ -60,26 +51,17 @@ export default function TrackList({
   };
 
   return (
-    <section className={`track-browser ${open ? "is-open" : ""}`} ref={rootRef} aria-label="Track library">
-      <button
-        type="button"
-        className="track-browser__header"
-        ref={headerRef}
-        onClick={() => { setOpen(value => !value); setMenuTrack(null); }}
-        aria-expanded={open}
-        aria-controls="track-browser-drawer"
-      >
-        <span className="track-browser__header-label">Tracks</span>
-        <strong>{selectedTrack ? titleFor(selectedTrack) : "Choose a track"}</strong>
-        <Icon name="chevronDown" size={17} />
-      </button>
-
-      {open && (
-        <div id="track-browser-drawer" className="track-browser__drawer" style={{ top: drawerTop }}>
-          <div className="track-browser__drawer-heading">
-            <span>Track library</span>
-            <small>{orderedNames.length} tracks</small>
-          </div>
+    <section className="track-library" ref={rootRef} aria-label="Track library">
+      <div className="track-library__heading">
+        <span className="track-library__heading-copy">
+          <Icon name="library" size={18} />
+          <strong>Track Library</strong>
+          <small>{orderedNames.length}</small>
+        </span>
+        <button type="button" className="track-library__collapse" onClick={onCollapse} aria-label="Collapse track library" title="Collapse track library">
+          <Icon name="chevronLeft" size={18} />
+        </button>
+      </div>
           <button
             type="button"
             className={`track-browser__autoplay ${autoplay ? "is-on" : ""}`}
@@ -146,7 +128,7 @@ export default function TrackList({
                       <div className="track-browser__menu" role="menu">
                         <button type="button" role="menuitem" onClick={() => runAction(onPlay, name)}>{autoplay ? "Play" : "Load"} after ending current track</button>
                         <button type="button" role="menuitem" onClick={() => runAction(onStopThenPlay, name)}>{autoplay ? "Play" : "Load"} after stopping current track</button>
-                        <button type="button" role="menuitem" onClick={() => runAction(onAddToQueue, name)}>Add to queue</button>
+                        <button type="button" role="menuitem" onClick={() => runAction(onAddToQueue, name, { navigate: false })}>Add to queue</button>
                       </div>
                     )}
                   </div>
@@ -155,8 +137,6 @@ export default function TrackList({
             })}
           </div>
           <div className="track-browser__hint">Tap a track on mobile · Double-click on desktop</div>
-        </div>
-      )}
     </section>
   );
 }
