@@ -19,6 +19,9 @@ export default function LeftPanel({
   roomIdentities,
   setRoomIdentity,
   libraryDocked = false,
+  canAccessDatabase = false,
+  onOpenDatabase,
+  onOpenSettings,
 }) {
   const [open, setOpen] = useState(() => readStr(LS_PANEL_OPEN, "true") === "true");
   const [editingRoomId, setEditingRoomId] = useState(null);
@@ -209,6 +212,42 @@ export default function LeftPanel({
             <UsersPanel users={users} latencyMs={latencyMs} offsetMs={offsetMs} />
           </div>
         )}
+
+        <div className="session-panel__actions" aria-label="Main menu">
+          {canAccessDatabase && (
+            <button
+              type="button"
+              className="session-panel__action"
+              onClick={() => {
+                closePanel();
+                onOpenDatabase?.();
+              }}
+            >
+              <span className="session-panel__action-icon"><Icon name="archive" size={19} /></span>
+              <span className="session-panel__action-copy">
+                <strong>Database</strong>
+                <small>Manage tracks and display names</small>
+              </span>
+              <Icon name="chevronRight" size={17} />
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="session-panel__action"
+            onClick={() => {
+              closePanel();
+              onOpenSettings?.();
+            }}
+          >
+            <span className="session-panel__action-icon"><Icon name="settings" size={19} /></span>
+            <span className="session-panel__action-copy">
+              <strong>Settings</strong>
+              <small>Playback and interface options</small>
+            </span>
+            <Icon name="chevronRight" size={17} />
+          </button>
+        </div>
       </div>
     </aside>
   );

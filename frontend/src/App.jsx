@@ -1253,6 +1253,9 @@ export default function App() {
         setRoomIdentity={setRoomIdentity}
         room={room}
         libraryDocked={libraryExpanded && !isPassiveRole}
+        canAccessDatabase={isActiveRole}
+        onOpenDatabase={() => setDbOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       {!isPassiveRole && (
@@ -1289,31 +1292,6 @@ export default function App() {
           )}
         </>
       )}
-
-      {/* Top-right settings access */}
-      <div style={{ position: "absolute", top: 16, right: 16, display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            aria-label="Settings"
-            onClick={() => setSettingsOpen(true)}
-            className="app-settings-button"
-            style={{
-              width: 32,
-              height: 32,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: "none",
-              fontSize: 20,
-              cursor: "pointer",
-            }}
-            title="Settings"
-          >
-            <Icon name="settings" size={20} />
-          </button>
-        </div>
-      </div>
 
       {audioLocked && room.onlineActive && (
         <div
@@ -1550,11 +1528,6 @@ export default function App() {
         setPauseFadeSeconds={setPauseFadeSeconds}
         showStatus={showStatus}
         setShowStatus={setShowStatus}
-        canAccessDatabase={isActiveRole}
-        onOpenDatabase={() => {
-          setSettingsOpen(false);
-          setDbOpen(true);
-        }}
         onUnlockIcon={() => setAppIconName("icon2b.png")}
       />
 

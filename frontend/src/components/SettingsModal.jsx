@@ -7,8 +7,6 @@ export default function SettingsModal({
   fadeOutSeconds, setFadeOutSeconds,
   pauseFadeSeconds, setPauseFadeSeconds,
   showStatus, setShowStatus,
-  canAccessDatabase,
-  onOpenDatabase,
   onUnlockIcon,
 }) {
   const overlayRef = useRef(null);
@@ -60,7 +58,7 @@ export default function SettingsModal({
         <header className="settings-modal__header">
           <div>
             <h2 id="settings-title" onClick={handleTitleTap}>Settings</h2>
-            <p>Personalize playback and manage your music library</p>
+            <p>Personalize playback and the listening interface</p>
           </div>
           <button className="database-icon-button" onClick={onClose} aria-label="Close settings">
             <Icon name="close" size={20} />
@@ -134,19 +132,6 @@ export default function SettingsModal({
               </span>
             </label>
           </section>
-
-          {canAccessDatabase && (
-            <section className="settings-group settings-group--library">
-              <button type="button" className="settings-database" onClick={onOpenDatabase}>
-                <span className="settings-database__icon"><Icon name="archive" size={20} /></span>
-                <span className="settings-database__copy">
-                  <strong>Database</strong>
-                  <small>Organize tracks and customize display names.</small>
-                </span>
-                <span className="settings-database__arrow" aria-hidden="true">›</span>
-              </button>
-            </section>
-          )}
         </div>
       </section>
     </div>
