@@ -997,11 +997,17 @@ export default function App() {
   async function requestTrackPlayback(name, { alwaysStop = false } = {}) {
     if (!name || (!isActiveRole && room.onlineActive)) return;
     await engine.unlockAudio?.();
-    clearTrackQueue();
-    selectTrackForRoom(name);
-    requestPlaybackAfterLoad(name);
+    if (!isActive) {
+      clearTrackQueue();
+      selectTrackForRoom(name);
+      requestPlaybackAfterLoad(name);
+      return;
+    }
 
-    if (!isActive) return;
+    // While another track is active, prepare the requested track without
+    // disturbing live playback. The Stop callback consumes this queue and
+    // applies the user's Auto-Play preference.
+    void addTrackToQueue(name);
     if (alwaysStop || isPaused) {
       handleStop();
       return;
@@ -1239,8 +1245,10 @@ export default function App() {
       {/* Current track title and shared track-volume control */}
       {playingTrackName && (
         <div className="now-playing">
-          <span className="now-playing__title">{getTrackTitle(playingTrackName)}</span>
-          {queuedTrack && <span className="now-playing__queued">queued: {getTrackTitle(queuedTrack)}</span>}
+          <span className="now-playing__copy">
+            {queuedTrack && <span className="now-playing__queued">queued: {getTrackTitle(queuedTrack)}</span>}
+            <span className="now-playing__title">{getTrackTitle(playingTrackName)}</span>
+          </span>
 
           {selectedTrack && !isPassiveRole && (
             <div style={{ position: "relative" }}>

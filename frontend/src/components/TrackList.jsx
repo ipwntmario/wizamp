@@ -127,8 +127,8 @@ export default function TrackList({
                     </button>
                     {menuTrack === name && (
                       <div className="track-browser__menu" role="menu">
-                        <button type="button" role="menuitem" onClick={() => runAction(onPlay, name)}>Play</button>
-                        <button type="button" role="menuitem" onClick={() => runAction(onStopThenPlay, name)}>Stop then play</button>
+                        <button type="button" role="menuitem" onClick={() => runAction(onPlay, name)}>Load after ending current track</button>
+                        <button type="button" role="menuitem" onClick={() => runAction(onStopThenPlay, name)}>Load after stopping current track</button>
                         <button type="button" role="menuitem" onClick={() => runAction(onAddToQueue, name)}>Add to queue</button>
                       </div>
                     )}
