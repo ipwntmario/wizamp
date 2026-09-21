@@ -83,6 +83,31 @@ test('stop cancels scheduled-position transitions', () => withTimers(timers => {
   assert.equal(engine.isPlaying, false);
 }));
 
+test('a pending stop fade can be reversed before it completes', () => withTimers(timers => {
+  const engine = fixture();
+  const ramps = [];
+  let heldAt = null;
+  engine.lastPlayingClipName = 'A';
+  engine.masterGain.gain = {
+    value: 1,
+    cancelScheduledValues() {},
+    cancelAndHoldAtTime(time) { heldAt = time; },
+    setValueAtTime() {},
+    linearRampToValueAtTime(value, time) { ramps.push({ value, time }); },
+  };
+  engine.setFadeOutSeconds(6);
+  engine.stopTrack(true);
+  assert.equal(timers.size > 0, true);
+
+  engine.audioCtx.currentTime = 3;
+  assert.equal(engine.cancelStopFade(), true);
+  assert.equal(heldAt, 3);
+  assert.deepEqual(ramps.at(-1), { value: 1, time: 5 });
+  assert.equal(engine._stopPendingUntil, 0);
+  assert.equal(engine._stopFinishTimer, null);
+  assert.equal(engine.isPlaying, true);
+}));
+
 test('changing tracks releases the previous decoded buffer cache', async () => {
   const engine = fixture();
   engine.currentTrackName = 'Old';

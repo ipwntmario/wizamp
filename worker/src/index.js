@@ -32,7 +32,7 @@ export class RoomHub {
     this.state = state;
     this.env = env;
     this.clients = new Map(); // Map<WebSocket, {id,name,role,ready,roomId}>
-    this.roomState = new Map(); // Map<roomId, { selectedTrack?: string, seed?: number, queuedSection?: string|null, queuedMode?: string|null, trackVolume?: number, playing?: { trackName:string, sectionName:string, serverMs:number } }>
+    this.roomState = new Map(); // Map<roomId, { selectedTrack?: string, seed?: number, queuedTrack?: string|null, queuedSection?: string|null, queuedMode?: string|null, trackVolume?: number, playing?: { trackName:string, sectionName:string, serverMs:number } }>
   }
 
   async fetch(req) {
@@ -103,8 +103,9 @@ export class RoomHub {
             seed: rs.seed ?? null,
             queuedSection: rs.queuedSection ?? null,
             queuedMode: rs.queuedMode ?? null,
+            queuedTrack: rs.queuedTrack ?? null,
             trackVolume: typeof rs.trackVolume === "number" ? rs.trackVolume : null,
-            autoplay: !!rs.autoplay,
+            autoplay: rs.autoplay ?? true,
             playing: rs.playing || null
           }));
         }
@@ -207,8 +208,26 @@ export class RoomHub {
         for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
         // clear playing snapshot for late joiners
         const rs = this.roomState.get(roomId) || {};
+        rs.stoppingPlaying = rs.playing || null;
         rs.playing = null;
         this.roomState.set(roomId, rs);
+        break;
+      }
+
+      case "CANCEL_STOP_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") {
+          try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only active user can cancel a stop." })); } catch {}
+          break;
+        }
+        const roomId = u.roomId;
+        const rs = this.roomState.get(roomId) || {};
+        if (rs.stoppingPlaying) rs.playing = rs.stoppingPlaying;
+        rs.stoppingPlaying = null;
+        this.roomState.set(roomId, rs);
+        console.log("[RoomHub] CANCEL_STOP_REQUEST", { roomId });
+        const payload = JSON.stringify({ type: "CANCEL_STOP" });
+        for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
         break;
       }
 
@@ -316,6 +335,34 @@ export class RoomHub {
         this.roomState.set(roomId, rs);
         console.log("[RoomHub] CLEAR_MODE_QUEUE_REQUEST", { roomId });
         const payload = JSON.stringify({ type: "CLEAR_MODE_QUEUE" });
+        for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
+        break;
+      }
+
+      case "QUEUE_TRACK_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") { try { ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only active user can queue a track." })); } catch{}; break; }
+        const roomId = u.roomId;
+        const name = String(data.name || "");
+        if (!name) break;
+        const rs = this.roomState.get(roomId) || {};
+        rs.queuedTrack = name;
+        this.roomState.set(roomId, rs);
+        console.log("[RoomHub] QUEUE_TRACK_REQUEST", { roomId, name });
+        const payload = JSON.stringify({ type: "QUEUE_TRACK", name });
+        for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
+        break;
+      }
+
+      case "CLEAR_TRACK_QUEUE_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") { try { ws.send(JSON.stringify({ type:"ERROR", code:"FORBIDDEN", message:"Only active user can clear the track queue." })); } catch{}; break; }
+        const roomId = u.roomId;
+        const rs = this.roomState.get(roomId) || {};
+        rs.queuedTrack = null;
+        this.roomState.set(roomId, rs);
+        console.log("[RoomHub] CLEAR_TRACK_QUEUE_REQUEST", { roomId });
+        const payload = JSON.stringify({ type: "CLEAR_TRACK_QUEUE" });
         for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
         break;
       }

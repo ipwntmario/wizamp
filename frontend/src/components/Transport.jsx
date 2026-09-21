@@ -7,8 +7,8 @@ export default function Transport({
   onPause,     // () => void
   onResume,    // () => void
   onStop,      // () => void
-  autoplay,
-  setAutoplay,
+  onUndo,
+  undoDisabled = true,
   isSimpleTrackPlaying, // boolean, true if currently playing track is "simple"
   unlockAudio,
 }) {
@@ -28,22 +28,15 @@ export default function Transport({
   return (
     <section style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        {/* Auto-Play toggle */}
+        {/* Undo the most recently queued change */}
         <button
-          onClick={() => setAutoplay?.(a => !a)}
-          title={autoplay ? "Auto-Play is ON" : "Auto-Play is OFF"}
-          aria-pressed={autoplay}
-          disabled={disabled}
-          style={{
-            width: 36, height: 36, borderRadius: "50%",
-            border: "1px solid #5C5C50",
-            background: autoplay ? "#9C9160" : "#363119",
-            color: "white",
-            cursor: disabled ? "not-allowed" : "pointer",
-            display: "inline-flex", alignItems: "center", justifyContent: "center"
-          }}
+          onClick={() => onUndo?.()}
+          title={undoDisabled ? "Nothing queued to undo" : "Undo last queued change"}
+          aria-label="Undo last queued change"
+          disabled={disabled || undoDisabled}
+          className="transport-undo"
         >
-          <Icon name={autoplay ? "autoplayOn" : "autoplayOff"} size={20} />
+          <Icon name="undo" size={20} />
         </button>
 
         {/* Play/Pause/Resume */}

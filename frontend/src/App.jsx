@@ -60,7 +60,8 @@ export default function App() {
   // Mirrors of state for engine callbacks (avoid stale closures)
   const selectedTrackRef = useRef(null);
   const playingTrackNameRef = useRef(null);
-  const autoplayRef = useRef(false);
+  const autoplayRef = useRef(true);
+  const isActiveRoleRef = useRef(true);
   const roomRef = useRef(null);
   const loadBusyRef = useRef(false);
   const failedLoadRef = useRef(null);
@@ -74,7 +75,10 @@ export default function App() {
 
   // Autoplay setting (persist)
   const [autoplay, setAutoplay] = useState(() => {
-    try { return localStorage.getItem("wizamp_autoplay") === "1"; } catch { return false; }
+    try {
+      const stored = localStorage.getItem("wizamp_autoplay");
+      return stored == null ? true : stored === "1";
+    } catch { return true; }
   });
   useEffect(() => {
     try { localStorage.setItem("wizamp_autoplay", autoplay ? "1" : "0"); } catch {}
@@ -119,6 +123,25 @@ export default function App() {
   // Modes
   const [currentModeName, setCurrentModeName] = useState("base");
   const [queuedModeName, setQueuedModeName] = useState(null);
+  const queuedSectionRef = useRef(null);
+  const queuedModeRef = useRef(null);
+
+  // Session-only undo history for pending queue changes.
+  const [undoHistory, setUndoHistory] = useState([]);
+  const undoHistoryRef = useRef([]);
+  const [undoEffect, setUndoEffect] = useState(null);
+  const undoEffectTimerRef = useRef(null);
+  const updateUndoHistory = useCallback((updater) => {
+    const next = typeof updater === "function" ? updater(undoHistoryRef.current) : updater;
+    undoHistoryRef.current = next;
+    setUndoHistory(next);
+  }, []);
+  const dropUndoActions = useCallback((kind) => {
+    updateUndoHistory(previous => previous.filter(action => action.kind !== kind));
+  }, [updateUndoHistory]);
+  const dropUndoActionsMatching = useCallback((predicate) => {
+    updateUndoHistory(previous => previous.filter(action => !predicate(action)));
+  }, [updateUndoHistory]);
 
   // Users panel
 
@@ -252,6 +275,10 @@ export default function App() {
           if (queued) {
             queuedTrackRef.current = null;
             setQueuedTrack(null);
+            dropUndoActions("track");
+            if (roomRef.current?.onlineActive && isActiveRoleRef.current) {
+              roomRef.current.requestClearTrackQueue?.();
+            }
             setAutoStartRequestedFor(null);
             setReleasedQueuedTrack({ name: queued, shouldPlay: autoplayRef.current, id: Date.now() });
             return;
@@ -271,10 +298,23 @@ export default function App() {
         }
       },
 
-      onSectionChange: (name) => setCurrentSectionName(name ?? null),
-      onQueueChange: (nameOrNull) => setQueuedSectionName(nameOrNull),
+      onSectionChange: (name) => {
+        setCurrentSectionName(name ?? null);
+        if (name && engineRef.current?.sectionData?.[name]?.type === "end") {
+          dropUndoActionsMatching(action => action.kind === "track");
+        }
+      },
+      onQueueChange: (nameOrNull) => {
+        queuedSectionRef.current = nameOrNull;
+        setQueuedSectionName(nameOrNull);
+        if (!nameOrNull) dropUndoActions("section");
+      },
       onModeChange: (modeName) => setCurrentModeName(modeName || "base"),
-      onModeQueueChange: (nameOrNull) => setQueuedModeName(nameOrNull),
+      onModeQueueChange: (nameOrNull) => {
+        queuedModeRef.current = nameOrNull;
+        setQueuedModeName(nameOrNull);
+        if (!nameOrNull) dropUndoActions("mode");
+      },
       onReady: () => { setClipProgress(0); },  // when engine finished resetting
     });
   }
@@ -321,6 +361,10 @@ export default function App() {
   useEffect(() => { selectedTrackRef.current = selectedTrack; }, [selectedTrack]);
   useEffect(() => { playingTrackNameRef.current = playingTrackName; }, [playingTrackName]);
   useEffect(() => { autoplayRef.current = autoplay; }, [autoplay]);
+  useEffect(() => { isActiveRoleRef.current = isActiveRole; }, [isActiveRole]);
+  useEffect(() => { queuedSectionRef.current = queuedSectionName; }, [queuedSectionName]);
+  useEffect(() => { queuedModeRef.current = queuedModeName; }, [queuedModeName]);
+  useEffect(() => () => clearTimeout(undoEffectTimerRef.current), []);
 
   // Track select menu persist (optional)
   useEffect(() => { localStorage.setItem("wizamp_dbSort", dbSort); }, [dbSort]);
@@ -482,10 +526,10 @@ export default function App() {
     if (!releasedQueuedTrack) return;
     const { name, shouldPlay } = releasedQueuedTrack;
     handleSelectTrack(name);
-    roomRef.current?.requestSetTrack?.(name);
+    if (roomRef.current?.onlineActive && isActiveRole) roomRef.current.requestSetTrack?.(name);
     if (shouldPlay) requestPlaybackAfterLoad(name);
     setReleasedQueuedTrack(null);
-  }, [releasedQueuedTrack, handleSelectTrack, requestPlaybackAfterLoad]);
+  }, [releasedQueuedTrack, handleSelectTrack, requestPlaybackAfterLoad, isActiveRole]);
 
   // Called when server sends STATE { name, seed, ... }.
   // It should ONLY select/preload, never start playback here.
@@ -607,6 +651,10 @@ export default function App() {
     engine.stopTrack(fade);
   }, [engine, cancelScheduledCommands]);
 
+  const onCancelStopMsg = useCallback(() => {
+    engine.cancelStopFade?.();
+  }, [engine]);
+
   const onResumeMsg = useCallback((serverMs) => {
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
     scheduleAtServerTime(serverMs, () => {
@@ -620,28 +668,57 @@ export default function App() {
       console.log("[SYNC][IGNORE] dropping stale QUEUE_SECTION during hydrate window:", name);
       return;
     }
+    queuedSectionRef.current = name || null;
     setQueuedSectionName(name || null);
     if (name) engine.queueSectionTransition?.(name);
   }, [engine, shouldIgnoreQueues]);
 
   const onClearSectionQueueMsg = useCallback(() => {
+    queuedSectionRef.current = null;
     setQueuedSectionName(null);
     engine.clearQueuedSection?.();
-  }, [engine]);
+    dropUndoActions("section");
+  }, [engine, dropUndoActions]);
 
   const onQueueModeMsg = useCallback((name) => {
     if (shouldIgnoreQueues()) {
       console.log("[SYNC][IGNORE] dropping stale QUEUE_MODE during hydrate window:", name);
       return;
     }
+    queuedModeRef.current = name || null;
     setQueuedModeName(name || null);
     if (name) engine.queueModeTransition?.(name);
   }, [engine, shouldIgnoreQueues]);
 
   const onClearModeQueueMsg = useCallback(() => {
+    queuedModeRef.current = null;
     setQueuedModeName(null);
     engine.clearQueuedMode?.();
-  }, [engine]);
+    dropUndoActions("mode");
+  }, [engine, dropUndoActions]);
+
+  const onQueueTrackMsg = useCallback((name) => {
+    if (!name) return;
+    const alreadyQueued = queuedTrackRef.current === name;
+    queuedTrackRef.current = name;
+    setQueuedTrack(name);
+    if (alreadyQueued) return;
+    void (async () => {
+      try {
+        const assets = await getTrackAssets(name);
+        await engine.cacheTrackBuffers(name, assets.clips, { basePath: assets.basePath });
+        assets.buffersReady = true;
+      } catch (queueError) {
+        console.error(`[QUEUE] Failed to prepare ${name}`, queueError);
+      }
+    })();
+  }, [engine, getTrackAssets]);
+
+  const onClearTrackQueueMsg = useCallback(() => {
+    queuedTrackRef.current = null;
+    setQueuedTrack(null);
+    dropUndoActions("track");
+  }, [dropUndoActions]);
 
   const onSetTrackVolumeMsg = useCallback((vol) => {
     const v = Math.max(0, Math.min(1, Number(vol)));
@@ -869,11 +946,14 @@ export default function App() {
     },
     onPause: onPauseMsg,
     onStop: onStopMsg,
+    onCancelStop: onCancelStopMsg,
     onResume: onResumeMsg,
     onQueueSection: onQueueSectionMsg,
     onClearSectionQueue: onClearSectionQueueMsg,
     onQueueMode: onQueueModeMsg,
     onClearModeQueue: onClearModeQueueMsg,
+    onQueueTrack: onQueueTrackMsg,
+    onClearTrackQueue: onClearTrackQueueMsg,
     onSetTrackVolume: onSetTrackVolumeMsg,
     onSetAutoplay: onSetAutoplayMsg,
     onSyncRequest: onSyncRequestMsg,
@@ -989,16 +1069,92 @@ export default function App() {
     }
   }
 
-  function clearTrackQueue() {
+  function pushUndoAction(action) {
+    if (action.previous === action.next && !action.sectionNext) return;
+    updateUndoHistory(previous => [...previous, { ...action, id: `${Date.now()}-${previous.length}` }]);
+  }
+
+  function showUndoEffect(action) {
+    clearTimeout(undoEffectTimerRef.current);
+    setUndoEffect({ ...action, effectId: Date.now() });
+    undoEffectTimerRef.current = setTimeout(() => setUndoEffect(null), 720);
+  }
+
+  function applySectionQueue(nameOrNull, { broadcast = true } = {}) {
+    queuedSectionRef.current = nameOrNull;
+    setQueuedSectionName(nameOrNull);
+    if (broadcast && room.onlineActive && isActiveRole) {
+      if (nameOrNull) room.requestQueueSection(nameOrNull);
+      else room.requestClearSectionQueue();
+    } else if (!room.onlineActive) {
+      if (nameOrNull) engine.queueSectionTransition?.(nameOrNull);
+      else engine.clearQueuedSection?.();
+    }
+  }
+
+  function applyModeQueue(nameOrNull, { broadcast = true } = {}) {
+    queuedModeRef.current = nameOrNull;
+    setQueuedModeName(nameOrNull);
+    if (broadcast && room.onlineActive && isActiveRole) {
+      if (nameOrNull) room.requestQueueMode(nameOrNull);
+      else room.requestClearModeQueue();
+    } else if (!room.onlineActive) {
+      if (nameOrNull) engine.queueModeTransition?.(nameOrNull);
+      else engine.clearQueuedMode?.();
+    }
+  }
+
+  function queueSectionSelection(nameOrNull) {
+    const previous = queuedSectionRef.current;
+    if (previous === nameOrNull) return;
+    if (nameOrNull) pushUndoAction({ kind: "section", previous, next: nameOrNull });
+    else dropUndoActions("section");
+    applySectionQueue(nameOrNull);
+  }
+
+  function queueModeSelection(nameOrNull) {
+    const previous = queuedModeRef.current;
+    if (previous === nameOrNull) return;
+    if (nameOrNull) pushUndoAction({ kind: "mode", previous, next: nameOrNull });
+    else dropUndoActions("mode");
+    applyModeQueue(nameOrNull);
+  }
+
+  function clearTrackQueue({ broadcast = false, pruneHistory = true } = {}) {
     queuedTrackRef.current = null;
     setQueuedTrack(null);
+    if (pruneHistory) dropUndoActions("track");
+    if (broadcast && room.onlineActive && isActiveRole) room.requestClearTrackQueue?.();
+  }
+
+  function undoLastQueuedChange() {
+    const action = undoHistoryRef.current.at(-1);
+    if (!action) return;
+    updateUndoHistory(previous => previous.slice(0, -1));
+    showUndoEffect(action);
+
+    if (action.kind === "track") {
+      if (action.stopPending) {
+        if (room.onlineActive && isActiveRole) room.requestCancelStop?.();
+        else engine.cancelStopFade?.();
+      }
+      if (action.previous) void addTrackToQueue(action.previous, { recordUndo: false });
+      else clearTrackQueue({ broadcast: true, pruneHistory: false });
+      if (action.sectionNext && queuedSectionRef.current === action.sectionNext) {
+        applySectionQueue(action.sectionPrevious || null);
+      }
+    } else if (action.kind === "section") {
+      applySectionQueue(action.previous || null);
+    } else if (action.kind === "mode") {
+      applyModeQueue(action.previous || null);
+    }
   }
 
   async function requestTrackPlayback(name, { alwaysStop = false } = {}) {
     if (!name || (!isActiveRole && room.onlineActive)) return;
     await engine.unlockAudio?.();
     if (!isActive) {
-      clearTrackQueue();
+      clearTrackQueue({ broadcast: true });
       selectTrackForRoom(name);
       requestPlaybackAfterLoad(name);
       return;
@@ -1007,38 +1163,54 @@ export default function App() {
     // While another track is active, prepare the requested track without
     // disturbing live playback. The Stop callback consumes this queue and
     // applies the user's Auto-Play preference.
-    void addTrackToQueue(name);
+    const previousTrack = queuedTrackRef.current;
+    const previousSection = queuedSectionRef.current;
+    void addTrackToQueue(name, { recordUndo: false });
     if (alwaysStop || isPaused) {
+      pushUndoAction({ kind: "track", previous: previousTrack, next: name, stopPending: true });
       handleStop();
       return;
     }
 
     const currentSection = sections[currentSectionName];
-    if (currentSection?.type === "end") return;
+    if (currentSection?.type === "end") {
+      dropUndoActions("track");
+      return;
+    }
     const nextSections = Array.isArray(currentSection?.nextSection)
       ? currentSection.nextSection
       : (currentSection?.nextSection ? [currentSection.nextSection] : []);
     const endSection = nextSections.find(sectionName => sections[sectionName]?.type === "end");
     if (endSection) {
-      setQueuedSectionName(endSection);
-      if (room.onlineActive && isActiveRole) room.requestQueueSection(endSection);
-      else engine.queueSectionTransition?.(endSection);
+      applySectionQueue(endSection);
+      pushUndoAction({
+        kind: "track",
+        previous: previousTrack,
+        next: name,
+        sectionPrevious: previousSection,
+        sectionNext: endSection,
+      });
     } else {
+      pushUndoAction({ kind: "track", previous: previousTrack, next: name, stopPending: true });
       handleStop();
     }
   }
 
-  async function addTrackToQueue(name) {
+  async function addTrackToQueue(name, { recordUndo = true, broadcast = true } = {}) {
     if (!name || (!isActiveRole && room.onlineActive)) return;
+    const previous = queuedTrackRef.current;
+    if (previous === name) return;
+    if (recordUndo) pushUndoAction({ kind: "track", previous, next: name });
     queuedTrackRef.current = name;
     setQueuedTrack(name);
+    if (broadcast && room.onlineActive && isActiveRole) room.requestQueueTrack?.(name);
     try {
       const assets = await getTrackAssets(name);
       await engine.cacheTrackBuffers(name, assets.clips, { basePath: assets.basePath });
       assets.buffersReady = true;
     } catch (error) {
       if (queuedTrackRef.current === name) {
-        clearTrackQueue();
+        clearTrackQueue({ broadcast: true });
         if (!isActive) setStatus(`Failed to queue ${getTrackTitle(name)}: ${error.message}`);
         console.error(`[QUEUE] Failed to prepare ${name}`, error);
       }
@@ -1162,6 +1334,8 @@ export default function App() {
             selectedTrack={selectedTrack}
             playingTrack={isActive ? playingTrackName : null}
             queuedTrack={queuedTrack}
+            autoplay={autoplay}
+            undoEffect={undoEffect}
             disabled={!isActiveRole && room.onlineActive}
             sortMode={dbSort}
             dynamicFirst={dbDynamicFirst}
@@ -1171,6 +1345,10 @@ export default function App() {
             onPlay={(name) => requestTrackPlayback(name)}
             onStopThenPlay={(name) => requestTrackPlayback(name, { alwaysStop: true })}
             onAddToQueue={addTrackToQueue}
+            onAutoplayChange={(next) => {
+              setAutoplay(!!next);
+              if (room.onlineActive && isActiveRole) room.requestSetAutoplay?.(!!next);
+            }}
           />
         )}
       </section>
@@ -1194,22 +1372,9 @@ export default function App() {
             sections={sections}
             currentSectionName={currentSectionName}
             queuedSectionName={queuedSectionName}
+            undoEffect={undoEffect}
             autoLockedTargets={autoLockedTargets}
-            onToggleQueuedSection={(nameOrNull) => {
-              setQueuedSectionName(nameOrNull);
-              if (room.onlineActive && isActiveRole) {
-                if (nameOrNull) room.requestQueueSection(nameOrNull);
-                else room.requestClearSectionQueue();
-              } else {
-                if (nameOrNull) {
-
-                  engine.queueSectionTransition?.(nameOrNull);
-                } else {
-
-                  engine.clearQueuedSection?.();
-                }
-              }
-            }}
+            onToggleQueuedSection={queueSectionSelection}
             largeButtons
             // NEW name resolvers
             getSectionTitle={(sectionKey) =>
@@ -1222,21 +1387,7 @@ export default function App() {
                 : getModeLabel(playingTrackName || selectedTrack, sectionKey, modeNameOrBase)}
             currentModeName={currentModeName}     // "base" or a mode name
             queuedModeName={queuedModeName}       // null or a mode name
-            onToggleQueuedMode={(nameOrNull) => {
-              setQueuedModeName(nameOrNull);
-              if (room.onlineActive && isActiveRole) {
-                if (nameOrNull) room.requestQueueMode(nameOrNull);
-                else room.requestClearModeQueue();
-              } else {
-                if (nameOrNull) {
-
-                  engine.queueModeTransition?.(nameOrNull);
-                } else {
-
-                  engine.clearQueuedMode?.();
-                }
-              }
-            }}
+            onToggleQueuedMode={queueModeSelection}
           />
         )}
       </section>
@@ -1245,7 +1396,7 @@ export default function App() {
       {/* Current track title and shared track-volume control */}
       {playingTrackName && (
         <div className="now-playing">
-          <span className="now-playing__copy">
+          <span className={`now-playing__copy ${undoEffect?.kind === "track" ? "is-undoing" : ""}`}>
             {queuedTrack && <span className="now-playing__queued">queued: {getTrackTitle(queuedTrack)}</span>}
             <span className="now-playing__title">{getTrackTitle(playingTrackName)}</span>
           </span>
@@ -1306,14 +1457,8 @@ export default function App() {
           onPause={handlePause}
           onResume={handleResume}
           onStop={handleStop}
-          autoplay={autoplay}
-          setAutoplay={(fnOrBool) => {
-            const next = typeof fnOrBool === "function" ? !!fnOrBool(autoplay) : !!fnOrBool;
-            setAutoplay(next); // optimistic
-            if (room.onlineActive && isActiveRole) {
-              room.requestSetAutoplay?.(next);
-            }
-          }}
+          onUndo={undoLastQueuedChange}
+          undoDisabled={undoHistory.length === 0}
           isSimpleTrackPlaying={tracks[playingTrackName]?.simple === true}
           unlockAudio={() => engine.unlockAudio?.()}
         />

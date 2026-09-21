@@ -56,6 +56,8 @@ export class AudioEngine {
     // stop-state
     this._stopPendingUntil = 0;     // audio time when the global stop fade ends (0 = none)
     this._stopFinishTimer = null;   // timeout id for finishing stop
+    this._stopFadeStartedAt = 0;
+    this._stopFadeDuration = 0;
 
     // RNG/debug
     this._seed = null;
@@ -442,6 +444,8 @@ export class AudioEngine {
       this._stopFinishTimer = null;
     }
     this._stopPendingUntil = 0;
+    this._stopFadeStartedAt = 0;
+    this._stopFadeDuration = 0;
 
     // Stop all clip sources immediately
     try {
@@ -639,6 +643,8 @@ export class AudioEngine {
       } catch {}
 
       this._stopPendingUntil = now + fade;
+      this._stopFadeStartedAt = now;
+      this._stopFadeDuration = fade;
 
       this._stopFinishTimer = setTimeout(() => {
         // Finalize stop
@@ -661,6 +667,8 @@ export class AudioEngine {
         } catch {}
 
         this._stopPendingUntil = 0;
+        this._stopFadeStartedAt = 0;
+        this._stopFadeDuration = 0;
         this._stopFinishTimer = null;
         this.onStatus?.("Stopped");
       }, fade * 1000 + 50);
@@ -680,9 +688,40 @@ export class AudioEngine {
         this.masterGain.gain.setValueAtTime(this.userGain, now);
       } catch {}
       this._stopPendingUntil = 0;
+      this._stopFadeStartedAt = 0;
+      this._stopFadeDuration = 0;
       this._stopFinishTimer = null;
       this.onStatus?.("Stopped");
     }
+  }
+
+  cancelStopFade() {
+    if (!this.audioCtx || !this.masterGain || !this._stopFinishTimer) return false;
+    const now = this.audioCtx.currentTime;
+    if (!this._stopPendingUntil || now >= this._stopPendingUntil) return false;
+
+    clearTimeout(this._stopFinishTimer);
+    this._stopFinishTimer = null;
+
+    const elapsed = Math.max(0, now - (this._stopFadeStartedAt || now));
+    const duration = Math.max(0.06, Math.min(this._stopFadeDuration || elapsed || 0.06, elapsed || 0.06));
+    const gain = this.masterGain.gain;
+    try {
+      if (typeof gain.cancelAndHoldAtTime === "function") {
+        gain.cancelAndHoldAtTime(now);
+      } else {
+        const total = Math.max(0.001, this._stopFadeDuration || 0.001);
+        const estimated = (this.userGain ?? 1) * Math.max(0, 1 - (elapsed / total));
+        gain.cancelScheduledValues(now);
+        gain.setValueAtTime(estimated, now);
+      }
+      gain.linearRampToValueAtTime(this.userGain ?? 1, now + duration);
+    } catch {}
+
+    this._stopPendingUntil = 0;
+    this._stopFadeStartedAt = 0;
+    this._stopFadeDuration = 0;
+    return true;
   }
 
   _fadeOutAndStopClip(name, durSec = 0.03) {

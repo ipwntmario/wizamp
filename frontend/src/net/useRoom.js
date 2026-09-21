@@ -7,8 +7,9 @@ const PING_INTERVAL_MS = 5000;
 
 export function useRoom({
   onlineEnabled, roomId, displayName, role,
-  onPlay, onSetTrack, onPause, onStop, onResume,
+  onPlay, onSetTrack, onPause, onStop, onCancelStop, onResume,
   onQueueSection, onClearSectionQueue, onQueueMode, onClearModeQueue,
+  onQueueTrack, onClearTrackQueue,
   onSetTrackVolume,
   onSetAutoplay,
   onSyncRequest, onSyncState
@@ -24,6 +25,8 @@ export function useRoom({
   useEffect(() => { onPauseRef.current = onPause; }, [onPause]);
   const onStopRef = useRef(onStop);
   useEffect(() => { onStopRef.current = onStop; }, [onStop]);
+  const onCancelStopRef = useRef(onCancelStop);
+  useEffect(() => { onCancelStopRef.current = onCancelStop; }, [onCancelStop]);
   const onResumeRef = useRef(onResume);
   useEffect(() => { onResumeRef.current = onResume; }, [onResume]);
   const onQueueSectionRef = useRef(onQueueSection);
@@ -34,6 +37,10 @@ export function useRoom({
   useEffect(() => { onQueueModeRef.current = onQueueMode; }, [onQueueMode]);
   const onClearModeQueueRef = useRef(onClearModeQueue);
   useEffect(() => { onClearModeQueueRef.current = onClearModeQueue; }, [onClearModeQueue]);
+  const onQueueTrackRef = useRef(onQueueTrack);
+  useEffect(() => { onQueueTrackRef.current = onQueueTrack; }, [onQueueTrack]);
+  const onClearTrackQueueRef = useRef(onClearTrackQueue);
+  useEffect(() => { onClearTrackQueueRef.current = onClearTrackQueue; }, [onClearTrackQueue]);
   const onSetTrackVolumeRef = useRef(onSetTrackVolume);
   useEffect(() => { onSetTrackVolumeRef.current = onSetTrackVolume; }, [onSetTrackVolume]);
   const onSetAutoplayRef = useRef(onSetAutoplay);
@@ -139,6 +146,7 @@ export function useRoom({
         // hydrate queued UI from snapshot (optional)
         if (data.queuedSection != null) onQueueSectionRef.current?.(String(data.queuedSection));
         if (data.queuedMode != null) onQueueModeRef.current?.(String(data.queuedMode));
+        if (data.queuedTrack != null) onQueueTrackRef.current?.(String(data.queuedTrack));
         if (typeof data.trackVolume === "number") {
           onSetTrackVolumeRef.current?.(data.trackVolume);
         }
@@ -160,6 +168,8 @@ export function useRoom({
         onPauseRef.current?.();
       } else if (data.type === "STOP") {
         onStopRef.current?.(!!data.fade);
+      } else if (data.type === "CANCEL_STOP") {
+        onCancelStopRef.current?.();
       } else if (data.type === "RESUME") {
         onResumeRef.current?.(Number(data.serverMs));
       } else if (data.type === "QUEUE_SECTION") {
@@ -170,6 +180,10 @@ export function useRoom({
         onQueueModeRef.current?.(String(data.name || ""));
       } else if (data.type === "CLEAR_MODE_QUEUE") {
         onClearModeQueueRef.current?.();
+      } else if (data.type === "QUEUE_TRACK") {
+        onQueueTrackRef.current?.(String(data.name || ""));
+      } else if (data.type === "CLEAR_TRACK_QUEUE") {
+        onClearTrackQueueRef.current?.();
       } else if (data.type === "SET_TRACK_VOLUME") {
         onSetTrackVolumeRef.current?.(Math.max(0, Math.min(1, Number(data.volume))));
       } else if (data.type === "SET_AUTOPLAY") {
@@ -242,6 +256,11 @@ export function useRoom({
     ws.send(JSON.stringify({ type: "STOP_REQUEST", fade }));
   }, []);
 
+  const requestCancelStop = useCallback(() => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "CANCEL_STOP_REQUEST" }));
+  }, []);
+
   const requestResume = useCallback(({ delayMs = 2000 } = {}) => {
     const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
     const serverMs = serverNowMs() + Math.max(0, delayMs);
@@ -272,6 +291,16 @@ export function useRoom({
   const requestClearModeQueue = useCallback(() => {
     const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({ type: "CLEAR_MODE_QUEUE_REQUEST" }));
+  }, []);
+
+  const requestQueueTrack = useCallback((name) => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "QUEUE_TRACK_REQUEST", name }));
+  }, []);
+
+  const requestClearTrackQueue = useCallback(() => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "CLEAR_TRACK_QUEUE_REQUEST" }));
   }, []);
 
   const requestSetTrackVolume = useCallback((volume) => {
@@ -308,12 +337,15 @@ export function useRoom({
     requestPlay,
     requestPause,
     requestStop,
+    requestCancelStop,
     requestResume,
     requestSetTrack,
     requestQueueSection,
     requestClearSectionQueue,
     requestQueueMode,
     requestClearModeQueue,
+    requestQueueTrack,
+    requestClearTrackQueue,
     requestSetTrackVolume,
     requestSetAutoplay,
     requestSync,

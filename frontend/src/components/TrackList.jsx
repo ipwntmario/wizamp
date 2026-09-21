@@ -7,6 +7,9 @@ export default function TrackList({
   selectedTrack,
   playingTrack,
   queuedTrack,
+  autoplay,
+  onAutoplayChange,
+  undoEffect,
   disabled,
   sortMode = "alpha-asc",
   dynamicFirst = true,
@@ -77,6 +80,20 @@ export default function TrackList({
             <span>Track library</span>
             <small>{orderedNames.length} tracks</small>
           </div>
+          <button
+            type="button"
+            className={`track-browser__autoplay ${autoplay ? "is-on" : ""}`}
+            onClick={() => onAutoplayChange?.(!autoplay)}
+            disabled={disabled}
+            aria-pressed={autoplay}
+            title={autoplay ? "Auto-Play is ON" : "Auto-Play is OFF"}
+          >
+            <span className="track-browser__autoplay-copy">
+              <Icon name={autoplay ? "autoplayOn" : "autoplayOff"} size={19} />
+              <span>Auto-Play</span>
+            </span>
+            <strong>{autoplay ? "On" : "Off"}</strong>
+          </button>
           <div className="track-browser__list">
             {orderedNames.map((name) => {
               const track = tracks[name];
@@ -89,7 +106,7 @@ export default function TrackList({
               ].filter(Boolean);
 
               return (
-                <div className={`track-browser__row ${selectedTrack === name ? "is-selected" : ""} ${isPlaying ? "is-playing" : ""}`} key={name}>
+                <div className={`track-browser__row ${selectedTrack === name ? "is-selected" : ""} ${isPlaying ? "is-playing" : ""} ${undoEffect?.kind === "track" && undoEffect?.next === name ? "is-undoing" : ""}`} key={name}>
                   <button
                     type="button"
                     className="track-browser__track"
@@ -127,8 +144,8 @@ export default function TrackList({
                     </button>
                     {menuTrack === name && (
                       <div className="track-browser__menu" role="menu">
-                        <button type="button" role="menuitem" onClick={() => runAction(onPlay, name)}>Load after ending current track</button>
-                        <button type="button" role="menuitem" onClick={() => runAction(onStopThenPlay, name)}>Load after stopping current track</button>
+                        <button type="button" role="menuitem" onClick={() => runAction(onPlay, name)}>{autoplay ? "Play" : "Load"} after ending current track</button>
+                        <button type="button" role="menuitem" onClick={() => runAction(onStopThenPlay, name)}>{autoplay ? "Play" : "Load"} after stopping current track</button>
                         <button type="button" role="menuitem" onClick={() => runAction(onAddToQueue, name)}>Add to queue</button>
                       </div>
                     )}
