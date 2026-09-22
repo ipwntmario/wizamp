@@ -309,6 +309,7 @@ body {
 
 /* Stable section and mode control regions */
 .section-controls { display: grid; width: 100%; gap: 10px; }
+.section-controls.is-replacement-locked .section-control-button { opacity: .45 !important; cursor: not-allowed !important; }
 .section-controls__region {
   width: 100%;
   overflow: hidden;

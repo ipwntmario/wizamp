@@ -2,6 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AudioEngine } from '../src/audio/audioEngine.js';
 import { orderTracks } from '../src/data/trackOrdering.js';
+import { findSelectableEndSection } from '../src/data/sectionTransitions.js';
+
+test('track replacement chooses only an end section available from the current buttons', () => {
+  const sections = {
+    Main: { nextSection: ['Bridge', 'End'] },
+    Bridge: { nextSection: ['Main'] },
+    AutoBridge: { type: 'auto', nextSection: 'End' },
+    End: { type: 'end' },
+  };
+  assert.equal(findSelectableEndSection(sections, 'Main'), 'End');
+  assert.equal(findSelectableEndSection(sections, 'Bridge'), null);
+  assert.equal(findSelectableEndSection(sections, 'AutoBridge'), null);
+  assert.equal(findSelectableEndSection(sections, 'End'), null);
+});
 
 function fixture() {
   const engine = new AudioEngine();

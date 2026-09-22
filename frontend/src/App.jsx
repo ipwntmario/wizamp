@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback  } from "react";
 import { AudioEngine } from "./audio/audioEngine";
 import { useMusicData } from "./data/useMusicData";
+import { findSelectableEndSection, getAutoLockedTargets } from "./data/sectionTransitions";
 import { useSession } from "./net/useSession";
 import { useRoom } from "./net/useRoom";
 import LeftPanel from "./components/LeftPanel";
@@ -101,6 +102,12 @@ export default function App() {
   const playRequestedForRef = useRef(null);
   const [queuedTrack, setQueuedTrack] = useState(null);
   const queuedTrackRef = useRef(null);
+  const [replacementPending, setReplacementPending] = useState(false);
+  const replacementPendingRef = useRef(false);
+  const setReplacementInProgress = useCallback((pending) => {
+    replacementPendingRef.current = pending;
+    setReplacementPending(pending);
+  }, []);
   const [releasedQueuedTrack, setReleasedQueuedTrack] = useState(null);
   const preparedTracksRef = useRef(new Map());
   const trackAssetPromisesRef = useRef(new Map());
@@ -271,6 +278,7 @@ export default function App() {
         console.log("[STATUS]", s);
         setStatus(s);
         if (s === "Stopped") {
+          setReplacementInProgress(false);
           setClipProgress(0);
 
           const playing = playingTrackNameRef.current;
@@ -408,10 +416,7 @@ export default function App() {
   }, [selectedTrack, tracks]);
 
   const autoLockedTargets = useMemo(() => {
-    const section = sections[currentSectionName];
-    if (section?.type !== "auto") return [];
-    const ns = section?.nextSection;
-    return Array.isArray(ns) ? ns : (ns ? [ns] : []);
+    return getAutoLockedTargets(sections[currentSectionName]);
   }, [sections, currentSectionName]);
 
   // RAF loop for clip progress
@@ -461,6 +466,7 @@ export default function App() {
   };
 
   const handlePause = () => {
+    if (replacementPendingRef.current) return;
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
     if (room.onlineActive && isActiveRole) {
       room.requestPause();
@@ -470,6 +476,7 @@ export default function App() {
   };
 
   const handleResume = async () => {
+    if (replacementPendingRef.current) return;
     await engine.unlockAudio();
     if (engine.getAudioState?.() !== "running") {
       setAudioLocked(true);
@@ -656,12 +663,14 @@ export default function App() {
   const onStopMsg = useCallback((fade = true) => {
     cancelScheduledCommands();
     pendingPlayRef.current = null;
+    if (queuedTrackRef.current) setReplacementInProgress(true);
     engine.stopTrack(fade);
-  }, [engine, cancelScheduledCommands]);
+  }, [engine, cancelScheduledCommands, setReplacementInProgress]);
 
   const onCancelStopMsg = useCallback(() => {
     engine.cancelStopFade?.();
-  }, [engine]);
+    setReplacementInProgress(false);
+  }, [engine, setReplacementInProgress]);
 
   const onResumeMsg = useCallback((serverMs) => {
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
@@ -678,15 +687,21 @@ export default function App() {
     }
     queuedSectionRef.current = name || null;
     setQueuedSectionName(name || null);
+    if (name && queuedTrackRef.current && sections[name]?.type === "end") {
+      setReplacementInProgress(true);
+    } else if (name && sections[name]?.type !== "end" && sections[engine.currentSectionName]?.type !== "end") {
+      setReplacementInProgress(false);
+    }
     if (name) engine.queueSectionTransition?.(name);
-  }, [engine, shouldIgnoreQueues]);
+  }, [engine, shouldIgnoreQueues, sections, setReplacementInProgress]);
 
   const onClearSectionQueueMsg = useCallback(() => {
     queuedSectionRef.current = null;
     setQueuedSectionName(null);
     engine.clearQueuedSection?.();
     dropUndoActions("section");
-  }, [engine, dropUndoActions]);
+    if (sections[engine.currentSectionName]?.type !== "end") setReplacementInProgress(false);
+  }, [engine, dropUndoActions, sections, setReplacementInProgress]);
 
   const onQueueModeMsg = useCallback((name) => {
     if (shouldIgnoreQueues()) {
@@ -710,6 +725,7 @@ export default function App() {
     const alreadyQueued = queuedTrackRef.current === name;
     queuedTrackRef.current = name;
     setQueuedTrack(name);
+    if (sections[queuedSectionRef.current]?.type === "end") setReplacementInProgress(true);
     if (alreadyQueued) return;
     void (async () => {
       try {
@@ -720,7 +736,7 @@ export default function App() {
         console.error(`[QUEUE] Failed to prepare ${name}`, queueError);
       }
     })();
-  }, [engine, getTrackAssets]);
+  }, [engine, getTrackAssets, sections, setReplacementInProgress]);
 
   const onClearTrackQueueMsg = useCallback(() => {
     queuedTrackRef.current = null;
@@ -1113,6 +1129,7 @@ export default function App() {
   }
 
   function queueSectionSelection(nameOrNull) {
+    if (replacementPendingRef.current) return;
     const previous = queuedSectionRef.current;
     if (previous === nameOrNull) return;
     if (nameOrNull) pushUndoAction({ kind: "section", previous, next: nameOrNull });
@@ -1121,6 +1138,7 @@ export default function App() {
   }
 
   function queueModeSelection(nameOrNull) {
+    if (replacementPendingRef.current) return;
     const previous = queuedModeRef.current;
     if (previous === nameOrNull) return;
     if (nameOrNull) pushUndoAction({ kind: "mode", previous, next: nameOrNull });
@@ -1142,6 +1160,7 @@ export default function App() {
     showUndoEffect(action);
 
     if (action.kind === "track") {
+      if (action.stopPending || action.sectionNext) setReplacementInProgress(false);
       if (action.stopPending) {
         if (room.onlineActive && isActiveRole) room.requestCancelStop?.();
         else engine.cancelStopFade?.();
@@ -1168,11 +1187,17 @@ export default function App() {
       return;
     }
 
+    if (replacementPendingRef.current) {
+      void addTrackToQueue(name);
+      return;
+    }
+
     // While another track is active, prepare the requested track without
     // disturbing live playback. The Stop callback consumes this queue and
     // applies the user's Auto-Play preference.
     const previousTrack = queuedTrackRef.current;
     const previousSection = queuedSectionRef.current;
+    setReplacementInProgress(true);
     void addTrackToQueue(name, { recordUndo: false });
     if (alwaysStop || isPaused) {
       pushUndoAction({ kind: "track", previous: previousTrack, next: name, stopPending: true });
@@ -1185,10 +1210,7 @@ export default function App() {
       dropUndoActions("track");
       return;
     }
-    const nextSections = Array.isArray(currentSection?.nextSection)
-      ? currentSection.nextSection
-      : (currentSection?.nextSection ? [currentSection.nextSection] : []);
-    const endSection = nextSections.find(sectionName => sections[sectionName]?.type === "end");
+    const endSection = findSelectableEndSection(sections, currentSectionName);
     if (endSection) {
       applySectionQueue(endSection);
       pushUndoAction({
@@ -1400,7 +1422,8 @@ export default function App() {
         <section style={{ marginBottom: 16 }}>
           {!isPassiveRole && (
           <SectionPanel
-            disabled={!isActiveRole && room.onlineActive}
+            disabled={replacementPending || (!isActiveRole && room.onlineActive)}
+            replacementLocked={replacementPending}
             sections={sections}
             currentSectionName={currentSectionName}
             queuedSectionName={queuedSectionName}
@@ -1429,7 +1452,8 @@ export default function App() {
       {!isPassiveRole && (
         <Transport
           disabled={!isActiveRole && room.onlineActive}
-          primaryDisabled={!playingTrackName}
+          primaryDisabled={!playingTrackName || replacementPending}
+          stopDisabled={replacementPending}
           isLoadingTrack={isLoadingTrack}
           isPlaying={isPlaying}
           isPaused={isPaused}
@@ -1532,7 +1556,7 @@ export default function App() {
             navigationControl={(
               <PrimaryPlaybackButton
                 compact
-                disabled={!playingTrackName || (!isActiveRole && room.onlineActive)}
+                disabled={!playingTrackName || replacementPending || (!isActiveRole && room.onlineActive)}
                 isLoadingTrack={isLoadingTrack}
                 isPlaying={isPlaying}
                 isPaused={isPaused}

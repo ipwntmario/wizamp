@@ -7,6 +7,7 @@ function toArray(value) {
 export default function SectionPanel({
   sections,
   disabled = false,
+  replacementLocked = false,
   currentSectionName,
   queuedSectionName,
   autoLockedTargets = [],
@@ -93,7 +94,7 @@ export default function SectionPanel({
   const buttonSizeClass = largeButtons ? " is-large" : "";
 
   return (
-    <div className="section-controls" ref={rootRef}>
+    <div className={`section-controls ${replacementLocked ? "is-replacement-locked" : ""}`} ref={rootRef}>
       {hasModeControls && (
         <section className="section-controls__region" aria-label="Modes">
           <div className="section-controls__heading">Modes</div>

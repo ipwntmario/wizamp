@@ -4,6 +4,7 @@ import PrimaryPlaybackButton from "./PrimaryPlaybackButton";
 export default function Transport({
   disabled = false,
   primaryDisabled = false,
+  stopDisabled = false,
   isLoadingTrack,
   isPlaying,
   isPaused,
@@ -45,15 +46,16 @@ export default function Transport({
 
         {/* Stop */}
         <button
-          onClick={() => { if (!disabled && isPlaying) onStop?.(); }}
+          onClick={() => { if (!disabled && !stopDisabled && isPlaying) onStop?.(); }}
           title="Stop"
-          disabled={disabled || !isPlaying}
+          disabled={disabled || stopDisabled || !isPlaying}
           style={{
             width: 40, height: 40, borderRadius: "50%",
             border: "1px solid #555",
-            background: (isPlaying && isSimpleTrackPlaying) ? "#B34745" : "#363119",
+            background: (isPlaying && isSimpleTrackPlaying && !stopDisabled) ? "#B34745" : "#363119",
             color: "white",
-            cursor: (disabled || !isPlaying) ? "not-allowed" : "pointer",
+            opacity: stopDisabled ? 0.4 : 1,
+            cursor: (disabled || stopDisabled || !isPlaying) ? "not-allowed" : "pointer",
             display: "inline-flex", alignItems: "center", justifyContent: "center"
           }}
         >
