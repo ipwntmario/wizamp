@@ -91,6 +91,16 @@ export default function TrackList({
                 <div className={`track-browser__row ${selectedTrack === name ? "is-selected" : ""} ${isPlaying ? "is-playing" : ""} ${undoEffect?.kind === "track" && undoEffect?.next === name ? "is-undoing" : ""}`} key={name}>
                   <button
                     type="button"
+                    className="track-browser__quick-action"
+                    disabled={disabled}
+                    onClick={() => runAction(onPlay, name)}
+                    aria-label={`${autoplay ? "Play" : "Load"} ${titleFor(name)}`}
+                    title={autoplay ? "Play track" : "Load track"}
+                  >
+                    <Icon name={autoplay ? "play" : "chevronRight"} size={16} />
+                  </button>
+                  <button
+                    type="button"
                     className="track-browser__track"
                     disabled={disabled}
                     onPointerUp={(event) => activateFromPointer(event, name)}
