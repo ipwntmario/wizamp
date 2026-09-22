@@ -24,6 +24,7 @@ import { useRoom } from "./net/useRoom";
 import LeftPanel from "./components/LeftPanel";
 import DatabaseModal from "./components/DatabaseModal";
 import SettingsModal from "./components/SettingsModal";
+import AboutModal from "./components/AboutModal";
 import Icon from "./components/Icon";
 import TrackList from "./components/TrackList";
 import QueueIndicator from "./components/QueueIndicator";
@@ -43,7 +44,7 @@ export default function App() {
   const [sections, setSections] = useState({});
 
   const [appIconName, setAppIconName] = useState("icon1.png");
-  const [showSplash, setShowSplash] = useState(true);
+  const [showAbout, setShowAbout] = useState(true);
   const [libraryExpanded, setLibraryExpanded] = useState(true);
   const [libraryWidth, setLibraryWidth] = useState(300);
   const [resizingLibrary, setResizingLibrary] = useState(false);
@@ -119,7 +120,7 @@ export default function App() {
 
   // Status visibility (persist)
   const [showStatus, setShowStatus] = useState(() => {
-    try { return localStorage.getItem("wizamp_showStatus") !== "0"; } catch { return true; }
+    try { return localStorage.getItem("wizamp_showStatus") === "1"; } catch { return false; }
   });
   useEffect(() => {
     try { localStorage.setItem("wizamp_showStatus", showStatus ? "1" : "0"); } catch {}
@@ -173,7 +174,7 @@ export default function App() {
   // App.jsx (top-level state)
   const [dbSort, setDbSort] = useState(() => localStorage.getItem("wizamp_dbSort") || "alpha-asc");
   const [dbDynamicFirst, setDbDynamicFirst] = useState(() => localStorage.getItem("wizamp_dbDynamicFirst") !== "false"); // default true
-  const [dbHideTests, setDbHideTests] = useState(() => localStorage.getItem("wizamp_dbHideTests") === "true");
+  const [dbHideTests, setDbHideTests] = useState(() => localStorage.getItem("wizamp_dbHideTests") !== "false");
 
   // Pinned tracks (persisted as array of names)
   const [pinned, setPinned] = useState(() => {
@@ -1273,20 +1274,7 @@ export default function App() {
       "--library-width": `${libraryWidth}px`
       }}>
 
-      {showSplash && (
-        <button
-          type="button"
-          className="app-splash"
-          onClick={() => setShowSplash(false)}
-          onAnimationEnd={() => setShowSplash(false)}
-          aria-label="Dismiss Wizamp splash screen"
-        >
-          <span className="app-splash__brand">
-            <img src={icons[appIconName] || icons["icon1.png"]} alt="" />
-            <span>Wizamp</span>
-          </span>
-        </button>
-      )}
+      <AboutModal open={showAbout} onClose={() => setShowAbout(false)} iconSrc={icons[appIconName] || icons["icon1.png"]} />
 
       <LeftPanel
         roomState={roomState}
@@ -1605,6 +1593,7 @@ export default function App() {
         showStatus={showStatus}
         setShowStatus={setShowStatus}
         onUnlockIcon={() => setAppIconName("icon2b.png")}
+        onOpenAbout={() => { setSettingsOpen(false); setShowAbout(true); }}
       />
 
       {/* Database modal */}

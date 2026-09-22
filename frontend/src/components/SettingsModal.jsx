@@ -8,6 +8,7 @@ export default function SettingsModal({
   pauseFadeSeconds, setPauseFadeSeconds,
   showStatus, setShowStatus,
   onUnlockIcon,
+  onOpenAbout,
 }) {
   const overlayRef = useRef(null);
   const mouseDownOnOverlay = useRef(false);
@@ -132,6 +133,14 @@ export default function SettingsModal({
               </span>
             </label>
           </section>
+          <button type="button" className="settings-about-link" onClick={onOpenAbout}>
+            <span className="settings-group__icon"><Icon name="info" size={18} /></span>
+            <span className="settings-about-link__copy">
+              <strong>About Wizamp</strong>
+              <small>Version 0.2 and update notes</small>
+            </span>
+            <Icon name="chevronRight" size={18} />
+          </button>
         </div>
       </section>
     </div>
