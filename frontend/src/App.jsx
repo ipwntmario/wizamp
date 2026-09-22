@@ -1259,6 +1259,13 @@ export default function App() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
+  const playingTrack = tracks[playingTrackName];
+  const isStopHighlighted = playingTrack?.simple === true || (
+    playingTrack?.simple === false &&
+    Object.keys(sections).length > 0 &&
+    !Object.values(sections).some((section) => section?.type === "end")
+  );
+
   return (
     <div className={`app-shell ${libraryExpanded ? "is-library-expanded" : "is-library-collapsed"} ${resizingLibrary ? "is-library-resizing" : ""} ${showStatus ? "" : "is-status-hidden"}`} style={{
       fontFamily: "sans-serif",
@@ -1463,7 +1470,7 @@ export default function App() {
           onStop={handleStop}
           onUndo={undoLastQueuedChange}
           undoDisabled={undoHistory.length === 0}
-          isSimpleTrackPlaying={tracks[playingTrackName]?.simple === true}
+          isStopHighlighted={isStopHighlighted}
           unlockAudio={() => engine.unlockAudio?.()}
           rightControl={selectedTrack ? (
             <TrackVolumeControl
