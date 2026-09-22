@@ -122,7 +122,7 @@ export default function SettingsModal({
                 <strong>Show status bar</strong>
                 <small>Display the current loading and playback state.</small>
               </span>
-              <span className="settings-switch">
+              <span className="toggle-switch">
                 <input
                   type="checkbox"
                   checked={!!showStatus}

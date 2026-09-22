@@ -242,23 +242,29 @@ export default function DatabaseModal({
             </select>
           </label>
 
-          <label className="database-check" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <input
-              type="checkbox"
-              checked={dynamicFirst}
-              onChange={(e) => onChangeDynamicFirst?.(e.target.checked)}
-              disabled={!(sortMode === "alpha-asc" || sortMode === "alpha-desc")}
-            />
-            <span style={{ color: "#bbb" }}>keep dynamic on top</span>
+          <label className="database-check">
+            <span>Keep dynamic on top</span>
+            <span className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={dynamicFirst}
+                onChange={(e) => onChangeDynamicFirst?.(e.target.checked)}
+                disabled={!(sortMode === "alpha-asc" || sortMode === "alpha-desc")}
+              />
+              <span aria-hidden="true" />
+            </span>
           </label>
 
-          <label className="database-check" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <input
-              type="checkbox"
-              checked={hideTests}
-              onChange={(e) => onChangeHideTests?.(e.target.checked)}
-            />
-            <span style={{ color: "#bbb" }}>hide test tracks</span>
+          <label className="database-check">
+            <span>Hide test tracks</span>
+            <span className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={hideTests}
+                onChange={(e) => onChangeHideTests?.(e.target.checked)}
+              />
+              <span aria-hidden="true" />
+            </span>
           </label>
 
           <div className="database-toolbar__actions" style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
