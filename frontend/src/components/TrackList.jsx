@@ -14,22 +14,33 @@ function OverflowTrackTitle({ children, active }) {
     const title = titleRef.current;
     if (!viewport || !title) return undefined;
 
-    const distance = Math.ceil(title.scrollWidth - viewport.clientWidth);
-    if (distance <= 1) return undefined;
+    let animation;
+    let measuredWidth = -1;
+    const updateAnimation = () => {
+      const viewportWidth = viewport.clientWidth;
+      if (viewportWidth === measuredWidth) return;
+      measuredWidth = viewportWidth;
+      animation?.cancel();
+      const distance = Math.ceil(title.scrollWidth - viewportWidth);
+      if (distance <= 1) return;
 
-    const travelMs = Math.max(2200, (distance / 18) * 1000);
-    const totalMs = travelMs + 1000;
-    const animation = title.animate([
-      { transform: "translateX(0)", offset: 0 },
-      { transform: `translateX(-${distance}px)`, offset: travelMs / totalMs },
-      { transform: `translateX(-${distance}px)`, offset: 1 },
-    ], {
-      duration: totalMs,
-      iterations: Infinity,
-      easing: "linear",
-    });
+      const travelMs = Math.max(2200, (distance / 18) * 1000);
+      const totalMs = travelMs + 1000;
+      animation = title.animate([
+        { transform: "translateX(0)", offset: 0 },
+        { transform: `translateX(-${distance}px)`, offset: travelMs / totalMs },
+        { transform: `translateX(-${distance}px)`, offset: 1 },
+      ], {
+        duration: totalMs,
+        iterations: Infinity,
+        easing: "linear",
+      });
+    };
+    updateAnimation();
+    const observer = new ResizeObserver(updateAnimation);
+    observer.observe(viewport);
 
-    return () => animation.cancel();
+    return () => { observer.disconnect(); animation?.cancel(); };
   }, [marqueeActive, children]);
 
   return (

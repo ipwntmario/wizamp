@@ -44,6 +44,9 @@ export default function App() {
   const [appIconName, setAppIconName] = useState("icon1.png");
   const [showSplash, setShowSplash] = useState(true);
   const [libraryExpanded, setLibraryExpanded] = useState(true);
+  const [libraryWidth, setLibraryWidth] = useState(300);
+  const [resizingLibrary, setResizingLibrary] = useState(false);
+  const libraryResizePointer = useRef(null);
   const [mobileView, setMobileView] = useState("controls");
 
   const [status, setStatus] = useState("Idle");
@@ -1222,10 +1225,23 @@ export default function App() {
     }
   }
 
+  const clampLibraryWidth = (width) => Math.max(300, Math.min(Math.round(width), Math.floor(window.innerWidth * 0.6)));
+  const resizeLibrary = (event) => {
+    if (libraryResizePointer.current !== event.pointerId) return;
+    setLibraryWidth(clampLibraryWidth(event.clientX - 12));
+  };
+  const finishLibraryResize = (event) => {
+    if (libraryResizePointer.current !== event.pointerId) return;
+    libraryResizePointer.current = null;
+    setResizingLibrary(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
   return (
-    <div className={`app-shell ${libraryExpanded ? "is-library-expanded" : "is-library-collapsed"} ${showStatus ? "" : "is-status-hidden"}`} style={{
+    <div className={`app-shell ${libraryExpanded ? "is-library-expanded" : "is-library-collapsed"} ${resizingLibrary ? "is-library-resizing" : ""} ${showStatus ? "" : "is-status-hidden"}`} style={{
       fontFamily: "sans-serif",
-      padding: 20
+      padding: 20,
+      "--library-width": `${libraryWidth}px`
       }}>
 
       {showSplash && (
@@ -1284,6 +1300,30 @@ export default function App() {
               onAutoplayChange={(next) => {
                 setAutoplay(!!next);
                 if (room.onlineActive && isActiveRole) room.requestSetAutoplay?.(!!next);
+              }}
+            />
+            <button
+              type="button"
+              className="track-library__resize-handle"
+              aria-label="Resize track library"
+              title="Drag or use arrow keys to resize track library"
+              onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                libraryResizePointer.current = event.pointerId;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setResizingLibrary(true);
+              }}
+              onPointerMove={resizeLibrary}
+              onPointerUp={finishLibraryResize}
+              onPointerCancel={finishLibraryResize}
+              onLostPointerCapture={() => {
+                libraryResizePointer.current = null;
+                setResizingLibrary(false);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                event.preventDefault();
+                setLibraryWidth(width => clampLibraryWidth(width + (event.key === "ArrowRight" ? 20 : -20)));
               }}
             />
           </aside>

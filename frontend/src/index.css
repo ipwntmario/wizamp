@@ -101,7 +101,7 @@ body {
   bottom: 12px;
   left: 12px;
   display: flex;
-  width: 300px;
+  width: min(var(--library-width, 300px), 60vw);
   min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,.11);
@@ -121,6 +121,13 @@ body {
   pointer-events: none;
   transition: opacity .18s ease, transform .3s cubic-bezier(.4,0,.2,1), visibility 0s .3s;
 }
+.track-library__resize-handle { position: absolute; z-index: 5; top: 0; right: 0; bottom: 0; width: 9px; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: ew-resize; touch-action: none; }
+.track-library__resize-handle::after { position: absolute; top: 50%; right: 2px; width: 3px; height: 42px; border-radius: 3px; background: rgba(255,255,255,.18); content: ""; opacity: 0; transform: translateY(-50%); transition: opacity .16s ease, background .16s ease; }
+.track-library__resize-handle:hover::after, .track-library__resize-handle:focus-visible::after, .app-shell.is-library-resizing .track-library__resize-handle::after { opacity: 1; background: rgba(224,199,102,.75); }
+.track-library__resize-handle:focus { outline: none; }
+.track-library__resize-handle:focus-visible { outline: 2px solid #e0c766; outline-offset: -2px; }
+.app-shell.is-library-resizing, .app-shell.is-library-resizing * { cursor: ew-resize !important; user-select: none !important; }
+.app-shell.is-library-resizing .app-main, .app-shell.is-library-resizing .session-panel__bar { transition: none !important; }
 .track-library { display: flex; width: 100%; min-height: 0; flex-direction: column; }
 .track-library__heading {
   display: flex;
@@ -158,10 +165,10 @@ body {
   backdrop-filter: blur(16px);
   animation: library-restore-in .25s ease both;
 }
-.app-shell.is-library-expanded .utility-dock { left: 324px; }
+.app-shell.is-library-expanded .utility-dock { left: calc(min(var(--library-width, 300px), 60vw) + 24px); }
 .app-shell.is-library-expanded .app-main {
-  width: min(760px, calc(100vw - 364px)) !important;
-  margin-right: max(20px, calc((100vw - 1084px) / 2)) !important;
+  width: min(760px, calc(100vw - min(var(--library-width, 300px), 60vw) - 64px)) !important;
+  margin-right: max(20px, calc((100vw - min(var(--library-width, 300px), 60vw) - 784px) / 2)) !important;
   margin-left: auto !important;
 }
 .app-main { display: flex; transition: width .3s cubic-bezier(.2,.8,.2,1), margin .3s cubic-bezier(.2,.8,.2,1); }
@@ -1232,6 +1239,7 @@ button:focus-visible {
   .app-shell.is-status-hidden .track-library-shell { bottom: calc(121px + env(safe-area-inset-bottom, 0px)); }
   .track-library__heading { min-height: 48px; flex-basis: 48px; }
   .track-library__collapse, .track-library-restore { display: none; }
+  .track-library__resize-handle { display: none; }
   .track-browser__list { padding: 5px; }
   .track-browser__menu { width: min(224px, calc(100vw - 54px)); }
   .mobile-playlists-view {
@@ -1301,7 +1309,8 @@ button:focus-visible {
 
 @media (min-width: 761px) {
   .session-panel__hint { display: none; }
-  .session-panel.is-closed.is-library-docked .session-panel__bar { width: 300px; border-radius: 14px 14px 0 0; }
+  .session-panel.is-closed.is-library-docked { --panel-width: min(var(--library-width, 300px), 60vw); }
+  .session-panel.is-closed.is-library-docked .session-panel__bar { width: min(var(--library-width, 300px), 60vw); border-radius: 14px 14px 0 0; }
 }
 
 @media (prefers-color-scheme: light) {
