@@ -2,6 +2,43 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { orderTracks, trackTitle } from "../data/trackOrdering";
 import Icon from "./Icon";
 
+function OverflowTrackTitle({ children, active }) {
+  const viewportRef = useRef(null);
+  const titleRef = useRef(null);
+  const motionAllowed = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const marqueeActive = active && motionAllowed;
+
+  useEffect(() => {
+    if (!marqueeActive) return undefined;
+    const viewport = viewportRef.current;
+    const title = titleRef.current;
+    if (!viewport || !title) return undefined;
+
+    const distance = Math.ceil(title.scrollWidth - viewport.clientWidth);
+    if (distance <= 1) return undefined;
+
+    const travelMs = Math.max(2200, (distance / 18) * 1000);
+    const totalMs = travelMs + 1000;
+    const animation = title.animate([
+      { transform: "translateX(0)", offset: 0 },
+      { transform: `translateX(-${distance}px)`, offset: travelMs / totalMs },
+      { transform: `translateX(-${distance}px)`, offset: 1 },
+    ], {
+      duration: totalMs,
+      iterations: Infinity,
+      easing: "linear",
+    });
+
+    return () => animation.cancel();
+  }, [marqueeActive, children]);
+
+  return (
+    <span className="track-browser__title-viewport" ref={viewportRef}>
+      <strong ref={titleRef} className={marqueeActive ? "is-marquee-active" : ""}>{children}</strong>
+    </span>
+  );
+}
+
 export default function TrackList({
   tracks,
   selectedTrack,
@@ -23,7 +60,11 @@ export default function TrackList({
   onNavigateToControls,
 }) {
   const [menuTrack, setMenuTrack] = useState(null);
+  const [hoveredTrack, setHoveredTrack] = useState(null);
+  const [heldTrack, setHeldTrack] = useState(null);
   const rootRef = useRef(null);
+  const longPressTimerRef = useRef(null);
+  const pointerGestureRef = useRef(null);
 
   const orderedNames = useMemo(() => orderTracks(tracks, {
     sortMode, dynamicFirst, hideTests, pinned, names,
@@ -40,14 +81,56 @@ export default function TrackList({
     return () => document.removeEventListener("pointerdown", closeMenu);
   }, [menuTrack]);
 
+  useEffect(() => () => clearTimeout(longPressTimerRef.current), []);
+
   const runAction = (action, name, { navigate = true } = {}) => {
     action?.(name);
     setMenuTrack(null);
     if (navigate) onNavigateToControls?.();
   };
 
-  const activateFromPointer = (event, name) => {
-    if (event.pointerType === "touch" || event.pointerType === "pen") runAction(onPlay, name);
+  const startLongPress = (event, name) => {
+    if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+    clearTimeout(longPressTimerRef.current);
+    pointerGestureRef.current = {
+      name,
+      x: event.clientX,
+      y: event.clientY,
+      canceled: false,
+      longPress: false,
+    };
+    longPressTimerRef.current = setTimeout(() => {
+      const gesture = pointerGestureRef.current;
+      if (!gesture || gesture.name !== name || gesture.canceled) return;
+      gesture.longPress = true;
+      setHeldTrack(name);
+    }, 500);
+  };
+
+  const updateLongPress = (event, name) => {
+    const gesture = pointerGestureRef.current;
+    if (!gesture || gesture.name !== name || gesture.longPress) return;
+    if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 10) {
+      gesture.canceled = true;
+      clearTimeout(longPressTimerRef.current);
+    }
+  };
+
+  const finishPointer = (event, name) => {
+    const gesture = pointerGestureRef.current;
+    clearTimeout(longPressTimerRef.current);
+    pointerGestureRef.current = null;
+    setHeldTrack(null);
+    if (gesture?.name === name && (event.pointerType === "touch" || event.pointerType === "pen")
+        && !gesture?.longPress && !gesture?.canceled) {
+      runAction(onPlay, name);
+    }
+  };
+
+  const cancelLongPress = () => {
+    clearTimeout(longPressTimerRef.current);
+    pointerGestureRef.current = null;
+    setHeldTrack(null);
   };
 
   return (
@@ -88,7 +171,12 @@ export default function TrackList({
               ].filter(Boolean);
 
               return (
-                <div className={`track-browser__row ${selectedTrack === name ? "is-selected" : ""} ${isPlaying ? "is-playing" : ""} ${undoEffect?.kind === "track" && undoEffect?.next === name ? "is-undoing" : ""}`} key={name}>
+                <div
+                  className={`track-browser__row ${selectedTrack === name ? "is-selected" : ""} ${isPlaying ? "is-playing" : ""} ${undoEffect?.kind === "track" && undoEffect?.next === name ? "is-undoing" : ""}`}
+                  key={name}
+                  onPointerEnter={(event) => { if (event.pointerType === "mouse") setHoveredTrack(name); }}
+                  onPointerLeave={(event) => { if (event.pointerType === "mouse") setHoveredTrack(null); }}
+                >
                   <button
                     type="button"
                     className="track-browser__quick-action"
@@ -103,7 +191,11 @@ export default function TrackList({
                     type="button"
                     className="track-browser__track"
                     disabled={disabled}
-                    onPointerUp={(event) => activateFromPointer(event, name)}
+                    onPointerDown={(event) => startLongPress(event, name)}
+                    onPointerMove={(event) => updateLongPress(event, name)}
+                    onPointerUp={(event) => finishPointer(event, name)}
+                    onPointerCancel={cancelLongPress}
+                    onContextMenu={(event) => { if (heldTrack === name) event.preventDefault(); }}
                     onDoubleClick={() => runAction(onPlay, name)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
@@ -114,7 +206,7 @@ export default function TrackList({
                     title="Double-click to play"
                   >
                     <span className="track-browser__track-copy">
-                      <strong>{titleFor(name)}</strong>
+                      <OverflowTrackTitle active={hoveredTrack === name || heldTrack === name}>{titleFor(name)}</OverflowTrackTitle>
                       {tags.length > 0 && <small>{tags.join(" · ")}</small>}
                     </span>
                     <span className="track-browser__state">

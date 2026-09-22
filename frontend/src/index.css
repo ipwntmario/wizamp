@@ -255,7 +255,9 @@ body {
 .track-browser__track { display: flex; min-width: 0; min-height: 52px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 12px; border: 0; border-radius: 10px 0 0 10px; color: inherit; background: transparent; text-align: left; touch-action: manipulation; }
 .track-browser__track:hover { border-color: transparent; }
 .track-browser__track-copy { display: grid; min-width: 0; gap: 2px; transition: transform .18s cubic-bezier(.2,.8,.2,1); }
-.track-browser__track-copy strong { overflow: hidden; font-size: 13px; font-weight: 670; text-overflow: ellipsis; white-space: nowrap; }
+.track-browser__title-viewport { display: block; min-width: 0; overflow: hidden; }
+.track-browser__track-copy strong { display: block; overflow: hidden; font-size: 13px; font-weight: 670; text-overflow: ellipsis; white-space: nowrap; }
+.track-browser__track-copy strong.is-marquee-active { width: max-content; min-width: 100%; overflow: visible; text-overflow: clip; }
 .track-browser__track-copy small { color: rgba(255,255,255,.34); font-size: 9px; font-weight: 600; letter-spacing: .025em; text-transform: uppercase; }
 .track-browser__state { display: flex; flex: 0 0 auto; gap: 5px; }
 .track-browser__state span { padding: 3px 6px; border-radius: 999px; color: #c9c0ff; background: rgba(143,124,255,.13); font-size: 8px; font-weight: 780; letter-spacing: .06em; text-transform: uppercase; }
