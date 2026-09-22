@@ -1,5 +1,9 @@
+import Icon from "./Icon";
+import PrimaryPlaybackButton from "./PrimaryPlaybackButton";
+
 export default function Transport({
   disabled = false,
+  primaryDisabled = false,
   isLoadingTrack,
   isPlaying,
   isPaused,
@@ -11,21 +15,8 @@ export default function Transport({
   undoDisabled = true,
   isSimpleTrackPlaying, // boolean, true if currently playing track is "simple"
   unlockAudio,
-  volumeControl,
+  rightControl,
 }) {
-  const primaryIcon = isLoadingTrack ? "loading" : (isPlaying ? "pause" : "play");
-  const primaryTitle = isLoadingTrack
-    ? "Loading… please wait"
-    : (isPlaying ? "Pause" : (isPaused ? "Resume" : "Play"));
-
-  const handlePrimary = () => {
-    unlockAudio?.();
-    if (disabled || isLoadingTrack) return;
-    if (isPlaying) onPause?.();
-    else if (isPaused) onResume?.();
-    else onPlay?.();
-  };
-
   return (
     <section className="transport-row">
       <div className="transport-controls">
@@ -41,28 +32,16 @@ export default function Transport({
         </button>
 
         {/* Play/Pause/Resume */}
-        <button
-          onClick={handlePrimary}
-          disabled={disabled || isLoadingTrack}
-          title={primaryTitle}
-          style={{
-            width: 52, height: 52, borderRadius: "50%",
-            border: "1px solid #555",
-            background: isLoadingTrack ? "#5C5C50"
-                      : (isPlaying ? "#363119"
-                      : (isPaused ? "#E0C766" : "#E0C766")),
-            color: isLoadingTrack ? "#888" : (isPlaying ? "white" : "black"),
-            fontSize: 18,
-            cursor: (disabled || isLoadingTrack) ? "not-allowed" : "pointer",
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
-          {isLoadingTrack ? (
-            <span className="loading-indicator"><Icon name="loading" size={20} /></span>
-          ) : (
-            <Icon name={primaryIcon} size={22} />
-          )}
-        </button>
+        <PrimaryPlaybackButton
+          disabled={disabled || primaryDisabled}
+          isLoadingTrack={isLoadingTrack}
+          isPlaying={isPlaying}
+          isPaused={isPaused}
+          onPlay={onPlay}
+          onPause={onPause}
+          onResume={onResume}
+          unlockAudio={unlockAudio}
+        />
 
         {/* Stop */}
         <button
@@ -81,8 +60,7 @@ export default function Transport({
           <Icon name="stop" size={18} />
         </button>
       </div>
-      {volumeControl && <div className="transport-volume">{volumeControl}</div>}
+      {rightControl && <div className="transport-side-control">{rightControl}</div>}
     </section>
   );
 }
-import Icon from "./Icon";

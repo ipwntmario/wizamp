@@ -30,6 +30,8 @@ import SectionPanel from "./components/SectionPanel";
 import Transport from "./components/Transport";
 import StatusBar from "./components/StatusBar";
 import VolumeControl from "./components/VolumeControl";
+import TrackVolumeControl from "./components/TrackVolumeControl";
+import PrimaryPlaybackButton from "./components/PrimaryPlaybackButton";
 import icon1Url from "./assets/icons/icon1.png";
 import icon2bUrl from "./assets/icons/icon2b.png";
 
@@ -1387,6 +1389,7 @@ export default function App() {
       {!isPassiveRole && (
         <Transport
           disabled={!isActiveRole && room.onlineActive}
+          primaryDisabled={!playingTrackName}
           isLoadingTrack={isLoadingTrack}
           isPlaying={isPlaying}
           isPaused={isPaused}
@@ -1398,16 +1401,21 @@ export default function App() {
           undoDisabled={undoHistory.length === 0}
           isSimpleTrackPlaying={tracks[playingTrackName]?.simple === true}
           unlockAudio={() => engine.unlockAudio?.()}
-          volumeControl={(
-            <VolumeControl
-              expanded={userVolumeOpen}
-              onExpandedChange={setUserVolumeOpen}
-              volume={userVolume}
-              onVolumeChange={setUserVolume}
-              muted={userMuted}
-              onMutedChange={setUserMuted}
+          rightControl={selectedTrack ? (
+            <TrackVolumeControl
+              open={trackVolUIOpen}
+              onOpenChange={setTrackVolUIOpen}
+              volume={trackVolume}
+              disabled={!isActiveRole}
+              onVolumeChange={(volume) => {
+                setTrackVolume(volume);
+                engine.setTrackVolume?.(volume);
+                if (playingTrackName && room.onlineActive && isActiveRole) {
+                  room.requestSetTrackVolume(volume);
+                }
+              }}
             />
-          )}
+          ) : null}
         />
       )}
 
@@ -1416,46 +1424,19 @@ export default function App() {
           <QueueIndicator currentTrack={playingTrackName} queuedTrack={queuedTrack} titleFor={getTrackTitle} />
 
           {selectedTrack && !isPassiveRole && (
-            <div style={{ position: "relative" }}>
-              <button
-                aria-label="Track volume"
-                onClick={() => setTrackVolUIOpen(open => !open)}
-                disabled={!isActiveRole}
-                className="now-playing__volume"
-                title="Track volume (set for all players)"
-              >
-                <Icon name={trackVolume === 1 ? "volume" : "volumeLow"} size={19} />
-              </button>
-
-              {trackVolUIOpen && (
-                <div style={{
-                  position: "absolute", right: 0, bottom: "110%",
-                  background: "#2a2a2a", color: "white", border: "1px solid #555", borderRadius: 8,
-                  padding: 10, minWidth: 220, zIndex: 2
-                }}>
-                  <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 6 }}>Track volume (set for all players)</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 36, textAlign: "right", opacity: 0.9 }}>{Math.round(trackVolume * 100)}</div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={Math.round(trackVolume * 100)}
-                      onChange={(event) => {
-                        const volume = Number(event.target.value) / 100;
-                        setTrackVolume(volume);
-                        engine.setTrackVolume?.(volume);
-                        if (playingTrackName && room.onlineActive && isActiveRole) {
-                          room.requestSetTrackVolume(volume);
-                        }
-                      }}
-                      style={{ flex: 1 }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+            <TrackVolumeControl
+              open={trackVolUIOpen}
+              onOpenChange={setTrackVolUIOpen}
+              volume={trackVolume}
+              disabled={!isActiveRole}
+              onVolumeChange={(volume) => {
+                setTrackVolume(volume);
+                engine.setTrackVolume?.(volume);
+                if (playingTrackName && room.onlineActive && isActiveRole) {
+                  room.requestSetTrackVolume(volume);
+                }
+              }}
+            />
           )}
         </div>
       </div>
@@ -1489,14 +1470,38 @@ export default function App() {
         </div>
       </div>
 
+      <div className="mobile-main-volume">
+        <VolumeControl
+          expanded={userVolumeOpen}
+          onExpandedChange={setUserVolumeOpen}
+          volume={userVolume}
+          onVolumeChange={setUserVolume}
+          muted={userMuted}
+          onMutedChange={setUserMuted}
+        />
+      </div>
+
       {!isPassiveRole && (
         <div className="mobile-queue-shortcut">
           <QueueIndicator
             currentTrack={playingTrackName}
             queuedTrack={queuedTrack}
             titleFor={getTrackTitle}
-            expandable={false}
+            expandable={mobileView === "controls"}
             onActivate={() => setMobileView("controls")}
+            navigationControl={(
+              <PrimaryPlaybackButton
+                compact
+                disabled={!playingTrackName || (!isActiveRole && room.onlineActive)}
+                isLoadingTrack={isLoadingTrack}
+                isPlaying={isPlaying}
+                isPaused={isPaused}
+                onPlay={handlePlay}
+                onPause={handlePause}
+                onResume={handleResume}
+                unlockAudio={() => engine.unlockAudio?.()}
+              />
+            )}
           />
         </div>
       )}
