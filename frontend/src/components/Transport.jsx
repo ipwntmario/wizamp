@@ -49,15 +49,7 @@ export default function Transport({
           onClick={() => { if (!disabled && !stopDisabled && isPlaying) onStop?.(); }}
           title="Stop"
           disabled={disabled || stopDisabled || !isPlaying}
-          style={{
-            width: 40, height: 40, borderRadius: "50%",
-            border: "1px solid #555",
-            background: (isPlaying && isStopHighlighted && !stopDisabled) ? "#B34745" : "#363119",
-            color: "white",
-            opacity: stopDisabled ? 0.4 : 1,
-            cursor: (disabled || stopDisabled || !isPlaying) ? "not-allowed" : "pointer",
-            display: "inline-flex", alignItems: "center", justifyContent: "center"
-          }}
+          className={`transport-stop ${isPlaying && isStopHighlighted && !stopDisabled ? "is-highlighted" : ""}`}
         >
           <Icon name="stop" size={18} />
         </button>

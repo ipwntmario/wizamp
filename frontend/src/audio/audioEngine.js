@@ -1165,6 +1165,34 @@ export class AudioEngine {
     return { progress01: rel };
   }
 
+  getTrackExitTiming() {
+    const ctx = this.audioCtx;
+    if (!ctx) return null;
+    if (this._stopPendingUntil) {
+      return {
+        kind: "fade",
+        remainingSeconds: Math.max(0, this._stopPendingUntil - ctx.currentTime),
+        totalSeconds: this._stopFadeDuration,
+      };
+    }
+
+    const clipName = this.lastPlayingClipName;
+    const clip = this.clipData?.[clipName];
+    const entry = this.activeClips?.[clipName];
+    const buffer = entry?.buffer;
+    if (!clip || !entry || !buffer) return null;
+    const positionSeconds = this.isPaused && this.pausedInfo?.clipName === clipName
+      ? this.pausedInfo.offsetSeconds
+      : (entry.offsetAtStart || 0) + Math.max(0, ctx.currentTime - entry.startedAt);
+    const boundary = clip.loopPoint ?? buffer.duration;
+    return {
+      kind: "clip",
+      clipName,
+      positionSeconds,
+      toBoundarySeconds: Math.max(0, boundary - positionSeconds),
+    };
+  }
+
   schedule(fn, atAudioTime) {
     const ctx = this.ensureContext();
     const ms = Math.max(0, (atAudioTime - ctx.currentTime) * 1000);

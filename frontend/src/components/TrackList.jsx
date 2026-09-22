@@ -55,6 +55,7 @@ export default function TrackList({
   selectedTrack,
   playingTrack,
   queuedTrack,
+  queuedTrackProgress = null,
   autoplay,
   onAutoplayChange,
   undoEffect,
@@ -247,6 +248,11 @@ export default function TrackList({
                       </div>
                     )}
                   </div>
+                  {isQueued && queuedTrackProgress != null && (
+                    <span className="track-browser__queue-progress" aria-hidden="true">
+                      <span style={{ transform: `scaleX(${queuedTrackProgress})` }} />
+                    </span>
+                  )}
                 </div>
               );
             })}

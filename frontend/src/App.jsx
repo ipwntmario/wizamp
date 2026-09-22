@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState, useCallback  } from "react";
 import { AudioEngine } from "./audio/audioEngine";
 import { useMusicData } from "./data/useMusicData";
 import { findSelectableEndSection, getAutoLockedTargets } from "./data/sectionTransitions";
+import { replacementRemainingSeconds } from "./data/replacementTiming";
 import { useSession } from "./net/useSession";
 import { useRoom } from "./net/useRoom";
 import LeftPanel from "./components/LeftPanel";
@@ -102,6 +103,8 @@ export default function App() {
   const [playRequestedFor, setPlayRequestedFor] = useState(null);
   const playRequestedForRef = useRef(null);
   const [queuedTrack, setQueuedTrack] = useState(null);
+  const [queuedTrackProgress, setQueuedTrackProgress] = useState(null);
+  const queuedTrackTimingRef = useRef(null);
   const queuedTrackRef = useRef(null);
   const [replacementPending, setReplacementPending] = useState(false);
   const replacementPendingRef = useRef(false);
@@ -432,6 +435,36 @@ export default function App() {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [engine, isPaused]);
+
+  useEffect(() => {
+    if (!queuedTrack || !replacementPending) {
+      queuedTrackTimingRef.current = null;
+      setQueuedTrackProgress(null);
+      return undefined;
+    }
+
+    const update = () => {
+      const timing = engine.getTrackExitTiming?.();
+      const remaining = replacementRemainingSeconds({ clips, sections, currentSectionName, queuedSectionName, timing });
+      if (!Number.isFinite(remaining)) {
+        setQueuedTrackProgress(null);
+        return;
+      }
+      const kind = timing.kind;
+      if (queuedTrackTimingRef.current?.track !== queuedTrack || queuedTrackTimingRef.current?.kind !== kind) {
+        queuedTrackTimingRef.current = {
+          track: queuedTrack,
+          kind,
+          total: kind === "fade" ? timing.totalSeconds : remaining,
+        };
+      }
+      const total = Math.max(queuedTrackTimingRef.current.total || 0, 0.001);
+      setQueuedTrackProgress(Math.max(0, Math.min(1, 1 - remaining / total)));
+    };
+    update();
+    const interval = window.setInterval(update, 50);
+    return () => window.clearInterval(interval);
+  }, [engine, queuedTrack, replacementPending, clips, sections, currentSectionName, queuedSectionName]);
 
   // Handlers
   const handlePlay = async () => {
@@ -1301,6 +1334,7 @@ export default function App() {
               selectedTrack={selectedTrack}
               playingTrack={isActive ? playingTrackName : null}
               queuedTrack={queuedTrack}
+              queuedTrackProgress={replacementPending ? queuedTrackProgress : null}
               autoplay={autoplay}
               undoEffect={undoEffect}
               disabled={!isActiveRole && room.onlineActive}
@@ -1405,9 +1439,9 @@ export default function App() {
       <div className="playback-dock">
       {/* Clip Information (progress bar from 0 to loopPoint) */}
       {!isPassiveRole && (
-        <section style={{ marginBottom: 16 }}>
-          <div style={{ height: 10, background: "#363119", borderRadius: 6, overflow: "hidden" }} aria-label="Clip position">
-            <div style={{ width: `${Math.round(clipProgress * 100)}%`, height: "100%", background: "#E0C766", transition: "width 80ms linear" }} />
+        <section className="clip-progress-wrap">
+          <div className="clip-progress" role="progressbar" aria-label="Clip position" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(clipProgress * 100)}>
+            <div className="clip-progress__fill" style={{ width: `${Math.round(clipProgress * 100)}%` }} />
           </div>
         </section>
       )}

@@ -103,22 +103,17 @@ export default function SectionPanel({
               {modes.map((mode) => {
                 const isActive = currentModeName === mode;
                 const isQueued = queuedModeName === mode && !isActive;
-                let background = "#8A4F9F";
-                let color = "white";
-                if (isQueued) { background = "#9E6FB4"; color = "black"; }
-                if (isActive) { background = "#E0C8E9"; color = "black"; }
-
                 const label = modeLabel(currentSectionName, mode);
                 return (
                   <button
-                    className={`section-control-button section-control-button--mode${buttonSizeClass}${isQueued ? " is-queued" : ""}${undoEffect?.kind === "mode" && undoEffect?.next === mode ? " is-undoing" : ""}`}
+                    className={`section-control-button section-control-button--mode${buttonSizeClass}${isActive ? " is-active" : ""}${isQueued ? " is-queued" : ""}${undoEffect?.kind === "mode" && undoEffect?.next === mode ? " is-undoing" : ""}`}
                     key={mode}
                     disabled={disabled}
                     onClick={() => {
                       if (disabled || isActive) return;
                       onToggleQueuedMode(isQueued ? null : mode);
                     }}
-                    style={{ background, color, cursor: isActive ? "default" : undefined }}
+                    style={{ cursor: isActive ? "default" : undefined }}
                     title={label}
                   >
                     {label}
@@ -156,31 +151,19 @@ export default function SectionPanel({
                 const isAutoLocked = autoLockedTargets.includes(name);
                 const isEnd = sections[name]?.type === "end";
 
-                let background = "#3B3F6B";
-                let color = "white";
-                let opacity = 1;
-                if (!isEnd && isQueued && !isAutoLocked) background = "#4E5588";
-                if (!isEnd && !isQueued && isAutoLocked) { background = "#6B6C72"; opacity = 0.9; }
-                if (!isEnd && isQueued && isAutoLocked) { background = "#5C5C77"; opacity = 0.9; }
-                if (isEnd && !isQueued && !isAutoLocked) background = "#B34745";
-                if (isEnd && isQueued && !isAutoLocked) background = "#C86462";
-                if (isEnd && !isQueued && isAutoLocked) { background = "#705C5C"; opacity = 0.9; }
-                if (isEnd && isQueued && isAutoLocked) { background = "#806060"; opacity = 0.9; }
-
                 const titleText = getSectionTitle
                   ? getSectionTitle(name)
                   : (sections[name]?.defaultDisplayName ?? name);
 
                 return (
                   <button
-                    className={`section-control-button section-control-button--section${buttonSizeClass}${isEnd ? " is-end" : ""}${isQueued ? " is-queued" : ""}${undoEffect?.kind === "section" && undoEffect?.next === name ? " is-undoing" : ""}`}
+                    className={`section-control-button section-control-button--section${buttonSizeClass}${isEnd ? " is-end" : ""}${isQueued ? " is-queued" : ""}${isAutoLocked ? " is-auto-locked" : ""}${undoEffect?.kind === "section" && undoEffect?.next === name ? " is-undoing" : ""}`}
                     key={name}
                     disabled={disabled || isAutoLocked}
                     onClick={() => {
                       if (disabled || isAutoLocked) return;
                       onToggleQueuedSection(isQueued ? null : name);
                     }}
-                    style={{ background, color, opacity }}
                     title={titleText}
                   >
                     {sectionLabel(name)}
