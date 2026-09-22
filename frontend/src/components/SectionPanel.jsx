@@ -111,7 +111,7 @@ export default function SectionPanel({
                 const label = modeLabel(currentSectionName, mode);
                 return (
                   <button
-                    className={`section-control-button section-control-button--mode${buttonSizeClass}${undoEffect?.kind === "mode" && undoEffect?.next === mode ? " is-undoing" : ""}`}
+                    className={`section-control-button section-control-button--mode${buttonSizeClass}${isQueued ? " is-queued" : ""}${undoEffect?.kind === "mode" && undoEffect?.next === mode ? " is-undoing" : ""}`}
                     key={mode}
                     disabled={disabled}
                     onClick={() => {
@@ -173,7 +173,7 @@ export default function SectionPanel({
 
                 return (
                   <button
-                    className={`section-control-button section-control-button--section${buttonSizeClass}${undoEffect?.kind === "section" && undoEffect?.next === name ? " is-undoing" : ""}`}
+                    className={`section-control-button section-control-button--section${buttonSizeClass}${isEnd ? " is-end" : ""}${isQueued ? " is-queued" : ""}${undoEffect?.kind === "section" && undoEffect?.next === name ? " is-undoing" : ""}`}
                     key={name}
                     disabled={disabled || isAutoLocked}
                     onClick={() => {

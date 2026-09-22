@@ -183,7 +183,7 @@ export default function TrackList({
 
               return (
                 <div
-                  className={`track-browser__row ${selectedTrack === name ? "is-selected" : ""} ${isPlaying ? "is-playing" : ""} ${undoEffect?.kind === "track" && undoEffect?.next === name ? "is-undoing" : ""}`}
+                  className={`track-browser__row ${selectedTrack === name ? "is-selected" : ""} ${isPlaying ? "is-playing" : ""} ${isQueued ? "is-queued" : ""} ${undoEffect?.kind === "track" && undoEffect?.next === name ? "is-undoing" : ""}`}
                   key={name}
                   onPointerEnter={(event) => { if (event.pointerType === "mouse") setHoveredTrack(name); }}
                   onPointerLeave={(event) => { if (event.pointerType === "mouse") setHoveredTrack(null); }}

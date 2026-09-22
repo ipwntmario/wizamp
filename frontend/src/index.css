@@ -246,6 +246,7 @@ body {
 .track-browser__row:hover { background: rgba(255,255,255,.04); }
 .track-browser__row.is-selected { border-color: rgba(143,124,255,.17); background: rgba(118,96,224,.075); }
 .track-browser__row.is-playing { background: linear-gradient(90deg, rgba(119,98,224,.14), rgba(255,255,255,.02)); }
+.track-browser__row.is-queued { --queued-edge-rgb: 224, 199, 102; animation: queued-edge-pulse 2.8s ease-in-out infinite; }
 .track-browser__row.is-undoing::after,
 .section-control-button.is-undoing::after,
 .now-playing__copy.is-undoing::after {
@@ -355,6 +356,13 @@ body {
 .section-control-button--section.is-large { padding: 10px 20px; font-size: 16px; }
 .section-control-button--mode { min-width: 90px; padding: 6px 12px; font-size: 13px; }
 .section-control-button--mode.is-large { padding: 8px 14px; font-size: 15px; }
+.section-control-button.is-queued { --queued-edge-rgb: 171, 181, 255; animation: queued-edge-pulse 2.8s ease-in-out infinite; }
+.section-control-button--mode.is-queued { --queued-edge-rgb: 208, 157, 229; }
+.section-control-button--section.is-end.is-queued { --queued-edge-rgb: 255, 162, 158; }
+@keyframes queued-edge-pulse {
+  0%, 100% { border-color: rgba(var(--queued-edge-rgb), .32); box-shadow: inset 0 0 0 1px rgba(var(--queued-edge-rgb), .08), 0 0 8px rgba(var(--queued-edge-rgb), .06); }
+  50% { border-color: rgba(var(--queued-edge-rgb), .78); box-shadow: inset 0 0 0 1px rgba(var(--queued-edge-rgb), .25), 0 0 15px rgba(var(--queued-edge-rgb), .2); }
+}
 .section-controls__measurement {
   position: absolute;
   z-index: -1;
@@ -1166,6 +1174,7 @@ button:focus-visible {
   .section-controls__body { transition-duration: .01ms !important; }
   .track-browser__drawer, .track-library-shell, .track-library-restore, .queue-indicator * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
   .track-browser__row.is-undoing::after, .section-control-button.is-undoing::after, .now-playing__copy.is-undoing::after { animation-duration: .01ms !important; }
+  .track-browser__row.is-queued, .section-control-button.is-queued { animation: none; border-color: rgba(var(--queued-edge-rgb), .55); box-shadow: inset 0 0 0 1px rgba(var(--queued-edge-rgb), .15); }
 }
 
 @media (max-width: 760px) {
