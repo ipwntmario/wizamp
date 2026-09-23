@@ -36,3 +36,27 @@ test('commands remain isolated to their room', () => {
   send({ type: 'PLAY_REQUEST', trackName: 'Track', sectionName: 'Main' });
   assert.deepEqual(otherMessages, []);
 });
+
+test('queued tracks are broadcast, stored, and cleared for the room', () => {
+  const { hub, send, messages } = fixture();
+  send({ type: 'QUEUE_TRACK_REQUEST', name: 'Next Track' });
+  assert.deepEqual(messages.at(-1), { type: 'QUEUE_TRACK', name: 'Next Track' });
+  assert.equal(hub.roomState.get('test').queuedTrack, 'Next Track');
+
+  send({ type: 'CLEAR_TRACK_QUEUE_REQUEST' });
+  assert.deepEqual(messages.at(-1), { type: 'CLEAR_TRACK_QUEUE' });
+  assert.equal(hub.roomState.get('test').queuedTrack, null);
+});
+
+test('cancelling a stop restores the room playing snapshot', () => {
+  const { hub, send, messages } = fixture();
+  const playing = { trackName: 'Track', sectionName: 'Main', serverMs: 12345 };
+  hub.roomState.set('test', { playing });
+
+  send({ type: 'STOP_REQUEST', fade: true });
+  assert.equal(hub.roomState.get('test').playing, null);
+  send({ type: 'CANCEL_STOP_REQUEST' });
+
+  assert.deepEqual(messages.at(-1), { type: 'CANCEL_STOP' });
+  assert.deepEqual(hub.roomState.get('test').playing, playing);
+});

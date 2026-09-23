@@ -2,6 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AudioEngine } from '../src/audio/audioEngine.js';
 import { orderTracks } from '../src/data/trackOrdering.js';
+import { findSelectableEndSection } from '../src/data/sectionTransitions.js';
+
+test('track replacement chooses only an end section available from the current buttons', () => {
+  const sections = {
+    Main: { nextSection: ['Bridge', 'End'] },
+    Bridge: { nextSection: ['Main'] },
+    AutoBridge: { type: 'auto', nextSection: 'End' },
+    End: { type: 'end' },
+  };
+  assert.equal(findSelectableEndSection(sections, 'Main'), 'End');
+  assert.equal(findSelectableEndSection(sections, 'Bridge'), null);
+  assert.equal(findSelectableEndSection(sections, 'AutoBridge'), null);
+  assert.equal(findSelectableEndSection(sections, 'End'), null);
+});
 
 function fixture() {
   const engine = new AudioEngine();
@@ -83,6 +97,31 @@ test('stop cancels scheduled-position transitions', () => withTimers(timers => {
   assert.equal(engine.isPlaying, false);
 }));
 
+test('a pending stop fade can be reversed before it completes', () => withTimers(timers => {
+  const engine = fixture();
+  const ramps = [];
+  let heldAt = null;
+  engine.lastPlayingClipName = 'A';
+  engine.masterGain.gain = {
+    value: 1,
+    cancelScheduledValues() {},
+    cancelAndHoldAtTime(time) { heldAt = time; },
+    setValueAtTime() {},
+    linearRampToValueAtTime(value, time) { ramps.push({ value, time }); },
+  };
+  engine.setFadeOutSeconds(6);
+  engine.stopTrack(true);
+  assert.equal(timers.size > 0, true);
+
+  engine.audioCtx.currentTime = 3;
+  assert.equal(engine.cancelStopFade(), true);
+  assert.equal(heldAt, 3);
+  assert.deepEqual(ramps.at(-1), { value: 1, time: 5 });
+  assert.equal(engine._stopPendingUntil, 0);
+  assert.equal(engine._stopFinishTimer, null);
+  assert.equal(engine.isPlaying, true);
+}));
+
 test('changing tracks releases the previous decoded buffer cache', async () => {
   const engine = fixture();
   engine.currentTrackName = 'Old';
@@ -91,6 +130,46 @@ test('changing tracks releases the previous decoded buffer cache', async () => {
   await engine.preloadTrack('New');
   assert.equal(engine.currentTrackName, 'New');
   assert.equal(engine._bufferCache.size, 0);
+});
+
+test('queued tracks decode into cache without replacing live playback data', async () => {
+  const engine = fixture();
+  engine.currentTrackName = 'Live';
+  engine.lastPlayingClipName = 'A';
+  const originalClips = engine.clipData;
+  const loaded = [];
+  engine._loadBufferWithCache = async (url, _context, meta) => {
+    loaded.push({ url, meta });
+    engine._bufferCache.set(url, {});
+  };
+
+  await engine.cacheTrackBuffers('Queued', {
+    Q: { file: { base: 'quiet song.ogg', intense: 'loud&fast.ogg' } },
+  }, { basePath: '/tracks/Queued Track' });
+
+  assert.equal(engine.currentTrackName, 'Live');
+  assert.equal(engine.lastPlayingClipName, 'A');
+  assert.equal(engine.clipData, originalClips);
+  assert.deepEqual(loaded.map(entry => entry.url), [
+    '/tracks/Queued%20Track/audio/quiet%20song.ogg',
+    '/tracks/Queued%20Track/audio/loud%26fast.ogg',
+  ]);
+});
+
+test('activating a queued track reuses its decoded buffers and prunes stale cache entries', async () => {
+  const engine = fixture();
+  engine.lastPlayingClipName = null;
+  engine.currentTrackName = 'Old';
+  engine.trackBase = '/tracks/Queued';
+  engine.setData({ clips: { Q: { file: 'ready.ogg' } }, sections: {}, tracks: {} });
+  const readyBuffer = { duration: 5 };
+  engine._bufferCache.set('/tracks/Queued/audio/ready.ogg', readyBuffer);
+  engine._bufferCache.set('/tracks/Old/audio/stale.ogg', {});
+
+  await engine.preloadTrack('Queued', { basePath: '/tracks/Queued', preserveCache: true });
+
+  assert.equal(engine.activeClips.Q.buffersByMode.base, readyBuffer);
+  assert.deepEqual([...engine._bufferCache.keys()], ['/tracks/Queued/audio/ready.ogg']);
 });
 
 test('catalog ordering keeps pinned tests and honors renamed titles', () => {

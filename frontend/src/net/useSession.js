@@ -30,7 +30,7 @@ function readIdentity(roomId) {
 export function useSession() {
   const [roomId, setRoomId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.has('room') ? params.get('room') : read('ui.roomChoice', 'awc') === 'private' ? '' : 'awc';
+    return params.has('room') ? params.get('room') : read('ui.roomChoice', 'private') === 'private' ? '' : 'awc';
   });
   const [roomIdentities, setRoomIdentities] = useState(() => ({ awc: readIdentity('awc') }));
 

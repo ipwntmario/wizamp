@@ -56,6 +56,8 @@ export class AudioEngine {
     // stop-state
     this._stopPendingUntil = 0;     // audio time when the global stop fade ends (0 = none)
     this._stopFinishTimer = null;   // timeout id for finishing stop
+    this._stopFadeStartedAt = 0;
+    this._stopFadeDuration = 0;
 
     // RNG/debug
     this._seed = null;
@@ -253,7 +255,11 @@ export class AudioEngine {
 
   // Build a safe URL for audio files: encode base path (keeps slashes) and filename.
   _buildAudioUrl(filename) {
-    const base = this.trackBase ? String(this.trackBase) : "";
+    return this._buildAudioUrlForBase(filename, this.trackBase);
+  }
+
+  _buildAudioUrlForBase(filename, basePath) {
+    const base = basePath ? String(basePath) : "";
     // encodeURI keeps "/" intact for the base path; it encodes spaces etc.
     const safeBase = encodeURI(base.replace(/([^:])\/{2,}/g, "$1/"));
     // encodeURIComponent for the file segment to handle "&", spaces, etc.
@@ -438,6 +444,8 @@ export class AudioEngine {
       this._stopFinishTimer = null;
     }
     this._stopPendingUntil = 0;
+    this._stopFadeStartedAt = 0;
+    this._stopFadeDuration = 0;
 
     // Stop all clip sources immediately
     try {
@@ -501,12 +509,25 @@ export class AudioEngine {
   }
 
   // ----- preload -----
+  async cacheTrackBuffers(trackName, clipData, { basePath } = {}) {
+    const ctx = this.ensureContext();
+    const entries = Object.entries(clipData || {});
+    for (const [clipName, clipObj] of entries) {
+      const fileMap = this._normalizeFileMap(clipObj?.file);
+      for (const [mode, filename] of Object.entries(fileMap)) {
+        if (!filename) continue;
+        const url = this._buildAudioUrlForBase(filename, basePath || `/tracks/${trackName}`);
+        await this._loadBufferWithCache(url, ctx, { trackName, clipName, mode });
+      }
+    }
+  }
+
   async preloadTrack(trackName, opts = {}) {
     const ctx = this.ensureContext();
 
     this.lastTrackName = trackName;
 
-    const { basePath, trackVolume } = opts || {};
+    const { basePath, trackVolume, preserveCache = false } = opts || {};
     if (typeof trackVolume === "number") this.setTrackVolume(trackVolume);
     this.trackBase = basePath ? String(basePath) : this.trackBase;
 
@@ -520,7 +541,7 @@ export class AudioEngine {
       return;
     }
 
-    if (!this.isPlaying && this.currentTrackName && this.currentTrackName !== trackName) {
+    if (!preserveCache && !this.isPlaying && this.currentTrackName && this.currentTrackName !== trackName) {
       this._bufferCache.clear(); // simple policy; or implement an LRU later
     }
 
@@ -529,6 +550,7 @@ export class AudioEngine {
 
     // Decode all clips + all mode files to buffers
     this.activeClips = {};
+    const activeUrls = new Set();
     const clipEntries = Object.entries(this.clipData);
 
     for (const [clipName, clipObj] of clipEntries) {
@@ -543,6 +565,7 @@ export class AudioEngine {
 
         // NEW: build a safe URL and pass clip/mode meta for precise error logs
         const url = this._buildAudioUrl(fname);
+        activeUrls.add(url);
         const buf = await this._loadBufferWithCache(url, this.audioCtx || ctx, {
           clipName,
           mode: modeKey
@@ -558,6 +581,12 @@ export class AudioEngine {
         startedAt: 0,
         offsetAtStart: 0
       };
+    }
+
+    if (preserveCache) {
+      for (const url of this._bufferCache.keys()) {
+        if (!activeUrls.has(url)) this._bufferCache.delete(url);
+      }
     }
 
     this._isPreloaded = true;
@@ -614,6 +643,8 @@ export class AudioEngine {
       } catch {}
 
       this._stopPendingUntil = now + fade;
+      this._stopFadeStartedAt = now;
+      this._stopFadeDuration = fade;
 
       this._stopFinishTimer = setTimeout(() => {
         // Finalize stop
@@ -636,6 +667,8 @@ export class AudioEngine {
         } catch {}
 
         this._stopPendingUntil = 0;
+        this._stopFadeStartedAt = 0;
+        this._stopFadeDuration = 0;
         this._stopFinishTimer = null;
         this.onStatus?.("Stopped");
       }, fade * 1000 + 50);
@@ -655,9 +688,40 @@ export class AudioEngine {
         this.masterGain.gain.setValueAtTime(this.userGain, now);
       } catch {}
       this._stopPendingUntil = 0;
+      this._stopFadeStartedAt = 0;
+      this._stopFadeDuration = 0;
       this._stopFinishTimer = null;
       this.onStatus?.("Stopped");
     }
+  }
+
+  cancelStopFade() {
+    if (!this.audioCtx || !this.masterGain || !this._stopFinishTimer) return false;
+    const now = this.audioCtx.currentTime;
+    if (!this._stopPendingUntil || now >= this._stopPendingUntil) return false;
+
+    clearTimeout(this._stopFinishTimer);
+    this._stopFinishTimer = null;
+
+    const elapsed = Math.max(0, now - (this._stopFadeStartedAt || now));
+    const duration = Math.max(0.06, Math.min(this._stopFadeDuration || elapsed || 0.06, elapsed || 0.06));
+    const gain = this.masterGain.gain;
+    try {
+      if (typeof gain.cancelAndHoldAtTime === "function") {
+        gain.cancelAndHoldAtTime(now);
+      } else {
+        const total = Math.max(0.001, this._stopFadeDuration || 0.001);
+        const estimated = (this.userGain ?? 1) * Math.max(0, 1 - (elapsed / total));
+        gain.cancelScheduledValues(now);
+        gain.setValueAtTime(estimated, now);
+      }
+      gain.linearRampToValueAtTime(this.userGain ?? 1, now + duration);
+    } catch {}
+
+    this._stopPendingUntil = 0;
+    this._stopFadeStartedAt = 0;
+    this._stopFadeDuration = 0;
+    return true;
   }
 
   _fadeOutAndStopClip(name, durSec = 0.03) {
@@ -1099,6 +1163,35 @@ export class AudioEngine {
     const rel = Math.max(0, Math.min(1, (clamped - loopStart) / span));
 
     return { progress01: rel };
+  }
+
+  getTrackExitTiming() {
+    const ctx = this.audioCtx;
+    if (!ctx) return null;
+    if (this._stopPendingUntil) {
+      return {
+        kind: "fade",
+        remainingSeconds: Math.max(0, this._stopPendingUntil - ctx.currentTime),
+        totalSeconds: this._stopFadeDuration,
+      };
+    }
+
+    const clipName = this.lastPlayingClipName;
+    const clip = this.clipData?.[clipName];
+    const entry = this.activeClips?.[clipName];
+    const buffer = entry?.buffer;
+    if (!clip || !entry || !buffer) return null;
+    const positionSeconds = this.isPaused && this.pausedInfo?.clipName === clipName
+      ? this.pausedInfo.offsetSeconds
+      : (entry.offsetAtStart || 0) + Math.max(0, ctx.currentTime - entry.startedAt);
+    const boundary = clip.loopPoint ?? buffer.duration;
+    return {
+      kind: "clip",
+      clipName,
+      startedAt: entry.startedAt,
+      positionSeconds,
+      toBoundarySeconds: Math.max(0, boundary - positionSeconds),
+    };
   }
 
   schedule(fn, atAudioTime) {

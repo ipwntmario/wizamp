@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
 
 export default function SettingsModal({
@@ -7,14 +7,15 @@ export default function SettingsModal({
   fadeOutSeconds, setFadeOutSeconds,
   pauseFadeSeconds, setPauseFadeSeconds,
   showStatus, setShowStatus,
-  canAccessDatabase,
-  onOpenDatabase,
-  onUnlockIcon,
+  showPlayControlsButton, setShowPlayControlsButton,
+  useAlternateIcon, setUseAlternateIcon,
+  onOpenAbout,
 }) {
   const overlayRef = useRef(null);
   const mouseDownOnOverlay = useRef(false);
   const titleTapCount = useRef(0);
   const titleTapResetTimer = useRef(null);
+  const [developerUnlocked, setDeveloperUnlocked] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -23,14 +24,20 @@ export default function SettingsModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  useEffect(() => () => clearTimeout(titleTapResetTimer.current), []);
+  useEffect(() => {
+    if (!open) {
+      titleTapCount.current = 0;
+      clearTimeout(titleTapResetTimer.current);
+    }
+    return () => clearTimeout(titleTapResetTimer.current);
+  }, [open]);
 
   function handleTitleTap() {
     clearTimeout(titleTapResetTimer.current);
     titleTapCount.current += 1;
     if (titleTapCount.current >= 5) {
       titleTapCount.current = 0;
-      onUnlockIcon?.();
+      setDeveloperUnlocked(true);
       return;
     }
     titleTapResetTimer.current = setTimeout(() => { titleTapCount.current = 0; }, 2200);
@@ -59,8 +66,8 @@ export default function SettingsModal({
       <section className="settings-modal" onClick={(event) => event.stopPropagation()}>
         <header className="settings-modal__header">
           <div>
-            <h2 id="settings-title" onClick={handleTitleTap}>Settings</h2>
-            <p>Personalize playback and manage your music library</p>
+            <h2 id="settings-title"><button type="button" className="settings-modal__title-trigger" onClick={handleTitleTap}>Settings</button></h2>
+            <p>Personalize playback and the listening interface</p>
           </div>
           <button className="database-icon-button" onClick={onClose} aria-label="Close settings">
             <Icon name="close" size={20} />
@@ -124,7 +131,7 @@ export default function SettingsModal({
                 <strong>Show status bar</strong>
                 <small>Display the current loading and playback state.</small>
               </span>
-              <span className="settings-switch">
+              <span className="toggle-switch">
                 <input
                   type="checkbox"
                   checked={!!showStatus}
@@ -134,19 +141,54 @@ export default function SettingsModal({
               </span>
             </label>
           </section>
+          {developerUnlocked && (
+            <section className="settings-group">
+              <div className="settings-group__heading">
+                <span className="settings-group__icon"><Icon name="code" size={18} /></span>
+                <div>
+                  <h3>Developers</h3>
+                  <p>Experimental interface options.</p>
+                </div>
+              </div>
 
-          {canAccessDatabase && (
-            <section className="settings-group settings-group--library">
-              <button type="button" className="settings-database" onClick={onOpenDatabase}>
-                <span className="settings-database__icon"><Icon name="archive" size={20} /></span>
-                <span className="settings-database__copy">
-                  <strong>Database</strong>
-                  <small>Organize tracks and customize display names.</small>
+              <label className="settings-field settings-field--toggle">
+                <span className="settings-field__copy">
+                  <strong>Show Play Controls button on mobile</strong>
+                  <small>Show a separate Play Controls tab on mobile.</small>
                 </span>
-                <span className="settings-database__arrow" aria-hidden="true">›</span>
-              </button>
+                <span className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={!!showPlayControlsButton}
+                    onChange={(event) => setShowPlayControlsButton?.(event.target.checked)}
+                  />
+                  <span aria-hidden="true" />
+                </span>
+              </label>
+              <label className="settings-field settings-field--toggle">
+                <span className="settings-field__copy">
+                  <strong>Use alternate icon</strong>
+                  <small>Use the alternate Wizamp icon in the About panel.</small>
+                </span>
+                <span className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={!!useAlternateIcon}
+                    onChange={(event) => setUseAlternateIcon?.(event.target.checked)}
+                  />
+                  <span aria-hidden="true" />
+                </span>
+              </label>
             </section>
           )}
+          <button type="button" className="settings-about-link" onClick={onOpenAbout}>
+            <span className="settings-group__icon"><Icon name="info" size={18} /></span>
+            <span className="settings-about-link__copy">
+              <strong>About Wizamp</strong>
+              <small>Version 0.2 and update notes</small>
+            </span>
+            <Icon name="chevronRight" size={18} />
+          </button>
         </div>
       </section>
     </div>

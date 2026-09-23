@@ -13,6 +13,7 @@ const paths = {
   globe: <><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></>,
   mixer: <><path d="M5 4v16M12 4v16M19 4v16"/><path d="M3 8h4M10 15h4M17 10h4"/></>,
   eye: <><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.5"/></>,
+  info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r=".8" fill="currentColor" stroke="none"/></>,
   headphones: <><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><path d="M4 14h3v6H5a1 1 0 0 1-1-1v-5ZM20 14h-3v6h2a1 1 0 0 0 1-1v-5Z"/></>,
   play: <path d="m8 5 11 7-11 7V5Z" fill="currentColor" stroke="none"/>,
   pause: <><path d="M8 5v14M16 5v14" strokeWidth="3.5"/></>,
@@ -24,6 +25,15 @@ const paths = {
   moreVertical: <><circle cx="12" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></>,
   pencil: <><path d="m4 20 4.2-1 10.9-10.9a2.1 2.1 0 0 0-3-3L5.2 16 4 20Z"/><path d="m14.7 6.5 3 3"/></>,
   chevronDown: <path d="m7 10 5 5 5-5"/>,
+  chevronUp: <path d="m7 14 5-5 5 5"/>,
+  chevronLeft: <path d="m15 18-6-6 6-6"/>,
+  chevronRight: <path d="m9 18 6-6-6-6"/>,
+  history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></>,
+  undo: <><path d="M9 7 4 12l5 5"/><path d="M5 12h8a6 6 0 0 1 6 6"/></>,
+  library: <><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></>,
+  controls: <><path d="M5 4v16M12 4v16M19 4v16"/><path d="M3 9h4M10 15h4M17 7h4"/></>,
+  code: <><path d="m8 7-5 5 5 5m8-10 5 5-5 5M14 4l-4 16"/></>,
+  playlist: <><path d="M4 6h10M4 11h10M4 16h7"/><path d="M17 13v7M17 13l4-1v6"/><circle cx="15" cy="20" r="2" fill="currentColor" stroke="none"/></>,
 };
 
 export default function Icon({ name, size = 20, title, style }) {
