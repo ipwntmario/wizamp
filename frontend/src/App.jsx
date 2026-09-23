@@ -1547,7 +1547,7 @@ export default function App() {
 
       {/* Playback queue and shared track-volume control */}
         <div className={`now-playing desktop-now-playing ${undoEffect?.kind === "track" ? "is-undoing" : ""}`}>
-          <QueueIndicator currentTrack={playingTrackName} queuedTrack={queuedTrack} titleFor={getTrackTitle} />
+          <QueueIndicator currentTrack={playingTrackName} queuedTrack={queuedTrack} queuedTrackProgress={queuedTrackProgress} titleFor={getTrackTitle} />
 
           {selectedTrack && !isPassiveRole && (
             <TrackVolumeControl
@@ -1612,6 +1612,7 @@ export default function App() {
           <QueueIndicator
             currentTrack={playingTrackName}
             queuedTrack={queuedTrack}
+            queuedTrackProgress={queuedTrackProgress}
             titleFor={getTrackTitle}
             expandable={mobileView === "controls"}
             onActivate={() => setMobileView("controls")}
