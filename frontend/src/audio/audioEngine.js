@@ -1188,6 +1188,7 @@ export class AudioEngine {
     return {
       kind: "clip",
       clipName,
+      startedAt: entry.startedAt,
       positionSeconds,
       toBoundarySeconds: Math.max(0, boundary - positionSeconds),
     };

@@ -15,6 +15,8 @@ export default function SectionPanel({
   largeButtons = false,
   currentModeName = "base",
   queuedModeName = null,
+  queuedSectionProgress = null,
+  queuedModeProgress = null,
   undoEffect = null,
   onToggleQueuedMode = () => {},
   getBaseModeLabel = () => "base",
@@ -117,6 +119,11 @@ export default function SectionPanel({
                     title={label}
                   >
                     {label}
+                    {isQueued && queuedModeProgress != null && (
+                      <span className="section-control-button__queue-progress" aria-hidden="true">
+                        <span style={{ transform: `scaleX(${queuedModeProgress})` }} />
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -167,6 +174,11 @@ export default function SectionPanel({
                     title={titleText}
                   >
                     {sectionLabel(name)}
+                    {isQueued && queuedSectionProgress != null && (
+                      <span className="section-control-button__queue-progress" aria-hidden="true">
+                        <span style={{ transform: `scaleX(${queuedSectionProgress})` }} />
+                      </span>
+                    )}
                   </button>
                 );
               })}

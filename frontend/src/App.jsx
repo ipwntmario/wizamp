@@ -105,6 +105,8 @@ export default function App() {
   const [queuedTrack, setQueuedTrack] = useState(null);
   const [queuedTrackProgress, setQueuedTrackProgress] = useState(null);
   const queuedTrackTimingRef = useRef(null);
+  const [queuedChoiceProgress, setQueuedChoiceProgress] = useState({ section: null, mode: null });
+  const queuedChoiceTimingRef = useRef({ section: null, mode: null });
   const queuedTrackRef = useRef(null);
   const [replacementPending, setReplacementPending] = useState(false);
   const replacementPendingRef = useRef(false);
@@ -437,34 +439,63 @@ export default function App() {
   }, [engine, isPaused]);
 
   useEffect(() => {
-    if (!queuedTrack || !replacementPending) {
+    if (!queuedTrack && !queuedSectionName && !queuedModeName) {
       queuedTrackTimingRef.current = null;
+      queuedChoiceTimingRef.current = { section: null, mode: null };
       setQueuedTrackProgress(null);
+      setQueuedChoiceProgress(previous => previous.section == null && previous.mode == null ? previous : { section: null, mode: null });
       return undefined;
     }
 
     const update = () => {
       const timing = engine.getTrackExitTiming?.();
-      const remaining = replacementRemainingSeconds({ clips, sections, currentSectionName, queuedSectionName, timing });
-      if (!Number.isFinite(remaining)) {
+      const trackCanCountDown = queuedTrack && (
+        replacementPending || timing?.kind === "fade" || sections[currentSectionName]?.type === "end"
+      );
+      const trackRemaining = trackCanCountDown
+        ? replacementRemainingSeconds({ clips, sections, currentSectionName, queuedSectionName, timing })
+        : null;
+      if (!Number.isFinite(trackRemaining)) {
+        queuedTrackTimingRef.current = null;
         setQueuedTrackProgress(null);
-        return;
+      } else {
+        const kind = timing.kind;
+        if (queuedTrackTimingRef.current?.track !== queuedTrack || queuedTrackTimingRef.current?.kind !== kind) {
+          queuedTrackTimingRef.current = {
+            track: queuedTrack,
+            kind,
+            total: kind === "fade" ? timing.totalSeconds : trackRemaining,
+          };
+        }
+        const total = Math.max(queuedTrackTimingRef.current.total || 0, 0.001);
+        setQueuedTrackProgress(Math.max(0, Math.min(1, 1 - trackRemaining / total)));
       }
-      const kind = timing.kind;
-      if (queuedTrackTimingRef.current?.track !== queuedTrack || queuedTrackTimingRef.current?.kind !== kind) {
-        queuedTrackTimingRef.current = {
-          track: queuedTrack,
-          kind,
-          total: kind === "fade" ? timing.totalSeconds : remaining,
-        };
+
+      const boundaryRemaining = timing?.kind === "clip" ? timing.toBoundarySeconds : null;
+      const choiceProgress = {};
+      for (const [kind, name] of [["section", queuedSectionName], ["mode", queuedModeName]]) {
+        if (!name || !Number.isFinite(boundaryRemaining)) {
+          queuedChoiceTimingRef.current[kind] = null;
+          choiceProgress[kind] = null;
+          continue;
+        }
+        const key = `${name}:${timing.clipName}:${timing.startedAt}`;
+        if (queuedChoiceTimingRef.current[kind]?.key !== key) {
+          queuedChoiceTimingRef.current[kind] = { key, total: boundaryRemaining };
+        }
+        const total = Math.max(queuedChoiceTimingRef.current[kind].total, 0.001);
+        choiceProgress[kind] = Math.max(0, Math.min(1, 1 - boundaryRemaining / total));
       }
-      const total = Math.max(queuedTrackTimingRef.current.total || 0, 0.001);
-      setQueuedTrackProgress(Math.max(0, Math.min(1, 1 - remaining / total)));
+      setQueuedChoiceProgress(previous => (
+        previous.section === choiceProgress.section && previous.mode === choiceProgress.mode
+          ? previous
+          : choiceProgress
+      ));
     };
     update();
     const interval = window.setInterval(update, 50);
     return () => window.clearInterval(interval);
-  }, [engine, queuedTrack, replacementPending, clips, sections, currentSectionName, queuedSectionName]);
+  }, [engine, queuedTrack, replacementPending, clips, sections, currentSectionName, queuedSectionName, queuedModeName]);
 
   // Handlers
   const handlePlay = async () => {
@@ -1334,7 +1365,7 @@ export default function App() {
               selectedTrack={selectedTrack}
               playingTrack={isActive ? playingTrackName : null}
               queuedTrack={queuedTrack}
-              queuedTrackProgress={replacementPending ? queuedTrackProgress : null}
+              queuedTrackProgress={queuedTrackProgress}
               autoplay={autoplay}
               undoEffect={undoEffect}
               disabled={!isActiveRole && room.onlineActive}
@@ -1471,6 +1502,8 @@ export default function App() {
                 : getModeLabel(playingTrackName || selectedTrack, sectionKey, modeNameOrBase)}
             currentModeName={currentModeName}     // "base" or a mode name
             queuedModeName={queuedModeName}       // null or a mode name
+            queuedSectionProgress={queuedChoiceProgress.section}
+            queuedModeProgress={queuedChoiceProgress.mode}
             onToggleQueuedMode={queueModeSelection}
           />
         )}

@@ -391,6 +391,8 @@ body {
 .section-control-button--mode { min-width: 90px; padding: 6px 12px; font-size: 13px; }
 .section-control-button--mode.is-large { padding: 8px 14px; font-size: 15px; }
 .section-control-button.is-queued { --queued-edge-rgb: 171, 181, 255; animation: queued-edge-pulse 2.8s ease-in-out infinite; }
+.section-control-button__queue-progress { position: absolute; right: 6px; bottom: 2px; left: 6px; height: 4px; overflow: hidden; border-radius: 999px; background: rgba(224,199,102,.15); pointer-events: none; }
+.section-control-button__queue-progress > span { display: block; width: 100%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ae913e, #eed77f); box-shadow: 0 0 9px rgba(224,199,102,.65); transform-origin: left center; transition: transform 50ms linear; }
 .section-control-button--mode.is-queued { --queued-edge-rgb: 208, 157, 229; }
 .section-control-button--section.is-end.is-queued { --queued-edge-rgb: 255, 162, 158; }
 @keyframes queued-edge-pulse {
@@ -1230,7 +1232,7 @@ button:focus-visible {
   .track-browser__drawer, .track-library-shell, .track-library-restore, .queue-indicator * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
   .track-browser__row.is-undoing::after, .section-control-button.is-undoing::after, .now-playing__copy.is-undoing::after { animation-duration: .01ms !important; }
   .track-browser__row.is-queued, .section-control-button.is-queued { animation: none; border-color: rgba(var(--queued-edge-rgb), .55); box-shadow: inset 0 0 0 1px rgba(var(--queued-edge-rgb), .15); }
-  .track-browser__queue-progress > span { transition: none; }
+  .track-browser__queue-progress > span, .section-control-button__queue-progress > span { transition: none; }
 }
 
 @media (max-width: 760px) {

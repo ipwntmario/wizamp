@@ -34,7 +34,7 @@ test('engine reports live stop-fade and clip-boundary timing', () => {
   engine.activeClips = { Main: { buffer: { duration: 13 }, startedAt: 2, offsetAtStart: 1 } };
   engine.lastPlayingClipName = 'Main';
   assert.deepEqual(engine.getTrackExitTiming(), {
-    kind: 'clip', clipName: 'Main', positionSeconds: 4, toBoundarySeconds: 8,
+    kind: 'clip', clipName: 'Main', startedAt: 2, positionSeconds: 4, toBoundarySeconds: 8,
   });
   engine._stopPendingUntil = 10;
   engine._stopFadeDuration = 6;
