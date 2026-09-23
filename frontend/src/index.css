@@ -883,6 +883,8 @@ body {
   background: rgba(25,26,34,.9);
 }
 .settings-modal__header h2 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: -.02em; cursor: default; user-select: none; }
+.settings-modal__title-trigger { padding: 0; border: 0; color: inherit; background: transparent; font: inherit; letter-spacing: inherit; cursor: default; }
+.settings-modal__title-trigger:focus-visible { outline: 2px solid #a99cff; outline-offset: 3px; }
 .settings-modal__header p { margin: 4px 0 0; color: rgba(255,255,255,.46); font-size: 12px; }
 .settings-modal__body { display: grid; gap: 12px; padding: 14px; }
 .settings-about-link { display: flex; min-height: 62px; align-items: center; gap: 11px; padding: 10px 14px; border: 1px solid rgba(255,255,255,.075); border-radius: 14px; color: #f6f7fb; background: rgba(255,255,255,.025); text-align: left; transition: border-color .16s ease, background .16s ease; }
@@ -1361,6 +1363,7 @@ button:focus-visible {
     backdrop-filter: blur(18px) saturate(130%);
   }
   .mobile-tab-bar button { display: grid; min-width: 0; place-items: center; align-content: center; gap: 2px; padding: 4px 2px; border: 0; border-radius: 0; color: rgba(255,255,255,.42); background: transparent; }
+  .mobile-tab-bar.is-two-tab { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .mobile-tab-bar button + button { border-left: 1px solid rgba(255,255,255,.055); }
   .mobile-tab-bar button.is-active { color: #eee7b9; background: linear-gradient(180deg, rgba(224,199,102,.12), rgba(224,199,102,.035)); }
   .mobile-tab-bar button span { overflow: hidden; max-width: 100%; font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }

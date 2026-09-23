@@ -38,13 +38,17 @@ import PrimaryPlaybackButton from "./components/PrimaryPlaybackButton";
 import icon1Url from "./assets/icons/icon1.png";
 import icon2bUrl from "./assets/icons/icon2b.png";
 
-const icons = { "icon1.png": icon1Url, "icon2b.png": icon2bUrl };
 export default function App() {
   const { tracks, loading, error: dataError } = useMusicData();  // <- only rely on tracks here
   const [clips, setClips] = useState({});
   const [sections, setSections] = useState({});
 
-  const [appIconName, setAppIconName] = useState("icon1.png");
+  const [useAlternateIcon, setUseAlternateIcon] = useState(() => {
+    try { return localStorage.getItem("wizamp_useAlternateIcon") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wizamp_useAlternateIcon", useAlternateIcon ? "1" : "0"); } catch {}
+  }, [useAlternateIcon]);
   const [showAbout, setShowAbout] = useState(true);
   const [libraryExpanded, setLibraryExpanded] = useState(true);
   const [libraryWidth, setLibraryWidth] = useState(300);
@@ -130,6 +134,15 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem("wizamp_showStatus", showStatus ? "1" : "0"); } catch {}
   }, [showStatus]);
+  const [showPlayControlsButton, setShowPlayControlsButton] = useState(() => {
+    try {
+      const stored = localStorage.getItem("wizamp_showPlayControlsButton");
+      return stored == null ? true : stored === "1";
+    } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wizamp_showPlayControlsButton", showPlayControlsButton ? "1" : "0"); } catch {}
+  }, [showPlayControlsButton]);
 
   const { roomId, setRoomId, onlineEnabled, role, setRole, displayName, setDisplayName, roomIdentities, setRoomIdentity } = useSession();
   const isActiveRole = !onlineEnabled || role === "GM";
@@ -1338,7 +1351,7 @@ export default function App() {
       "--library-width": `${libraryWidth}px`
       }}>
 
-      <AboutModal open={showAbout} onClose={() => setShowAbout(false)} iconSrc={icons[appIconName] || icons["icon1.png"]} />
+      <AboutModal open={showAbout} onClose={() => setShowAbout(false)} iconSrc={useAlternateIcon ? icon2bUrl : icon1Url} />
 
       <LeftPanel
         roomState={roomState}
@@ -1634,15 +1647,17 @@ export default function App() {
       )}
 
       {!isPassiveRole && (
-        <nav className="mobile-tab-bar" aria-label="Primary views">
+        <nav className={`mobile-tab-bar${showPlayControlsButton ? "" : " is-two-tab"}`} aria-label="Primary views">
           <button type="button" className={mobileView === "library" ? "is-active" : ""} onClick={() => setMobileView("library")} aria-pressed={mobileView === "library"}>
             <Icon name="library" size={18} />
             <span>Track Library</span>
           </button>
-          <button type="button" className={mobileView === "controls" ? "is-active" : ""} onClick={() => setMobileView("controls")} aria-pressed={mobileView === "controls"}>
-            <Icon name="controls" size={18} />
-            <span>Play Controls</span>
-          </button>
+          {showPlayControlsButton && (
+            <button type="button" className={mobileView === "controls" ? "is-active" : ""} onClick={() => setMobileView("controls")} aria-pressed={mobileView === "controls"}>
+              <Icon name="controls" size={18} />
+              <span>Play Controls</span>
+            </button>
+          )}
           <button type="button" className={mobileView === "playlists" ? "is-active" : ""} onClick={() => setMobileView("playlists")} aria-pressed={mobileView === "playlists"}>
             <Icon name="playlist" size={18} />
             <span>Playlists</span>
@@ -1660,7 +1675,10 @@ export default function App() {
         setPauseFadeSeconds={setPauseFadeSeconds}
         showStatus={showStatus}
         setShowStatus={setShowStatus}
-        onUnlockIcon={() => setAppIconName("icon2b.png")}
+        showPlayControlsButton={showPlayControlsButton}
+        setShowPlayControlsButton={setShowPlayControlsButton}
+        useAlternateIcon={useAlternateIcon}
+        setUseAlternateIcon={setUseAlternateIcon}
         onOpenAbout={() => { setSettingsOpen(false); setShowAbout(true); }}
       />
 

@@ -32,6 +32,7 @@ const paths = {
   undo: <><path d="M9 7 4 12l5 5"/><path d="M5 12h8a6 6 0 0 1 6 6"/></>,
   library: <><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></>,
   controls: <><path d="M5 4v16M12 4v16M19 4v16"/><path d="M3 9h4M10 15h4M17 7h4"/></>,
+  code: <><path d="m8 7-5 5 5 5m8-10 5 5-5 5M14 4l-4 16"/></>,
   playlist: <><path d="M4 6h10M4 11h10M4 16h7"/><path d="M17 13v7M17 13l4-1v6"/><circle cx="15" cy="20" r="2" fill="currentColor" stroke="none"/></>,
 };
 
