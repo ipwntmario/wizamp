@@ -185,7 +185,7 @@ export default function SettingsModal({
             <span className="settings-group__icon"><Icon name="info" size={18} /></span>
             <span className="settings-about-link__copy">
               <strong>About Wizamp</strong>
-              <small>Version 0.2 and update notes</small>
+              <small>How Wizamp works and what’s new in Version 0.2</small>
             </span>
             <Icon name="chevronRight" size={18} />
           </button>

@@ -50,6 +50,15 @@ export default function App() {
     try { localStorage.setItem("wizamp_useAlternateIcon", useAlternateIcon ? "1" : "0"); } catch {}
   }, [useAlternateIcon]);
   const [showAbout, setShowAbout] = useState(true);
+  const [aboutSection, setAboutSection] = useState(() => {
+    try {
+      const hasSeenGuide = localStorage.getItem("wizamp_hasSeenGuide") === "1";
+      localStorage.setItem("wizamp_hasSeenGuide", "1");
+      return hasSeenGuide ? "updates" : "guide";
+    } catch {
+      return "guide";
+    }
+  });
   const [libraryExpanded, setLibraryExpanded] = useState(true);
   const [libraryWidth, setLibraryWidth] = useState(300);
   const [resizingLibrary, setResizingLibrary] = useState(false);
@@ -1351,7 +1360,13 @@ export default function App() {
       "--library-width": `${libraryWidth}px`
       }}>
 
-      <AboutModal open={showAbout} onClose={() => setShowAbout(false)} iconSrc={useAlternateIcon ? icon2bUrl : icon1Url} />
+      <AboutModal
+        open={showAbout}
+        onClose={() => setShowAbout(false)}
+        iconSrc={useAlternateIcon ? icon2bUrl : icon1Url}
+        section={aboutSection}
+        onSectionChange={setAboutSection}
+      />
 
       <LeftPanel
         roomState={roomState}
@@ -1679,7 +1694,7 @@ export default function App() {
         setShowPlayControlsButton={setShowPlayControlsButton}
         useAlternateIcon={useAlternateIcon}
         setUseAlternateIcon={setUseAlternateIcon}
-        onOpenAbout={() => { setSettingsOpen(false); setShowAbout(true); }}
+        onOpenAbout={() => { setSettingsOpen(false); setAboutSection("updates"); setShowAbout(true); }}
       />
 
       {/* Database modal */}
