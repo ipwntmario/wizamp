@@ -38,6 +38,7 @@ import TrackVolumeControl from "./components/TrackVolumeControl";
 import PrimaryPlaybackButton from "./components/PrimaryPlaybackButton";
 import ClipProgress from "./components/ClipProgress";
 import DynamicClipPanel from "./components/DynamicClipPanel";
+import CursorEffect from "./components/CursorEffect";
 import icon1Url from "./assets/icons/icon1.png";
 import icon2bUrl from "./assets/icons/icon2b.png";
 
@@ -152,6 +153,12 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem("wizamp_showStatus", showStatus ? "1" : "0"); } catch {}
   }, [showStatus]);
+  const [cursorEffectEnabled, setCursorEffectEnabled] = useState(() => {
+    try { return localStorage.getItem("wizamp_cursorEffect") !== "0"; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wizamp_cursorEffect", cursorEffectEnabled ? "1" : "0"); } catch {}
+  }, [cursorEffectEnabled]);
   const [showPlayControlsButton, setShowPlayControlsButton] = useState(() => {
     try {
       const stored = localStorage.getItem("wizamp_showPlayControlsButton");
@@ -1747,6 +1754,8 @@ export default function App() {
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        cursorEffectEnabled={cursorEffectEnabled}
+        setCursorEffectEnabled={setCursorEffectEnabled}
         fadeOutSeconds={fadeOutSeconds}
         setFadeOutSeconds={setFadeOutSeconds}
         pauseFadeSeconds={pauseFadeSeconds}
@@ -1836,6 +1845,7 @@ export default function App() {
         }}
       />
 
+      <CursorEffect enabled={cursorEffectEnabled} themeId={activeTheme.id} effect={activeTheme.cursorEffect} />
     </div>
   );
 }

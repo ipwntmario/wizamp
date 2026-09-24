@@ -19,3 +19,7 @@ test('every session can use every theme in its Standard or Fantasy group', () =>
   }
   assert.deepEqual(availableThemes().map(({ group }) => group), ['Standard', 'Standard', 'Fantasy', 'Fantasy']);
 });
+
+test('only the fantasy themes provide a wand cursor effect', () => {
+  assert.deepEqual(availableThemes().map(({ cursorEffect }) => cursorEffect ?? null), [null, null, 'wand', 'wand']);
+});

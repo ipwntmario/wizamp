@@ -127,6 +127,15 @@ body {
   .about-panel__concept > svg { top: -10px; left: 17px; transform: rotate(90deg); }
 }
 
+.cursor-effect {
+  position: fixed;
+  z-index: 10001;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+}
+
 .app-main {
   box-sizing: border-box;
   min-height: calc(100vh - 40px);

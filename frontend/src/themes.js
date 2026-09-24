@@ -1,8 +1,8 @@
 export const THEMES = [
   { id: "dark", name: "Dark", group: "Standard" },
   { id: "light", name: "Light", group: "Standard" },
-  { id: "signet", name: "Signet", group: "Fantasy" },
-  { id: "castle-torchlit", name: "Castle (Torchlit)", group: "Fantasy" },
+  { id: "signet", name: "Signet", group: "Fantasy", cursorEffect: "wand" },
+  { id: "castle-torchlit", name: "Castle (Torchlit)", group: "Fantasy", cursorEffect: "wand" },
 ];
 
 export const SESSION_THEME_DEFAULTS = {

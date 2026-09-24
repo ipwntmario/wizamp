@@ -7,6 +7,7 @@ export default function SettingsModal({
   fadeOutSeconds, setFadeOutSeconds,
   pauseFadeSeconds, setPauseFadeSeconds,
   showStatus, setShowStatus,
+  cursorEffectEnabled, setCursorEffectEnabled,
   showPlayControlsButton, setShowPlayControlsButton,
   useAlternateIcon, setUseAlternateIcon,
   onOpenAbout,
@@ -136,6 +137,20 @@ export default function SettingsModal({
                   type="checkbox"
                   checked={!!showStatus}
                   onChange={(event) => setShowStatus?.(event.target.checked)}
+                />
+                <span aria-hidden="true" />
+              </span>
+            </label>
+            <label className="settings-field settings-field--toggle">
+              <span className="settings-field__copy">
+                <strong>Cursor effect</strong>
+                <small>Show a magical glow and sparkles in Signet and Castle (Torchlit). Respects reduced-motion preferences.</small>
+              </span>
+              <span className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={!!cursorEffectEnabled}
+                  onChange={(event) => setCursorEffectEnabled?.(event.target.checked)}
                 />
                 <span aria-hidden="true" />
               </span>
