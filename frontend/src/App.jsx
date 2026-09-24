@@ -316,6 +316,7 @@ export default function App() {
         console.log("[STATUS]", s);
         setStatus(s);
         if (s === "Stopped") {
+          dropUndoActions("stop");
           setReplacementInProgress(false);
           setClipProgress(0);
 
@@ -590,14 +591,16 @@ export default function App() {
     }
   };
 
-  const handleStop = async () => {
-
+  const handleStop = async ({ recordUndo = true } = {}) => {
+    if (recordUndo && isActive && Number(fadeOutSeconds) > 0) {
+      dropUndoActions("stop");
+      pushUndoAction({ kind: "stop", previous: "playing", next: "stopping" });
+    }
     if (room.onlineActive && isActiveRole) {
       // Tell everyone to stop (with fade)
       room.requestStop(true);
     } else {
       // Local stop only
-
       engine.stopTrack(true);
     }
   };
@@ -767,8 +770,9 @@ export default function App() {
 
   const onCancelStopMsg = useCallback(() => {
     engine.cancelStopFade?.();
+    dropUndoActions("stop");
     setReplacementInProgress(false);
-  }, [engine, setReplacementInProgress]);
+  }, [engine, dropUndoActions, setReplacementInProgress]);
 
   const onResumeMsg = useCallback((serverMs) => {
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
@@ -1273,7 +1277,10 @@ export default function App() {
     updateUndoHistory(previous => previous.slice(0, -1));
     showUndoEffect(action);
 
-    if (action.kind === "track") {
+    if (action.kind === "stop") {
+      if (room.onlineActive && isActiveRole) room.requestCancelStop?.();
+      else engine.cancelStopFade?.();
+    } else if (action.kind === "track") {
       if (action.stopPending || action.sectionNext) setReplacementInProgress(false);
       if (action.stopPending) {
         if (room.onlineActive && isActiveRole) room.requestCancelStop?.();
@@ -1315,7 +1322,7 @@ export default function App() {
     void addTrackToQueue(name, { recordUndo: false });
     if (alwaysStop || isPaused) {
       pushUndoAction({ kind: "track", previous: previousTrack, next: name, stopPending: true });
-      handleStop();
+      handleStop({ recordUndo: false });
       return;
     }
 
@@ -1336,7 +1343,7 @@ export default function App() {
       });
     } else {
       pushUndoAction({ kind: "track", previous: previousTrack, next: name, stopPending: true });
-      handleStop();
+      handleStop({ recordUndo: false });
     }
   }
 
@@ -1592,6 +1599,7 @@ export default function App() {
           onStop={handleStop}
           onUndo={undoLastQueuedChange}
           undoDisabled={undoHistory.length === 0}
+          undoLabel={undoHistory.at(-1)?.kind === "stop" ? "Undo stop" : undefined}
           isStopHighlighted={isStopHighlighted}
           unlockAudio={() => engine.unlockAudio?.()}
           rightControl={selectedTrack ? (

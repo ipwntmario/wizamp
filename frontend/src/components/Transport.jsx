@@ -14,6 +14,7 @@ export default function Transport({
   onStop,      // () => void
   onUndo,
   undoDisabled = true,
+  undoLabel = "Undo last queued change",
   isStopHighlighted, // simple tracks or dynamic tracks with no ending section
   unlockAudio,
   rightControl,
@@ -21,11 +22,11 @@ export default function Transport({
   return (
     <section className="transport-row">
       <div className="transport-controls">
-        {/* Undo the most recently queued change */}
+        {/* Undo the most recent reversible playback or queue action */}
         <button
           onClick={() => onUndo?.()}
-          title={undoDisabled ? "Nothing queued to undo" : "Undo last queued change"}
-          aria-label="Undo last queued change"
+          title={undoDisabled ? "Nothing to undo" : undoLabel}
+          aria-label={undoLabel}
           disabled={disabled || undoDisabled}
           className="transport-undo"
         >
