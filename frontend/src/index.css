@@ -1367,9 +1367,10 @@ button:focus-visible {
   .track-library-shell.is-mobile-active,
   .app-shell.is-library-collapsed .track-library-shell.is-mobile-active { display: flex; visibility: visible; opacity: 1; transform: none; pointer-events: auto; }
   .app-shell.is-status-hidden .track-library-shell { bottom: calc(121px + env(safe-area-inset-bottom, 0px)); }
-  .track-library__heading { min-height: 48px; flex-basis: 48px; }
+  .track-library__heading { display: none; }
   .track-library__collapse, .track-library-restore { display: none; }
   .track-library__resize-handle { display: none; }
+  .track-browser__autoplay { box-sizing: border-box; min-height: 38px; padding: 4px 12px; }
   .track-browser__list { padding: 5px; }
   .track-browser__menu { width: min(224px, calc(100vw - 54px)); }
   .mobile-playlists-view {
