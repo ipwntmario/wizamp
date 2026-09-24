@@ -35,6 +35,7 @@ import StatusBar from "./components/StatusBar";
 import VolumeControl from "./components/VolumeControl";
 import TrackVolumeControl from "./components/TrackVolumeControl";
 import PrimaryPlaybackButton from "./components/PrimaryPlaybackButton";
+import ClipProgress from "./components/ClipProgress";
 import icon1Url from "./assets/icons/icon1.png";
 import icon2bUrl from "./assets/icons/icon2b.png";
 
@@ -63,7 +64,7 @@ export default function App() {
   const [libraryWidth, setLibraryWidth] = useState(300);
   const [resizingLibrary, setResizingLibrary] = useState(false);
   const libraryResizePointer = useRef(null);
-  const [mobileView, setMobileView] = useState("controls");
+  const [mobileView, setMobileView] = useState("library");
 
   const [status, setStatus] = useState("Idle");
   const [statusHistory, setStatusHistory] = useState([]);
@@ -225,6 +226,8 @@ export default function App() {
 
 
   const [clipProgress, setClipProgress] = useState(0);  // 0..1 visual bar
+  const [clipPositionSeconds, setClipPositionSeconds] = useState(0);
+  const [clipDurationSeconds, setClipDurationSeconds] = useState(0);
 
   // Volume settings
   const [trackVolUIOpen, setTrackVolUIOpen] = useState(false);
@@ -452,13 +455,14 @@ export default function App() {
     let raf = 0;
     const tick = () => {
       const info = engine.getPlaybackInfo?.();
-      // Freeze during pause: keep the last rendered value.
-      setClipProgress(prev => (isPaused ? prev : (info?.progress01 ?? 0)));
+      setClipProgress(info?.progress01 ?? 0);
+      setClipPositionSeconds(info?.positionSeconds ?? 0);
+      setClipDurationSeconds(info?.durationSeconds ?? 0);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [engine, isPaused]);
+  }, [engine]);
 
   useEffect(() => {
     if (!queuedTrack && !queuedSectionName && !queuedModeName) {
@@ -767,6 +771,12 @@ export default function App() {
     });
   }, [tracks, playingTrackName, selectedTrack, engine, scheduleAtServerTime]);
 
+  const onSeekMsg = useCallback(({ positionSeconds, serverMs }) => {
+    const seek = () => engine.seekSimpleTrack?.(positionSeconds);
+    if (Number.isFinite(serverMs)) scheduleAtServerTime(serverMs, seek);
+    else seek();
+  }, [engine, scheduleAtServerTime]);
+
   const onQueueSectionMsg = useCallback((name) => {
     if (shouldIgnoreQueues()) {
       console.log("[SYNC][IGNORE] dropping stale QUEUE_SECTION during hydrate window:", name);
@@ -1059,6 +1069,7 @@ export default function App() {
     onStop: onStopMsg,
     onCancelStop: onCancelStopMsg,
     onResume: onResumeMsg,
+    onSeek: onSeekMsg,
     onQueueSection: onQueueSectionMsg,
     onClearSectionQueue: onClearSectionQueueMsg,
     onQueueMode: onQueueModeMsg,
@@ -1071,6 +1082,15 @@ export default function App() {
     onSyncState: onSyncStateMsg,
   });
   useEffect(() => { roomRef.current = room; }, [room]);
+
+  const handleSeek = useCallback((positionSeconds) => {
+    if (!Number.isFinite(positionSeconds)) return;
+    if (room.onlineActive && isActiveRole) {
+      room.requestSeek?.({ positionSeconds });
+    } else {
+      engine.seekSimpleTrack?.(positionSeconds);
+    }
+  }, [engine, room, isActiveRole]);
 
   const roomState = {
     isOnline: onlineEnabled,
@@ -1496,13 +1516,16 @@ export default function App() {
       <h1 className="visually-hidden">Wizamp</h1>
 
       <div className="playback-dock">
-      {/* Clip Information (progress bar from 0 to loopPoint) */}
+      {/* Clip information; simple tracks expose their linear timeline for seeking. */}
       {!isPassiveRole && (
-        <section className="clip-progress-wrap">
-          <div className="clip-progress" role="progressbar" aria-label="Clip position" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(clipProgress * 100)}>
-            <div className="clip-progress__fill" style={{ width: `${Math.round(clipProgress * 100)}%` }} />
-          </div>
-        </section>
+        <ClipProgress
+          progress={clipProgress}
+          positionSeconds={clipPositionSeconds}
+          durationSeconds={clipDurationSeconds}
+          showTimeline={playingTrack?.simple === true && isActive}
+          seekable={playingTrack?.simple === true && isActive && !replacementPending && (!room.onlineActive || isActiveRole)}
+          onSeek={handleSeek}
+        />
       )}
 
       {/* Section Controls */}

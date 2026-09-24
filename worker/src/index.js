@@ -245,6 +245,21 @@ export class RoomHub {
         break;
       }
 
+      case "SEEK_REQUEST": {
+        const u = this.clients.get(ws); if (!u) return;
+        if (u.role !== "GM") {
+          try { ws.send(JSON.stringify({ type: "ERROR", code: "FORBIDDEN", message: "Only active user can seek." })); } catch {}
+          break;
+        }
+        const roomId = u.roomId;
+        const positionSeconds = Math.max(0, Number(data.positionSeconds) || 0);
+        const serverMs = Number(data.serverMs) || (Date.now() + 300);
+        console.log("[RoomHub] SEEK_REQUEST", { roomId, positionSeconds, serverMs });
+        const payload = JSON.stringify({ type: "SEEK", positionSeconds, serverMs });
+        for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
+        break;
+      }
+
       case "SET_TRACK_REQUEST": {
         const u = this.clients.get(ws);
         if (!u) return;

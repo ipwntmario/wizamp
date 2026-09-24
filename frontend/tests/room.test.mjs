@@ -60,3 +60,13 @@ test('cancelling a stop restores the room playing snapshot', () => {
   assert.deepEqual(messages.at(-1), { type: 'CANCEL_STOP' });
   assert.deepEqual(hub.roomState.get('test').playing, playing);
 });
+
+test('seek is synchronized within the room and restricted to the active user', () => {
+  const { send, messages } = fixture();
+  send({ type: 'SEEK_REQUEST', positionSeconds: 42.5, serverMs: 13000 });
+  assert.deepEqual(messages.at(-1), { type: 'SEEK', positionSeconds: 42.5, serverMs: 13000 });
+
+  const passive = fixture('PASSIVE');
+  passive.send({ type: 'SEEK_REQUEST', positionSeconds: 10, serverMs: 13000 });
+  assert.equal(passive.messages.at(-1).code, 'FORBIDDEN');
+});

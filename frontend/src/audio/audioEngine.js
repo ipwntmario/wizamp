@@ -1122,6 +1122,35 @@ export class AudioEngine {
     this.pausedInfo = null;
   }
 
+  _playableDuration(clipName, buffer) {
+    const clip = this.clipData?.[clipName];
+    if (!clip || !buffer) return 0;
+    const metadataDuration = Number(clip.loopPoint ?? clip.clipEnd);
+    const bufferDuration = Math.max(0, Number(buffer.duration) || 0);
+    if (!Number.isFinite(metadataDuration) || metadataDuration <= 0) return bufferDuration;
+    return bufferDuration > 0 ? Math.min(metadataDuration, bufferDuration) : metadataDuration;
+  }
+
+  seekSimpleTrack(positionSeconds) {
+    if (this.trackData?.[this.currentTrackName]?.simple !== true) return false;
+    const clipName = this.pausedInfo?.clipName || this.lastPlayingClipName;
+    const entry = clipName ? this.activeClips?.[clipName] : null;
+    const buffer = clipName ? (this._bufferForClipMode(clipName) || entry?.buffer) : null;
+    const duration = this._playableDuration(clipName, buffer);
+    if (!clipName || !entry || duration <= 0) return false;
+
+    const requested = Math.max(0, Number(positionSeconds) || 0);
+    const offsetSeconds = Math.min(requested, Math.max(0, duration - 0.001));
+    if (this.isPaused && this.pausedInfo) {
+      this.pausedInfo = { ...this.pausedInfo, clipName, offsetSeconds };
+      return true;
+    }
+
+    this.clearScheduled();
+    this.playClip(clipName, { offsetSeconds, skipFadeIn: true });
+    return true;
+  }
+
   getPlaybackInfo() {
     // If we paused and captured an offset, keep the bar frozen at that location.
     if (this.isPaused && this.pausedInfo) {
@@ -1134,9 +1163,10 @@ export class AudioEngine {
         const span = Math.max(1e-6, loopPoint - loopStart);
         const offset = (offsetSeconds != null) ? offsetSeconds : loopStart;
         const rel = Math.max(0, Math.min(1, (offset - loopStart) / span));
-        return { progress01: rel };
+        const durationSeconds = this._playableDuration(clipName, buff);
+        return { progress01: rel, positionSeconds: Math.max(0, offset), durationSeconds };
       }
-      return { progress01: 0 };
+      return { progress01: 0, positionSeconds: 0, durationSeconds: 0 };
     }
 
     // Normal running path
@@ -1146,7 +1176,7 @@ export class AudioEngine {
     const buff  = this._bufferForClipMode?.(clipName) || entry?.buffer;
     const ctx   = this.audioCtx;
 
-    if (!ctx || !entry || !clip || !buff) return { progress01: 0 };
+    if (!ctx || !entry || !clip || !buff) return { progress01: 0, positionSeconds: 0, durationSeconds: 0 };
 
     const loopStart = clip.loopStart || 0;
     const loopPoint = (clip.loopPoint ?? buff.duration);
@@ -1162,7 +1192,11 @@ export class AudioEngine {
     const clamped = Math.max(loopStart, Math.min(loopPoint, posWrapped));
     const rel = Math.max(0, Math.min(1, (clamped - loopStart) / span));
 
-    return { progress01: rel };
+    return {
+      progress01: rel,
+      positionSeconds: Math.max(0, posWrapped),
+      durationSeconds: this._playableDuration(clipName, buff),
+    };
   }
 
   getTrackExitTiming() {
