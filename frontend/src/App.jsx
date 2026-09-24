@@ -15,12 +15,13 @@
  * for adequate testing to be done.
  */
 
-import { useEffect, useMemo, useRef, useState, useCallback  } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback  } from "react";
 import { AudioEngine } from "./audio/audioEngine";
 import { useMusicData } from "./data/useMusicData";
 import { findSelectableEndSection, getAutoLockedTargets } from "./data/sectionTransitions";
 import { replacementRemainingSeconds } from "./data/replacementTiming";
 import { useSession } from "./net/useSession";
+import { resolveTheme, themeSessionKey, themeStorageKey } from "./themes";
 import { useRoom } from "./net/useRoom";
 import LeftPanel from "./components/LeftPanel";
 import DatabaseModal from "./components/DatabaseModal";
@@ -162,6 +163,19 @@ export default function App() {
   }, [showPlayControlsButton]);
 
   const { roomId, setRoomId, onlineEnabled, role, setRole, displayName, setDisplayName, roomIdentities, setRoomIdentity } = useSession();
+  const [themeChoices, setThemeChoices] = useState({});
+  const roomThemeKey = themeSessionKey(roomId);
+  let savedThemeId;
+  try { savedThemeId = localStorage.getItem(themeStorageKey(roomId)); } catch { /* Storage may be disabled. */ }
+  const activeTheme = resolveTheme(roomId, themeChoices[roomThemeKey] ?? savedThemeId);
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = activeTheme.id;
+  }, [activeTheme.id]);
+  const chooseTheme = (targetRoomId, themeId) => {
+    if (resolveTheme(targetRoomId, themeId).id !== themeId) return;
+    setThemeChoices((previous) => ({ ...previous, [themeSessionKey(targetRoomId)]: themeId }));
+    try { localStorage.setItem(themeStorageKey(targetRoomId), themeId); } catch { /* Storage may be disabled. */ }
+  };
   const isActiveRole = !onlineEnabled || role === "GM";
   const isPassiveRole = onlineEnabled && role === "PASSIVE";
 
@@ -1412,6 +1426,8 @@ export default function App() {
         setDisplayName={setDisplayName}
         roomIdentities={roomIdentities}
         setRoomIdentity={setRoomIdentity}
+        themeChoices={themeChoices}
+        onChooseTheme={chooseTheme}
         room={room}
         libraryDocked={libraryExpanded && !isPassiveRole}
         canAccessDatabase={isActiveRole}
