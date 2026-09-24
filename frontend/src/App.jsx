@@ -36,6 +36,7 @@ import VolumeControl from "./components/VolumeControl";
 import TrackVolumeControl from "./components/TrackVolumeControl";
 import PrimaryPlaybackButton from "./components/PrimaryPlaybackButton";
 import ClipProgress from "./components/ClipProgress";
+import DynamicClipPanel from "./components/DynamicClipPanel";
 import icon1Url from "./assets/icons/icon1.png";
 import icon2bUrl from "./assets/icons/icon2b.png";
 
@@ -65,6 +66,12 @@ export default function App() {
   const [resizingLibrary, setResizingLibrary] = useState(false);
   const libraryResizePointer = useRef(null);
   const [mobileView, setMobileView] = useState("library");
+  const [dynamicClipsExpanded, setDynamicClipsExpanded] = useState(() => {
+    try { return localStorage.getItem("wizamp_dynamicClipsExpanded") !== "0"; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wizamp_dynamicClipsExpanded", dynamicClipsExpanded ? "1" : "0"); } catch {}
+  }, [dynamicClipsExpanded]);
 
   const [status, setStatus] = useState("Idle");
   const [statusHistory, setStatusHistory] = useState([]);
@@ -1516,8 +1523,8 @@ export default function App() {
       <h1 className="visually-hidden">Wizamp</h1>
 
       <div className="playback-dock">
-      {/* Clip information; simple tracks expose their linear timeline for seeking. */}
-      {!isPassiveRole && (
+      {/* Simple tracks expose their linear timeline directly for seeking. */}
+      {!isPassiveRole && playingTrack?.simple !== false && (
         <ClipProgress
           progress={clipProgress}
           positionSeconds={clipPositionSeconds}
@@ -1528,7 +1535,16 @@ export default function App() {
         />
       )}
 
-      {/* Section Controls */}
+      {/* Bottom-to-top hierarchy is Tracks, Sections, Modes, Clips. */}
+      {!isPassiveRole && playingTrack?.simple === false && isActive && (
+        <DynamicClipPanel
+          expanded={dynamicClipsExpanded}
+          onExpandedChange={setDynamicClipsExpanded}
+          progress={clipProgress}
+        />
+      )}
+
+      {/* Section and mode controls follow clips in the top-to-bottom layout. */}
       {currentSectionName && !isPassiveRole && (
         <section style={{ marginBottom: 16 }}>
           {!isPassiveRole && (

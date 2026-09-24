@@ -148,6 +148,16 @@ body {
 .clip-progress__thumb { position: absolute; top: 50%; width: 14px; height: 14px; border: 2px solid #f2df89; border-radius: 50%; background: #302b22; box-shadow: 0 1px 5px rgba(0,0,0,.55), 0 0 9px rgba(224,199,102,.34); transform: translate(-50%, -50%); transition: left 80ms linear, width .14s ease, height .14s ease; }
 .clip-progress.is-dragging .clip-progress__fill, .clip-progress.is-dragging .clip-progress__thumb { transition: none; }
 .clip-progress.is-dragging .clip-progress__thumb { width: 17px; height: 17px; }
+.dynamic-clips { overflow: hidden; margin-bottom: 16px; border: 1px solid rgba(255,255,255,.065); border-radius: 11px; background: linear-gradient(145deg, rgba(255,255,255,.018), rgba(8,9,14,.1)); }
+.dynamic-clips__heading { display: flex; min-height: 28px; align-items: center; justify-content: space-between; padding-left: 12px; border-bottom: 1px solid rgba(255,255,255,.045); color: rgba(255,255,255,.27); font-size: 8px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.dynamic-clips__heading button { display: grid; width: 34px; align-self: stretch; place-items: center; border: 0; color: rgba(255,255,255,.3); background: transparent; cursor: pointer; transition: color .15s ease, background .15s ease; }
+.dynamic-clips__heading button:hover { color: rgba(255,255,255,.68); background: rgba(255,255,255,.035); }
+.dynamic-clips__heading button:focus-visible, .dynamic-clips-restore:focus-visible { outline: 2px solid #a99cff; outline-offset: -2px; }
+.dynamic-clips__body { padding: 12px 14px 13px; }
+.dynamic-clips .clip-progress-wrap { margin: 0; }
+.dynamic-clips-restore { display: grid; width: 34px; height: 14px; box-sizing: border-box; margin: -3px auto 5px; padding: 0; place-items: center; border: 0; border-radius: 999px; color: rgba(255,255,255,.18); background: transparent; cursor: pointer; line-height: 0; transition: color .15s ease, background .15s ease, opacity .15s ease; opacity: .58; }
+.dynamic-clips-restore svg { margin: 0; }
+.dynamic-clips-restore:hover { color: rgba(255,255,255,.56); background: rgba(255,255,255,.025); opacity: 1; }
 
 /* Responsive track-library surface */
 .track-library-shell {
@@ -392,8 +402,6 @@ body {
   letter-spacing: .11em;
   text-transform: uppercase;
 }
-.section-controls__region[aria-label="Section transitions"] { order: 1; }
-.section-controls__region[aria-label="Modes"] { order: 2; }
 .section-controls__heading--section { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
 .section-controls__heading--section strong {
   color: rgba(255,255,255,.82);
