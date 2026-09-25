@@ -1,13 +1,6 @@
 import { useEffect, useRef } from "react";
 import Icon from "./Icon";
-
-const updates = [
-  { title: "A cleaner foundation", detail: "Refactored playback and interface code, refreshed the app's icons, and polished the session, settings, and database panels." },
-  { title: "Steadier playback controls", detail: "Reorganized the progress, section, mode, and transport areas. Section and mode spaces now hold their size as a track changes." },
-  { title: "A better track library", detail: "Added a resizable desktop panel, dedicated mobile views, quick track actions, title scrolling, and clearer track and queue indicators." },
-  { title: "Queue with confidence", detail: "Tracks can preload for later playback, Auto-Play respects your choice, and pending tracks, sections, and modes can be undone." },
-  { title: "Useful details", detail: "Added status history, compact volume controls, subtle queued-state highlights, and clearer behavior when ending or replacing a track." },
-];
+import { LATEST_RELEASE, PREVIOUS_RELEASES } from "../releaseNotes";
 
 const concepts = [
   {
@@ -55,7 +48,7 @@ function GuidePanel() {
             <span className="about-panel__concept-number">{number}</span>
             <strong>{title}</strong>
             <p>{detail}</p>
-            {index < concepts.length - 1 && <Icon name="chevronRight" size={18} />}
+            {index > 0 && <Icon name="chevronRight" size={18} />}
           </div>
         ))}
       </div>
@@ -74,19 +67,43 @@ function GuidePanel() {
   );
 }
 
+function UpdateList({ updates }) {
+  return (
+    <ul className="about-panel__updates">
+      {updates.map(({ title, detail }) => (
+        <li key={title}>
+          <strong>{title}</strong>
+          <span>{detail}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function UpdatesPanel() {
   return (
     <div id="about-updates-panel" role="tabpanel" aria-labelledby="about-updates-tab" className="about-panel__body">
-      <h3>What’s new in v0.2</h3>
-      <p className="about-panel__intro">A more polished, flexible way to explore and play tracks.</p>
-      <ul className="about-panel__updates">
-        {updates.map(({ title, detail }) => (
-          <li key={title}>
-            <strong>{title}</strong>
-            <span>{detail}</span>
-          </li>
+      <h3>What’s new in v{LATEST_RELEASE.version}</h3>
+      <p className="about-panel__intro">{LATEST_RELEASE.intro}</p>
+      <UpdateList updates={LATEST_RELEASE.updates} />
+    </div>
+  );
+}
+
+function PreviousUpdatesPanel() {
+  return (
+    <div id="about-history-panel" role="tabpanel" aria-labelledby="about-history-tab" className="about-panel__body">
+      <h3>Previous updates</h3>
+      <p className="about-panel__intro">Earlier releases, newest first.</p>
+      <div className="about-panel__history" aria-label="Previous release notes">
+        {PREVIOUS_RELEASES.map((release) => (
+          <article className="about-panel__release" key={release.version}>
+            <h4>Version {release.version}</h4>
+            <p className="about-panel__intro">{release.intro}</p>
+            <UpdateList updates={release.updates} />
+          </article>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
@@ -115,7 +132,7 @@ export default function AboutModal({ open, onClose, iconSrc, section = "guide", 
           <div>
             <p className="about-panel__eyebrow">About the app</p>
             <h2 id="about-title">Wizamp</h2>
-            <span className="about-panel__version">Version 0.2</span>
+            <span className="about-panel__version">Version {LATEST_RELEASE.version}</span>
           </div>
         </header>
         <nav className="about-panel__tabs" role="tablist" aria-label="About Wizamp">
@@ -141,8 +158,19 @@ export default function AboutModal({ open, onClose, iconSrc, section = "guide", 
           >
             Latest update
           </button>
+          <button
+            id="about-history-tab"
+            type="button"
+            role="tab"
+            aria-selected={section === "history"}
+            aria-controls="about-history-panel"
+            className={section === "history" ? "is-active" : ""}
+            onClick={() => onSectionChange?.("history")}
+          >
+            Previous updates
+          </button>
         </nav>
-        {section === "updates" ? <UpdatesPanel /> : <GuidePanel />}
+        {section === "updates" ? <UpdatesPanel /> : section === "history" ? <PreviousUpdatesPanel /> : <GuidePanel />}
       </section>
     </div>
   );

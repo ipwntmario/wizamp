@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
+import { LATEST_RELEASE } from "../releaseNotes";
 
 export default function SettingsModal({
   open,
@@ -200,7 +201,7 @@ export default function SettingsModal({
             <span className="settings-group__icon"><Icon name="info" size={18} /></span>
             <span className="settings-about-link__copy">
               <strong>About Wizamp</strong>
-              <small>How Wizamp works and what’s new in Version 0.2</small>
+              <small>How Wizamp works and what’s new in Version {LATEST_RELEASE.version}</small>
             </span>
             <Icon name="chevronRight" size={18} />
           </button>

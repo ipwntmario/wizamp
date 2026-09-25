@@ -83,8 +83,8 @@ body {
 .about-panel__eyebrow { margin: 0 0 3px; color: #b9adff; font-size: 10px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
 .about-panel__header h2 { margin: 0 0 8px; font-size: clamp(30px, 7vw, 42px); font-weight: 750; letter-spacing: -.045em; line-height: 1; }
 .about-panel__version { display: inline-block; padding: 4px 9px; border: 1px solid rgba(143,124,255,.28); border-radius: 999px; color: #d7ceff; background: rgba(143,124,255,.12); font-size: 11px; font-weight: 700; }
-.about-panel__tabs { display: grid; grid-template-columns: 1fr 1fr; padding: 0 32px; border-bottom: 1px solid rgba(255,255,255,.08); background: rgba(9,10,15,.22); }
-.about-panel__tabs button { position: relative; min-height: 48px; border: 0; color: rgba(255,255,255,.45); background: transparent; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; transition: color .16s ease, background .16s ease; }
+.about-panel__tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0 32px; border-bottom: 1px solid rgba(255,255,255,.08); background: rgba(9,10,15,.22); }
+.about-panel__tabs button { position: relative; min-height: 48px; padding: 5px; border: 0; color: rgba(255,255,255,.45); background: transparent; font: inherit; font-size: 12px; font-weight: 750; line-height: 1.2; cursor: pointer; transition: color .16s ease, background .16s ease; }
 .about-panel__tabs button::after { position: absolute; right: 18px; bottom: -1px; left: 18px; height: 2px; border-radius: 2px 2px 0 0; background: #9b8aff; content: ""; opacity: 0; transform: scaleX(.65); transition: opacity .16s ease, transform .16s ease; }
 .about-panel__tabs button:hover { color: rgba(255,255,255,.75); background: rgba(255,255,255,.02); }
 .about-panel__tabs button.is-active { color: #eeeaff; }
@@ -114,11 +114,16 @@ body {
 .about-panel__updates li { display: grid; gap: 3px; padding: 11px 13px; border: 1px solid rgba(255,255,255,.065); border-radius: 11px; background: rgba(255,255,255,.026); }
 .about-panel__updates strong { color: #e7e2ff; font-size: 12px; }
 .about-panel__updates span { color: rgba(255,255,255,.56); font-size: 11px; line-height: 1.5; }
+.about-panel__history { max-height: max(180px, min(440px, calc(100dvh - 280px))); overflow-y: auto; padding-right: 7px; scrollbar-color: rgba(143,124,255,.45) transparent; scrollbar-width: thin; }
+.about-panel__release + .about-panel__release { margin-top: 22px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.1); }
+.about-panel__release h4 { margin: 0; color: var(--theme-accent, #c9beff); font-size: 13px; }
+.about-panel__release .about-panel__intro { margin-bottom: 12px; }
 @media (max-width: 520px) {
   .about-overlay { align-items: flex-start; }
   .about-panel__header { gap: 10px; padding: 26px 20px 22px; }
   .about-panel__header img { width: 56px; height: 56px; flex-basis: 56px; }
-  .about-panel__tabs { padding: 0 22px; }
+  .about-panel__tabs { padding: 0 12px; }
+  .about-panel__tabs button { font-size: 11px; }
   .about-panel__body { padding: 20px 22px 24px; }
   .about-panel__section-heading { display: block; }
   .about-panel__tutorial { margin: -7px 0 17px; }
