@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import Icon from "./Icon";
 
-export default function QueueIndicator({ currentTrack, queuedTrack, queuedTrackProgress = null, titleFor, expandable = true, onActivate, navigationControl }) {
+export default function QueueIndicator({ currentTrack, queuedTrack, queuedTrackProgress = null, titleFor, expandable = true, locked = false, onActivate, navigationControl }) {
   const [manuallyExpanded, setManuallyExpanded] = useState(false);
   const [countdownChoice, setCountdownChoice] = useState(null);
   const itemsId = useId();
@@ -10,12 +10,13 @@ export default function QueueIndicator({ currentTrack, queuedTrack, queuedTrackP
   const countdownActive = !!queuedTrack && queuedTrackProgress != null;
   const countdownKey = `${currentTrack ?? ""}\u0000${queuedTrack ?? ""}`;
   const choice = countdownChoice?.key === countdownKey ? countdownChoice.view : null;
-  const view = !expandable
+  const view = locked ? "collapsed" : !expandable
     ? (countdownActive && choice !== "collapsed" ? "peeking" : "collapsed")
     : countdownActive
       ? (choice ?? (manuallyExpanded ? "expanded" : "peeking"))
       : (manuallyExpanded ? "expanded" : "collapsed");
   const open = view !== "collapsed";
+  const Toggle = locked ? "div" : "button";
 
   useEffect(() => {
     if (!countdownActive) setCountdownChoice(null);
@@ -35,20 +36,20 @@ export default function QueueIndicator({ currentTrack, queuedTrack, queuedTrackP
   };
 
   return (
-    <section className={`queue-indicator ${open ? "is-open" : ""} ${view === "peeking" ? "is-peeking" : ""} ${expandable ? "" : "is-navigation"}`} aria-label="Playback queue">
+    <section className={`queue-indicator ${open ? "is-open" : ""} ${view === "peeking" ? "is-peeking" : ""} ${expandable ? "" : "is-navigation"} ${locked ? "is-locked" : ""}`} aria-label="Playback queue">
       <div className="queue-indicator__top-row">
-        <button
-          type="button"
+        <Toggle
+          type={locked ? undefined : "button"}
           className="queue-indicator__toggle"
-          onClick={handleClick}
-          aria-expanded={expandable ? open : undefined}
-          aria-controls={expandable ? itemsId : undefined}
+          onClick={locked ? undefined : handleClick}
+          aria-expanded={!locked && expandable ? open : undefined}
+          aria-controls={!locked && expandable ? itemsId : undefined}
         >
           <span className="queue-indicator__label">Track</span>
           <span className="queue-indicator__current">{currentTitle}</span>
-          {expandable && view !== "peeking" && <Icon name={open ? "chevronDown" : "chevronUp"} size={17} />}
-        </button>
-        {expandable && view === "peeking" && (
+          {!locked && expandable && view !== "peeking" && <Icon name={open ? "chevronDown" : "chevronUp"} size={17} />}
+        </Toggle>
+        {!locked && expandable && view === "peeking" && (
           <div className="queue-indicator__peek-controls">
             <button type="button" aria-label="Expand track queue" onClick={() => chooseView("expanded")}>
               <Icon name="chevronUp" size={15} />
@@ -58,7 +59,7 @@ export default function QueueIndicator({ currentTrack, queuedTrack, queuedTrackP
             </button>
           </div>
         )}
-        {!expandable && navigationControl && (
+        {!locked && !expandable && navigationControl && (
           <div className="queue-indicator__navigation-control">{navigationControl}</div>
         )}
       </div>
@@ -71,7 +72,7 @@ export default function QueueIndicator({ currentTrack, queuedTrack, queuedTrackP
               <span style={{ transform: `scaleX(${queuedTrackProgress})` }} />
             </span>
           )}
-          {!expandable && open && (
+          {!locked && !expandable && open && (
             <button type="button" className="queue-indicator__item-nav" aria-label="Go to play controls" onClick={onActivate} />
           )}
         </div>

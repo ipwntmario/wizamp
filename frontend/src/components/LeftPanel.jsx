@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import UsersPanel from "./UsersPanel";
 import Icon from "./Icon";
+import { availableThemes, resolveTheme, themeStorageKey } from "../themes";
 
 const LS_PANEL_OPEN = "ui.panelOpen";
 const LONG_PRESS_MS = 550;
@@ -18,7 +19,10 @@ export default function LeftPanel({
   currentRoomId,
   roomIdentities,
   setRoomIdentity,
+  themeChoices = {},
+  onChooseTheme,
   libraryDocked = false,
+  volumeExpanded = false,
   canAccessDatabase = false,
   onOpenDatabase,
   onOpenSettings,
@@ -28,6 +32,9 @@ export default function LeftPanel({
   const gesture = useRef(null);
   const longPressTimer = useRef(null);
   const suppressClick = useRef(false);
+  const barRef = useRef(null);
+  const roomNameMeasureRef = useRef(null);
+  const [compactHeader, setCompactHeader] = useState(false);
 
   useEffect(() => persist(LS_PANEL_OPEN, String(open)), [open]);
   useEffect(() => () => clearTimeout(longPressTimer.current), []);
@@ -37,6 +44,23 @@ export default function LeftPanel({
   const latencyMs = roomState?.latencyMs ?? null;
   const offsetMs = roomState?.serverOffsetMs ?? null;
   const awcIdentity = roomIdentities?.awc || { role: "GM", displayName: "" };
+
+  useLayoutEffect(() => {
+    const update = () => {
+      if (!volumeExpanded || open || !window.matchMedia("(max-width: 760px)").matches) {
+        setCompactHeader(false);
+        return;
+      }
+      const barLeft = barRef.current?.getBoundingClientRect().left ?? 8;
+      const nameWidth = roomNameMeasureRef.current?.getBoundingClientRect().width ?? 0;
+      const fullBarRight = barLeft + 44 + 28 + 9 + nameWidth + 14 + 2;
+      const expandedVolumeLeft = window.innerWidth - 8 - Math.min(270, window.innerWidth - 118) - 2;
+      setCompactHeader(fullBarRight + 8 > expandedVolumeLeft);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [volumeExpanded, open, activeRoom.name]);
 
   function closePanel() {
     setOpen(false);
@@ -53,7 +77,7 @@ export default function LeftPanel({
     if (gesture.current) return;
     gesture.current = { x: event.clientX, y: event.clientY, longPressed: false };
     clearTimeout(longPressTimer.current);
-    if (!room?.private) {
+    if (room) {
       longPressTimer.current = setTimeout(() => {
         if (!gesture.current) return;
         gesture.current.longPressed = true;
@@ -63,15 +87,10 @@ export default function LeftPanel({
     }
   }
 
-  function moveTouch(event) {
+  function cancelHoldOnMove(event) {
     if (!gesture.current || event.pointerType !== "touch") return;
-    const dx = event.clientX - gesture.current.x;
-    const dy = event.clientY - gesture.current.y;
-    if (Math.hypot(dx, dy) > 10) clearTimeout(longPressTimer.current);
-    if (dx < -64 && Math.abs(dx) > Math.abs(dy)) {
+    if (Math.hypot(event.clientX - gesture.current.x, event.clientY - gesture.current.y) > 10) {
       clearTimeout(longPressTimer.current);
-      gesture.current = null;
-      closePanel();
     }
   }
 
@@ -88,12 +107,12 @@ export default function LeftPanel({
 
   return (
     <aside
-      className={`session-panel ${open ? "is-open" : "is-closed"} ${libraryDocked ? "is-library-docked" : ""}`}
+      className={`session-panel ${open ? "is-open" : "is-closed"} ${libraryDocked ? "is-library-docked" : ""} ${compactHeader ? "is-header-compact" : ""}`}
       aria-label="Session rooms"
-      onPointerMove={moveTouch}
+      onPointerMove={cancelHoldOnMove}
       onPointerCancel={endTouch}
     >
-      <div className="session-panel__bar">
+      <div ref={barRef} className="session-panel__bar">
         <button
           className="session-panel__menu"
           type="button"
@@ -110,24 +129,24 @@ export default function LeftPanel({
           <span className={`session-room__icon session-room__icon--${activeRoom.private ? "private" : "online"}`}>
             <Icon name={activeRoom.icon} size={19} />
           </span>
-          <span>{activeRoom.name}</span>
+          <span className="session-panel__current-name" aria-hidden={compactHeader}>{activeRoom.name}</span>
+          <span ref={roomNameMeasureRef} className="session-panel__current-measure" aria-hidden="true">{activeRoom.name}</span>
         </div>
       </div>
 
       <div
         className="session-panel__drawer"
         aria-hidden={!open}
-        onPointerDown={(event) => beginTouch(event, null)}
-        onPointerUp={endTouch}
       >
         <div className="session-panel__heading">
           <span>Sessions</span>
-          <span className="session-panel__hint">Swipe left to close</span>
         </div>
 
         <div className="session-panel__rooms">
           {rooms.map((room) => {
             const selected = room.id === currentRoomId;
+            const themeChoice = themeChoices[room.id || "private"] ?? readStr(themeStorageKey(room.id), null);
+            const themes = availableThemes();
             return (
               <div className="session-room-wrap" key={room.private ? "private" : room.id}>
                 <button
@@ -150,58 +169,72 @@ export default function LeftPanel({
                     <strong>{room.name}</strong>
                     <small>{room.detail}</small>
                   </span>
-                  {!room.private && (
-                    <span
-                      className="session-room__more"
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Edit identity for ${room.name}`}
-                      aria-expanded={editingRoomId === room.id}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setEditingRoomId((value) => value === room.id ? null : room.id);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setEditingRoomId((value) => value === room.id ? null : room.id);
-                        }
-                      }}
-                    >
-                      <Icon name="moreVertical" size={20} />
-                    </span>
-                  )}
+                </button>
+                <button
+                  type="button"
+                  className="session-room__more"
+                  aria-label={`Options for ${room.name}`}
+                  aria-expanded={editingRoomId === room.id}
+                  aria-controls={`session-options-${room.id || "private"}`}
+                  onClick={() => setEditingRoomId((value) => value === room.id ? null : room.id)}
+                >
+                  <Icon name="moreVertical" size={20} />
                 </button>
 
-                {!room.private && (
                   <div
+                    id={`session-options-${room.id || "private"}`}
                     className={`session-identity ${editingRoomId === room.id ? "is-visible" : ""}`}
                     aria-hidden={editingRoomId !== room.id}
                     inert={editingRoomId !== room.id}
                   >
-                    <label>
-                      <span>Display name</span>
-                      <input
-                        value={awcIdentity.displayName}
-                        onChange={(event) => setRoomIdentity(room.id, { displayName: event.target.value })}
-                        placeholder="Your name"
-                        spellCheck="false"
-                      />
-                    </label>
-                    <label>
-                      <span>Role</span>
-                      <select
-                        value={awcIdentity.role}
-                        onChange={(event) => setRoomIdentity(room.id, { role: event.target.value })}
-                      >
-                        <option value="GM">Audio Manager</option>
-                        <option value="PASSIVE_BTS">BTS</option>
-                        <option value="PASSIVE">Player</option>
-                      </select>
-                    </label>
+                    {!room.private && (
+                      <>
+                        <label>
+                          <span>Display name</span>
+                          <input
+                            value={awcIdentity.displayName}
+                            onChange={(event) => setRoomIdentity(room.id, { displayName: event.target.value })}
+                            placeholder="Your name"
+                            spellCheck="false"
+                          />
+                        </label>
+                        <label>
+                          <span>Role</span>
+                          <select
+                            value={awcIdentity.role}
+                            onChange={(event) => setRoomIdentity(room.id, { role: event.target.value })}
+                          >
+                            <option value="GM">Audio Manager</option>
+                            <option value="PASSIVE_BTS">BTS</option>
+                            <option value="PASSIVE">Player</option>
+                          </select>
+                        </label>
+                      </>
+                    )}
+                    <fieldset className="session-theme-picker">
+                      <legend>Theme</legend>
+                      {[...new Set(themes.map(({ group }) => group))].map((group) => (
+                        <div className="session-theme-picker__group" key={group}>
+                          <h4 className="session-theme-picker__group-title">{group}</h4>
+                          <div className="session-theme-picker__choices">
+                            {themes.filter((theme) => theme.group === group).map((theme) => (
+                              <label className="session-theme-picker__choice" key={theme.id}>
+                                <input
+                                  type="radio"
+                                  name={`theme-${room.id || "private"}`}
+                                  value={theme.id}
+                                  checked={resolveTheme(room.id, themeChoice).id === theme.id}
+                                  onChange={() => onChooseTheme?.(room.id, theme.id)}
+                                />
+                                <span className={`session-theme-picker__swatch session-theme-picker__swatch--${theme.id}`} aria-hidden="true" />
+                                <span>{theme.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </fieldset>
                   </div>
-                )}
               </div>
             );
           })}

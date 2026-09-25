@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
+import { LATEST_RELEASE } from "../releaseNotes";
 
 export default function SettingsModal({
   open,
@@ -7,6 +8,7 @@ export default function SettingsModal({
   fadeOutSeconds, setFadeOutSeconds,
   pauseFadeSeconds, setPauseFadeSeconds,
   showStatus, setShowStatus,
+  cursorEffectEnabled, setCursorEffectEnabled,
   showPlayControlsButton, setShowPlayControlsButton,
   useAlternateIcon, setUseAlternateIcon,
   onOpenAbout,
@@ -128,14 +130,14 @@ export default function SettingsModal({
 
             <label className="settings-field settings-field--toggle">
               <span className="settings-field__copy">
-                <strong>Show status bar</strong>
-                <small>Display the current loading and playback state.</small>
+                <strong>Cursor effect</strong>
+                <small>Show a magical glow and sparkles in Signet and Castle (Torchlit). Respects reduced-motion preferences.</small>
               </span>
               <span className="toggle-switch">
                 <input
                   type="checkbox"
-                  checked={!!showStatus}
-                  onChange={(event) => setShowStatus?.(event.target.checked)}
+                  checked={!!cursorEffectEnabled}
+                  onChange={(event) => setCursorEffectEnabled?.(event.target.checked)}
                 />
                 <span aria-hidden="true" />
               </span>
@@ -167,6 +169,20 @@ export default function SettingsModal({
               </label>
               <label className="settings-field settings-field--toggle">
                 <span className="settings-field__copy">
+                  <strong>Show status bar</strong>
+                  <small>Display the current loading and playback state.</small>
+                </span>
+                <span className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={!!showStatus}
+                    onChange={(event) => setShowStatus?.(event.target.checked)}
+                  />
+                  <span aria-hidden="true" />
+                </span>
+              </label>
+              <label className="settings-field settings-field--toggle">
+                <span className="settings-field__copy">
                   <strong>Use alternate icon</strong>
                   <small>Use the alternate Wizamp icon in the About panel.</small>
                 </span>
@@ -185,7 +201,7 @@ export default function SettingsModal({
             <span className="settings-group__icon"><Icon name="info" size={18} /></span>
             <span className="settings-about-link__copy">
               <strong>About Wizamp</strong>
-              <small>Version 0.2 and update notes</small>
+              <small>How Wizamp works and what’s new in Version {LATEST_RELEASE.version}</small>
             </span>
             <Icon name="chevronRight" size={18} />
           </button>

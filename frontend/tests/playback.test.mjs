@@ -172,6 +172,30 @@ test('activating a queued track reuses its decoded buffers and prunes stale cach
   assert.deepEqual([...engine._bufferCache.keys()], ['/tracks/Queued/audio/ready.ogg']);
 });
 
+test('simple tracks expose a timeline and can seek while playing or paused', () => withTimers(() => {
+  const engine = fixture();
+  engine.trackData = { Simple: { simple: true } };
+  engine.currentTrackName = 'Simple';
+  engine.playClip('A');
+  engine.audioCtx.currentTime = 4;
+
+  assert.deepEqual(engine.getPlaybackInfo(), {
+    progress01: 0.3,
+    positionSeconds: 3,
+    durationSeconds: 10,
+  });
+
+  assert.equal(engine.seekSimpleTrack(7), true);
+  assert.equal(engine.activeClips.A.offsetAtStart, 7);
+  assert.equal(engine.getPlaybackInfo().positionSeconds, 7);
+
+  engine.isPaused = true;
+  engine.pausedInfo = { clipName: 'A', offsetSeconds: 7 };
+  assert.equal(engine.seekSimpleTrack(4), true);
+  assert.equal(engine.pausedInfo.offsetSeconds, 4);
+  assert.equal(engine.getPlaybackInfo().positionSeconds, 4);
+}));
+
 test('catalog ordering keeps pinned tests and honors renamed titles', () => {
   const tracks = { A: { simple: true }, B: { simple: false }, C: { simple: false, test: true }, D: { test: true } };
   assert.deepEqual(orderTracks(tracks, { pinned: new Set(['C']), hideTests: true, dynamicFirst: true, sortMode: 'alpha-asc' }), ['C', 'B', 'A']);

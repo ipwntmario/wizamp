@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="128" viewBox="0 0 256 128">
+  <defs>
+    <linearGradient id="stone-a" x1="0" y1="0" x2="0.85" y2="1">
+      <stop stop-color="#777064"/>
+      <stop offset="0.18" stop-color="#625d53"/>
+      <stop offset="0.7" stop-color="#48463f"/>
+      <stop offset="1" stop-color="#33342f"/>
+    </linearGradient>
+    <linearGradient id="stone-b" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#716b5e"/>
+      <stop offset="0.4" stop-color="#58554b"/>
+      <stop offset="1" stop-color="#383a35"/>
+    </linearGradient>
+    <linearGradient id="stone-c" x1="0" y1="0" x2="0.7" y2="1">
+      <stop stop-color="#696355"/>
+      <stop offset="0.48" stop-color="#535047"/>
+      <stop offset="1" stop-color="#343630"/>
+    </linearGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="7" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+  </defs>
+  <rect width="256" height="128" fill="#242522"/>
+  <g stroke="#232520" stroke-width="2">
+    <rect x="2" y="2" width="124" height="60" rx="4" fill="url(#stone-a)"/>
+    <rect x="130" y="2" width="124" height="60" rx="4" fill="url(#stone-b)"/>
+    <rect x="-62" y="66" width="124" height="60" rx="4" fill="url(#stone-b)"/>
+    <rect x="66" y="66" width="124" height="60" rx="4" fill="url(#stone-c)"/>
+    <rect x="194" y="66" width="124" height="60" rx="4" fill="url(#stone-a)"/>
+  </g>
+  <g fill="none" stroke-linecap="round">
+    <path d="M8 6H120 M136 6H247 M-56 70H56 M72 70H184 M200 70H248" stroke="#a39a87" stroke-opacity=".37" stroke-width="2"/>
+    <path d="M5 9V56 M133 9V56 M-59 73V120 M69 73V120 M197 73V120" stroke="#b2a796" stroke-opacity=".16" stroke-width="2"/>
+    <path d="M8 58H120 M136 58H247 M-56 122H56 M72 122H184 M200 122H248" stroke="#141916" stroke-opacity=".66" stroke-width="3"/>
+    <path d="M122 9V55 M250 9V55 M58 73V119 M186 73V119" stroke="#111815" stroke-opacity=".4" stroke-width="3"/>
+    <path d="M21 17l12 2 7-1 M87 40l17 1 M149 26l13-2 6 1 M29 91l12 1 M95 109l16-1 M219 85l11 2" stroke="#d1c0a2" stroke-opacity=".1" stroke-width="1.5"/>
+  </g>
+  <rect width="256" height="128" filter="url(#grain)" opacity=".065"/>
+</svg>

@@ -7,7 +7,7 @@ const PING_INTERVAL_MS = 5000;
 
 export function useRoom({
   onlineEnabled, roomId, displayName, role,
-  onPlay, onSetTrack, onPause, onStop, onCancelStop, onResume,
+  onPlay, onSetTrack, onPause, onStop, onCancelStop, onResume, onSeek,
   onQueueSection, onClearSectionQueue, onQueueMode, onClearModeQueue,
   onQueueTrack, onClearTrackQueue,
   onSetTrackVolume,
@@ -29,6 +29,8 @@ export function useRoom({
   useEffect(() => { onCancelStopRef.current = onCancelStop; }, [onCancelStop]);
   const onResumeRef = useRef(onResume);
   useEffect(() => { onResumeRef.current = onResume; }, [onResume]);
+  const onSeekRef = useRef(onSeek);
+  useEffect(() => { onSeekRef.current = onSeek; }, [onSeek]);
   const onQueueSectionRef = useRef(onQueueSection);
   useEffect(() => { onQueueSectionRef.current = onQueueSection; }, [onQueueSection]);
   const onClearSectionQueueRef = useRef(onClearSectionQueue);
@@ -172,6 +174,8 @@ export function useRoom({
         onCancelStopRef.current?.();
       } else if (data.type === "RESUME") {
         onResumeRef.current?.(Number(data.serverMs));
+      } else if (data.type === "SEEK") {
+        onSeekRef.current?.({ positionSeconds: Number(data.positionSeconds), serverMs: Number(data.serverMs) });
       } else if (data.type === "QUEUE_SECTION") {
         onQueueSectionRef.current?.(String(data.name || ""));
       } else if (data.type === "CLEAR_SECTION_QUEUE") {
@@ -267,6 +271,13 @@ export function useRoom({
     ws.send(JSON.stringify({ type: "RESUME_REQUEST", serverMs }));
   }, [serverNowMs]);
 
+  const requestSeek = useCallback(({ positionSeconds, delayMs = 300 } = {}) => {
+    const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const seconds = Math.max(0, Number(positionSeconds) || 0);
+    const serverMs = serverNowMs() + Math.max(0, delayMs);
+    ws.send(JSON.stringify({ type: "SEEK_REQUEST", positionSeconds: seconds, serverMs }));
+  }, [serverNowMs]);
+
   const requestSetTrack = useCallback((name) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -339,6 +350,7 @@ export function useRoom({
     requestStop,
     requestCancelStop,
     requestResume,
+    requestSeek,
     requestSetTrack,
     requestQueueSection,
     requestClearSectionQueue,

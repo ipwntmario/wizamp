@@ -15,12 +15,13 @@
  * for adequate testing to be done.
  */
 
-import { useEffect, useMemo, useRef, useState, useCallback  } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback  } from "react";
 import { AudioEngine } from "./audio/audioEngine";
 import { useMusicData } from "./data/useMusicData";
 import { findSelectableEndSection, getAutoLockedTargets } from "./data/sectionTransitions";
 import { replacementRemainingSeconds } from "./data/replacementTiming";
 import { useSession } from "./net/useSession";
+import { resolveTheme, themeSessionKey, themeStorageKey } from "./themes";
 import { useRoom } from "./net/useRoom";
 import LeftPanel from "./components/LeftPanel";
 import DatabaseModal from "./components/DatabaseModal";
@@ -35,6 +36,9 @@ import StatusBar from "./components/StatusBar";
 import VolumeControl from "./components/VolumeControl";
 import TrackVolumeControl from "./components/TrackVolumeControl";
 import PrimaryPlaybackButton from "./components/PrimaryPlaybackButton";
+import ClipProgress from "./components/ClipProgress";
+import DynamicClipPanel from "./components/DynamicClipPanel";
+import CursorEffect from "./components/CursorEffect";
 import icon1Url from "./assets/icons/icon1.png";
 import icon2bUrl from "./assets/icons/icon2b.png";
 
@@ -50,11 +54,26 @@ export default function App() {
     try { localStorage.setItem("wizamp_useAlternateIcon", useAlternateIcon ? "1" : "0"); } catch {}
   }, [useAlternateIcon]);
   const [showAbout, setShowAbout] = useState(true);
+  const [aboutSection, setAboutSection] = useState(() => {
+    try {
+      const hasSeenGuide = localStorage.getItem("wizamp_hasSeenGuide") === "1";
+      localStorage.setItem("wizamp_hasSeenGuide", "1");
+      return hasSeenGuide ? "updates" : "guide";
+    } catch {
+      return "guide";
+    }
+  });
   const [libraryExpanded, setLibraryExpanded] = useState(true);
   const [libraryWidth, setLibraryWidth] = useState(300);
   const [resizingLibrary, setResizingLibrary] = useState(false);
   const libraryResizePointer = useRef(null);
-  const [mobileView, setMobileView] = useState("controls");
+  const [mobileView, setMobileView] = useState("library");
+  const [dynamicClipsExpanded, setDynamicClipsExpanded] = useState(() => {
+    try { return localStorage.getItem("wizamp_dynamicClipsExpanded") !== "0"; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wizamp_dynamicClipsExpanded", dynamicClipsExpanded ? "1" : "0"); } catch {}
+  }, [dynamicClipsExpanded]);
 
   const [status, setStatus] = useState("Idle");
   const [statusHistory, setStatusHistory] = useState([]);
@@ -134,6 +153,12 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem("wizamp_showStatus", showStatus ? "1" : "0"); } catch {}
   }, [showStatus]);
+  const [cursorEffectEnabled, setCursorEffectEnabled] = useState(() => {
+    try { return localStorage.getItem("wizamp_cursorEffect") !== "0"; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("wizamp_cursorEffect", cursorEffectEnabled ? "1" : "0"); } catch {}
+  }, [cursorEffectEnabled]);
   const [showPlayControlsButton, setShowPlayControlsButton] = useState(() => {
     try {
       const stored = localStorage.getItem("wizamp_showPlayControlsButton");
@@ -145,8 +170,23 @@ export default function App() {
   }, [showPlayControlsButton]);
 
   const { roomId, setRoomId, onlineEnabled, role, setRole, displayName, setDisplayName, roomIdentities, setRoomIdentity } = useSession();
+  const [themeChoices, setThemeChoices] = useState({});
+  const roomThemeKey = themeSessionKey(roomId);
+  let savedThemeId;
+  try { savedThemeId = localStorage.getItem(themeStorageKey(roomId)); } catch { /* Storage may be disabled. */ }
+  const activeTheme = resolveTheme(roomId, themeChoices[roomThemeKey] ?? savedThemeId);
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = activeTheme.id;
+  }, [activeTheme.id]);
+  const chooseTheme = (targetRoomId, themeId) => {
+    if (resolveTheme(targetRoomId, themeId).id !== themeId) return;
+    setThemeChoices((previous) => ({ ...previous, [themeSessionKey(targetRoomId)]: themeId }));
+    try { localStorage.setItem(themeStorageKey(targetRoomId), themeId); } catch { /* Storage may be disabled. */ }
+  };
   const isActiveRole = !onlineEnabled || role === "GM";
   const isPassiveRole = onlineEnabled && role === "PASSIVE";
+  const isReadOnlyRole = onlineEnabled && (role === "PASSIVE" || role === "PASSIVE_BTS");
+  const effectiveMobileView = isReadOnlyRole ? "controls" : mobileView;
 
   // Audio unlock for Chrome late-joiners
   const [audioLocked, setAudioLocked] = useState(false);
@@ -216,6 +256,8 @@ export default function App() {
 
 
   const [clipProgress, setClipProgress] = useState(0);  // 0..1 visual bar
+  const [clipPositionSeconds, setClipPositionSeconds] = useState(0);
+  const [clipDurationSeconds, setClipDurationSeconds] = useState(0);
 
   // Volume settings
   const [trackVolUIOpen, setTrackVolUIOpen] = useState(false);
@@ -297,6 +339,7 @@ export default function App() {
         console.log("[STATUS]", s);
         setStatus(s);
         if (s === "Stopped") {
+          dropUndoActions("stop");
           setReplacementInProgress(false);
           setClipProgress(0);
 
@@ -443,13 +486,14 @@ export default function App() {
     let raf = 0;
     const tick = () => {
       const info = engine.getPlaybackInfo?.();
-      // Freeze during pause: keep the last rendered value.
-      setClipProgress(prev => (isPaused ? prev : (info?.progress01 ?? 0)));
+      setClipProgress(info?.progress01 ?? 0);
+      setClipPositionSeconds(info?.positionSeconds ?? 0);
+      setClipDurationSeconds(info?.durationSeconds ?? 0);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [engine, isPaused]);
+  }, [engine]);
 
   useEffect(() => {
     if (!queuedTrack && !queuedSectionName && !queuedModeName) {
@@ -570,14 +614,16 @@ export default function App() {
     }
   };
 
-  const handleStop = async () => {
-
+  const handleStop = async ({ recordUndo = true } = {}) => {
+    if (recordUndo && isActive && Number(fadeOutSeconds) > 0) {
+      dropUndoActions("stop");
+      pushUndoAction({ kind: "stop", previous: "playing", next: "stopping" });
+    }
     if (room.onlineActive && isActiveRole) {
       // Tell everyone to stop (with fade)
       room.requestStop(true);
     } else {
       // Local stop only
-
       engine.stopTrack(true);
     }
   };
@@ -747,8 +793,9 @@ export default function App() {
 
   const onCancelStopMsg = useCallback(() => {
     engine.cancelStopFade?.();
+    dropUndoActions("stop");
     setReplacementInProgress(false);
-  }, [engine, setReplacementInProgress]);
+  }, [engine, dropUndoActions, setReplacementInProgress]);
 
   const onResumeMsg = useCallback((serverMs) => {
     const simple = !!tracks[playingTrackName || selectedTrack]?.simple;
@@ -757,6 +804,12 @@ export default function App() {
       engine.resume(simple);
     });
   }, [tracks, playingTrackName, selectedTrack, engine, scheduleAtServerTime]);
+
+  const onSeekMsg = useCallback(({ positionSeconds, serverMs }) => {
+    const seek = () => engine.seekSimpleTrack?.(positionSeconds);
+    if (Number.isFinite(serverMs)) scheduleAtServerTime(serverMs, seek);
+    else seek();
+  }, [engine, scheduleAtServerTime]);
 
   const onQueueSectionMsg = useCallback((name) => {
     if (shouldIgnoreQueues()) {
@@ -1050,6 +1103,7 @@ export default function App() {
     onStop: onStopMsg,
     onCancelStop: onCancelStopMsg,
     onResume: onResumeMsg,
+    onSeek: onSeekMsg,
     onQueueSection: onQueueSectionMsg,
     onClearSectionQueue: onClearSectionQueueMsg,
     onQueueMode: onQueueModeMsg,
@@ -1062,6 +1116,15 @@ export default function App() {
     onSyncState: onSyncStateMsg,
   });
   useEffect(() => { roomRef.current = room; }, [room]);
+
+  const handleSeek = useCallback((positionSeconds) => {
+    if (!Number.isFinite(positionSeconds)) return;
+    if (room.onlineActive && isActiveRole) {
+      room.requestSeek?.({ positionSeconds });
+    } else {
+      engine.seekSimpleTrack?.(positionSeconds);
+    }
+  }, [engine, room, isActiveRole]);
 
   const roomState = {
     isOnline: onlineEnabled,
@@ -1237,7 +1300,10 @@ export default function App() {
     updateUndoHistory(previous => previous.slice(0, -1));
     showUndoEffect(action);
 
-    if (action.kind === "track") {
+    if (action.kind === "stop") {
+      if (room.onlineActive && isActiveRole) room.requestCancelStop?.();
+      else engine.cancelStopFade?.();
+    } else if (action.kind === "track") {
       if (action.stopPending || action.sectionNext) setReplacementInProgress(false);
       if (action.stopPending) {
         if (room.onlineActive && isActiveRole) room.requestCancelStop?.();
@@ -1279,7 +1345,7 @@ export default function App() {
     void addTrackToQueue(name, { recordUndo: false });
     if (alwaysStop || isPaused) {
       pushUndoAction({ kind: "track", previous: previousTrack, next: name, stopPending: true });
-      handleStop();
+      handleStop({ recordUndo: false });
       return;
     }
 
@@ -1300,7 +1366,7 @@ export default function App() {
       });
     } else {
       pushUndoAction({ kind: "track", previous: previousTrack, next: name, stopPending: true });
-      handleStop();
+      handleStop({ recordUndo: false });
     }
   }
 
@@ -1345,13 +1411,19 @@ export default function App() {
   );
 
   return (
-    <div className={`app-shell ${libraryExpanded ? "is-library-expanded" : "is-library-collapsed"} ${resizingLibrary ? "is-library-resizing" : ""} ${showStatus ? "" : "is-status-hidden"}`} style={{
+    <div className={`app-shell ${libraryExpanded ? "is-library-expanded" : "is-library-collapsed"} ${resizingLibrary ? "is-library-resizing" : ""} ${showStatus ? "" : "is-status-hidden"} ${isReadOnlyRole ? "is-role-read-only" : ""}`} style={{
       fontFamily: "sans-serif",
       padding: 20,
       "--library-width": `${libraryWidth}px`
       }}>
 
-      <AboutModal open={showAbout} onClose={() => setShowAbout(false)} iconSrc={useAlternateIcon ? icon2bUrl : icon1Url} />
+      <AboutModal
+        open={showAbout}
+        onClose={() => setShowAbout(false)}
+        iconSrc={useAlternateIcon ? icon2bUrl : icon1Url}
+        section={aboutSection}
+        onSectionChange={setAboutSection}
+      />
 
       <LeftPanel
         roomState={roomState}
@@ -1363,16 +1435,19 @@ export default function App() {
         setDisplayName={setDisplayName}
         roomIdentities={roomIdentities}
         setRoomIdentity={setRoomIdentity}
+        themeChoices={themeChoices}
+        onChooseTheme={chooseTheme}
         room={room}
-        libraryDocked={libraryExpanded && !isPassiveRole}
+        libraryDocked={libraryExpanded && !isReadOnlyRole}
+        volumeExpanded={userVolumeOpen}
         canAccessDatabase={isActiveRole}
         onOpenDatabase={() => setDbOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
-      {!isPassiveRole && (
+      {!isReadOnlyRole && (
         <>
-          <aside className={`track-library-shell ${mobileView === "library" ? "is-mobile-active" : ""}`}>
+          <aside className={`track-library-shell ${effectiveMobileView === "library" ? "is-mobile-active" : ""}`}>
             <TrackList
               tracks={tracks}
               selectedTrack={selectedTrack}
@@ -1477,20 +1552,32 @@ export default function App() {
         </div>
       )}
 
-      <main className={`app-main ${mobileView === "controls" ? "is-mobile-active" : ""}`} style={{ width: "100%", maxWidth: 760, margin: "0 auto", flexDirection: "column" }}>
+      <main className={`app-main ${effectiveMobileView === "controls" ? "is-mobile-active" : ""}`} style={{ width: "100%", maxWidth: 760, margin: "0 auto", flexDirection: "column" }}>
       <h1 className="visually-hidden">Wizamp</h1>
 
       <div className="playback-dock">
-      {/* Clip Information (progress bar from 0 to loopPoint) */}
-      {!isPassiveRole && (
-        <section className="clip-progress-wrap">
-          <div className="clip-progress" role="progressbar" aria-label="Clip position" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(clipProgress * 100)}>
-            <div className="clip-progress__fill" style={{ width: `${Math.round(clipProgress * 100)}%` }} />
-          </div>
-        </section>
+      {/* Simple tracks expose their linear timeline directly for seeking. */}
+      {!isPassiveRole && playingTrack?.simple !== false && (
+        <ClipProgress
+          progress={clipProgress}
+          positionSeconds={clipPositionSeconds}
+          durationSeconds={clipDurationSeconds}
+          showTimeline={playingTrack?.simple === true && isActive}
+          seekable={playingTrack?.simple === true && isActive && !replacementPending && (!room.onlineActive || isActiveRole)}
+          onSeek={handleSeek}
+        />
       )}
 
-      {/* Section Controls */}
+      {/* Bottom-to-top hierarchy is Tracks, Sections, Modes, Clips. */}
+      {!isPassiveRole && playingTrack?.simple === false && isActive && (
+        <DynamicClipPanel
+          expanded={dynamicClipsExpanded}
+          onExpandedChange={setDynamicClipsExpanded}
+          progress={clipProgress}
+        />
+      )}
+
+      {/* Section and mode controls follow clips in the top-to-bottom layout. */}
       {currentSectionName && !isPassiveRole && (
         <section style={{ marginBottom: 16 }}>
           {!isPassiveRole && (
@@ -1538,6 +1625,7 @@ export default function App() {
           onStop={handleStop}
           onUndo={undoLastQueuedChange}
           undoDisabled={undoHistory.length === 0}
+          undoLabel={undoHistory.at(-1)?.kind === "stop" ? "Undo stop" : undefined}
           isStopHighlighted={isStopHighlighted}
           unlockAudio={() => engine.unlockAudio?.()}
           rightControl={selectedTrack ? (
@@ -1581,8 +1669,8 @@ export default function App() {
       </div>
       </main>
 
-      {!isPassiveRole && (
-        <section className={`mobile-playlists-view ${mobileView === "playlists" ? "is-mobile-active" : ""}`} aria-label="Playlists">
+      {!isReadOnlyRole && (
+        <section className={`mobile-playlists-view ${effectiveMobileView === "playlists" ? "is-mobile-active" : ""}`} aria-label="Playlists">
           <Icon name="playlist" size={32} />
           <strong>Playlists</strong>
           <span>Playlist support is coming later.</span>
@@ -1620,45 +1708,44 @@ export default function App() {
         />
       </div>
 
-      {!isPassiveRole && (
-        <div className="mobile-queue-shortcut">
-          <QueueIndicator
-            currentTrack={playingTrackName}
-            queuedTrack={queuedTrack}
-            queuedTrackProgress={queuedTrackProgress}
-            titleFor={getTrackTitle}
-            expandable={mobileView === "controls"}
-            onActivate={() => setMobileView("controls")}
-            navigationControl={(
-              <PrimaryPlaybackButton
-                compact
-                disabled={!playingTrackName || replacementPending || (!isActiveRole && room.onlineActive)}
-                isLoadingTrack={isLoadingTrack}
-                isPlaying={isPlaying}
-                isPaused={isPaused}
-                onPlay={handlePlay}
-                onPause={handlePause}
-                onResume={handleResume}
-                unlockAudio={() => engine.unlockAudio?.()}
-              />
-            )}
-          />
-        </div>
-      )}
+      <div className="mobile-queue-shortcut">
+        <QueueIndicator
+          currentTrack={playingTrackName}
+          queuedTrack={queuedTrack}
+          queuedTrackProgress={queuedTrackProgress}
+          titleFor={getTrackTitle}
+          expandable={effectiveMobileView === "controls"}
+          locked={isReadOnlyRole}
+          onActivate={() => setMobileView("controls")}
+          navigationControl={!isReadOnlyRole ? (
+            <PrimaryPlaybackButton
+              compact
+              disabled={!playingTrackName || replacementPending || (!isActiveRole && room.onlineActive)}
+              isLoadingTrack={isLoadingTrack}
+              isPlaying={isPlaying}
+              isPaused={isPaused}
+              onPlay={handlePlay}
+              onPause={handlePause}
+              onResume={handleResume}
+              unlockAudio={() => engine.unlockAudio?.()}
+            />
+          ) : null}
+        />
+      </div>
 
-      {!isPassiveRole && (
+      {!isReadOnlyRole && (
         <nav className={`mobile-tab-bar${showPlayControlsButton ? "" : " is-two-tab"}`} aria-label="Primary views">
-          <button type="button" className={mobileView === "library" ? "is-active" : ""} onClick={() => setMobileView("library")} aria-pressed={mobileView === "library"}>
+          <button type="button" className={effectiveMobileView === "library" ? "is-active" : ""} onClick={() => setMobileView("library")} aria-pressed={effectiveMobileView === "library"}>
             <Icon name="library" size={18} />
             <span>Track Library</span>
           </button>
           {showPlayControlsButton && (
-            <button type="button" className={mobileView === "controls" ? "is-active" : ""} onClick={() => setMobileView("controls")} aria-pressed={mobileView === "controls"}>
+            <button type="button" className={effectiveMobileView === "controls" ? "is-active" : ""} onClick={() => setMobileView("controls")} aria-pressed={effectiveMobileView === "controls"}>
               <Icon name="controls" size={18} />
               <span>Play Controls</span>
             </button>
           )}
-          <button type="button" className={mobileView === "playlists" ? "is-active" : ""} onClick={() => setMobileView("playlists")} aria-pressed={mobileView === "playlists"}>
+          <button type="button" className={effectiveMobileView === "playlists" ? "is-active" : ""} onClick={() => setMobileView("playlists")} aria-pressed={effectiveMobileView === "playlists"}>
             <Icon name="playlist" size={18} />
             <span>Playlists</span>
           </button>
@@ -1669,6 +1756,8 @@ export default function App() {
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        cursorEffectEnabled={cursorEffectEnabled}
+        setCursorEffectEnabled={setCursorEffectEnabled}
         fadeOutSeconds={fadeOutSeconds}
         setFadeOutSeconds={setFadeOutSeconds}
         pauseFadeSeconds={pauseFadeSeconds}
@@ -1679,7 +1768,7 @@ export default function App() {
         setShowPlayControlsButton={setShowPlayControlsButton}
         useAlternateIcon={useAlternateIcon}
         setUseAlternateIcon={setUseAlternateIcon}
-        onOpenAbout={() => { setSettingsOpen(false); setShowAbout(true); }}
+        onOpenAbout={() => { setSettingsOpen(false); setAboutSection("updates"); setShowAbout(true); }}
       />
 
       {/* Database modal */}
@@ -1758,6 +1847,7 @@ export default function App() {
         }}
       />
 
+      <CursorEffect enabled={cursorEffectEnabled} themeId={activeTheme.id} effect={activeTheme.cursorEffect} />
     </div>
   );
 }
