@@ -130,20 +130,6 @@ export default function SettingsModal({
 
             <label className="settings-field settings-field--toggle">
               <span className="settings-field__copy">
-                <strong>Show status bar</strong>
-                <small>Display the current loading and playback state.</small>
-              </span>
-              <span className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={!!showStatus}
-                  onChange={(event) => setShowStatus?.(event.target.checked)}
-                />
-                <span aria-hidden="true" />
-              </span>
-            </label>
-            <label className="settings-field settings-field--toggle">
-              <span className="settings-field__copy">
                 <strong>Cursor effect</strong>
                 <small>Show a magical glow and sparkles in Signet and Castle (Torchlit). Respects reduced-motion preferences.</small>
               </span>
@@ -177,6 +163,20 @@ export default function SettingsModal({
                     type="checkbox"
                     checked={!!showPlayControlsButton}
                     onChange={(event) => setShowPlayControlsButton?.(event.target.checked)}
+                  />
+                  <span aria-hidden="true" />
+                </span>
+              </label>
+              <label className="settings-field settings-field--toggle">
+                <span className="settings-field__copy">
+                  <strong>Show status bar</strong>
+                  <small>Display the current loading and playback state.</small>
+                </span>
+                <span className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={!!showStatus}
+                    onChange={(event) => setShowStatus?.(event.target.checked)}
                   />
                   <span aria-hidden="true" />
                 </span>
