@@ -185,6 +185,8 @@ export default function App() {
   };
   const isActiveRole = !onlineEnabled || role === "GM";
   const isPassiveRole = onlineEnabled && role === "PASSIVE";
+  const isReadOnlyRole = onlineEnabled && (role === "PASSIVE" || role === "PASSIVE_BTS");
+  const effectiveMobileView = isReadOnlyRole ? "controls" : mobileView;
 
   // Audio unlock for Chrome late-joiners
   const [audioLocked, setAudioLocked] = useState(false);
@@ -1409,7 +1411,7 @@ export default function App() {
   );
 
   return (
-    <div className={`app-shell ${libraryExpanded ? "is-library-expanded" : "is-library-collapsed"} ${resizingLibrary ? "is-library-resizing" : ""} ${showStatus ? "" : "is-status-hidden"}`} style={{
+    <div className={`app-shell ${libraryExpanded ? "is-library-expanded" : "is-library-collapsed"} ${resizingLibrary ? "is-library-resizing" : ""} ${showStatus ? "" : "is-status-hidden"} ${isReadOnlyRole ? "is-role-read-only" : ""}`} style={{
       fontFamily: "sans-serif",
       padding: 20,
       "--library-width": `${libraryWidth}px`
@@ -1436,15 +1438,16 @@ export default function App() {
         themeChoices={themeChoices}
         onChooseTheme={chooseTheme}
         room={room}
-        libraryDocked={libraryExpanded && !isPassiveRole}
+        libraryDocked={libraryExpanded && !isReadOnlyRole}
+        volumeExpanded={userVolumeOpen}
         canAccessDatabase={isActiveRole}
         onOpenDatabase={() => setDbOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
-      {!isPassiveRole && (
+      {!isReadOnlyRole && (
         <>
-          <aside className={`track-library-shell ${mobileView === "library" ? "is-mobile-active" : ""}`}>
+          <aside className={`track-library-shell ${effectiveMobileView === "library" ? "is-mobile-active" : ""}`}>
             <TrackList
               tracks={tracks}
               selectedTrack={selectedTrack}
@@ -1549,7 +1552,7 @@ export default function App() {
         </div>
       )}
 
-      <main className={`app-main ${mobileView === "controls" ? "is-mobile-active" : ""}`} style={{ width: "100%", maxWidth: 760, margin: "0 auto", flexDirection: "column" }}>
+      <main className={`app-main ${effectiveMobileView === "controls" ? "is-mobile-active" : ""}`} style={{ width: "100%", maxWidth: 760, margin: "0 auto", flexDirection: "column" }}>
       <h1 className="visually-hidden">Wizamp</h1>
 
       <div className="playback-dock">
@@ -1666,8 +1669,8 @@ export default function App() {
       </div>
       </main>
 
-      {!isPassiveRole && (
-        <section className={`mobile-playlists-view ${mobileView === "playlists" ? "is-mobile-active" : ""}`} aria-label="Playlists">
+      {!isReadOnlyRole && (
+        <section className={`mobile-playlists-view ${effectiveMobileView === "playlists" ? "is-mobile-active" : ""}`} aria-label="Playlists">
           <Icon name="playlist" size={32} />
           <strong>Playlists</strong>
           <span>Playlist support is coming later.</span>
@@ -1705,45 +1708,44 @@ export default function App() {
         />
       </div>
 
-      {!isPassiveRole && (
-        <div className="mobile-queue-shortcut">
-          <QueueIndicator
-            currentTrack={playingTrackName}
-            queuedTrack={queuedTrack}
-            queuedTrackProgress={queuedTrackProgress}
-            titleFor={getTrackTitle}
-            expandable={mobileView === "controls"}
-            onActivate={() => setMobileView("controls")}
-            navigationControl={(
-              <PrimaryPlaybackButton
-                compact
-                disabled={!playingTrackName || replacementPending || (!isActiveRole && room.onlineActive)}
-                isLoadingTrack={isLoadingTrack}
-                isPlaying={isPlaying}
-                isPaused={isPaused}
-                onPlay={handlePlay}
-                onPause={handlePause}
-                onResume={handleResume}
-                unlockAudio={() => engine.unlockAudio?.()}
-              />
-            )}
-          />
-        </div>
-      )}
+      <div className="mobile-queue-shortcut">
+        <QueueIndicator
+          currentTrack={playingTrackName}
+          queuedTrack={queuedTrack}
+          queuedTrackProgress={queuedTrackProgress}
+          titleFor={getTrackTitle}
+          expandable={effectiveMobileView === "controls"}
+          locked={isReadOnlyRole}
+          onActivate={() => setMobileView("controls")}
+          navigationControl={!isReadOnlyRole ? (
+            <PrimaryPlaybackButton
+              compact
+              disabled={!playingTrackName || replacementPending || (!isActiveRole && room.onlineActive)}
+              isLoadingTrack={isLoadingTrack}
+              isPlaying={isPlaying}
+              isPaused={isPaused}
+              onPlay={handlePlay}
+              onPause={handlePause}
+              onResume={handleResume}
+              unlockAudio={() => engine.unlockAudio?.()}
+            />
+          ) : null}
+        />
+      </div>
 
-      {!isPassiveRole && (
+      {!isReadOnlyRole && (
         <nav className={`mobile-tab-bar${showPlayControlsButton ? "" : " is-two-tab"}`} aria-label="Primary views">
-          <button type="button" className={mobileView === "library" ? "is-active" : ""} onClick={() => setMobileView("library")} aria-pressed={mobileView === "library"}>
+          <button type="button" className={effectiveMobileView === "library" ? "is-active" : ""} onClick={() => setMobileView("library")} aria-pressed={effectiveMobileView === "library"}>
             <Icon name="library" size={18} />
             <span>Track Library</span>
           </button>
           {showPlayControlsButton && (
-            <button type="button" className={mobileView === "controls" ? "is-active" : ""} onClick={() => setMobileView("controls")} aria-pressed={mobileView === "controls"}>
+            <button type="button" className={effectiveMobileView === "controls" ? "is-active" : ""} onClick={() => setMobileView("controls")} aria-pressed={effectiveMobileView === "controls"}>
               <Icon name="controls" size={18} />
               <span>Play Controls</span>
             </button>
           )}
-          <button type="button" className={mobileView === "playlists" ? "is-active" : ""} onClick={() => setMobileView("playlists")} aria-pressed={mobileView === "playlists"}>
+          <button type="button" className={effectiveMobileView === "playlists" ? "is-active" : ""} onClick={() => setMobileView("playlists")} aria-pressed={effectiveMobileView === "playlists"}>
             <Icon name="playlist" size={18} />
             <span>Playlists</span>
           </button>

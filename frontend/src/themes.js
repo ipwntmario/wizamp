@@ -7,7 +7,7 @@ export const THEMES = [
 
 export const SESSION_THEME_DEFAULTS = {
   private: "dark",
-  awc: "signet",
+  awc: "castle-torchlit",
 };
 
 export function themeSessionKey(roomId) {

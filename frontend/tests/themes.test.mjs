@@ -4,7 +4,7 @@ import { availableThemes, resolveTheme, themeStorageKey } from '../src/themes.js
 
 test('each session starts with its own default and stores a separate choice', () => {
   assert.equal(resolveTheme('', null).id, 'dark');
-  assert.equal(resolveTheme('awc', null).id, 'signet');
+  assert.equal(resolveTheme('awc', null).id, 'castle-torchlit');
   assert.equal(resolveTheme('awc', 'book1').id, 'signet');
   assert.equal(resolveTheme('', 'hogwarts').id, 'castle-torchlit');
   assert.equal(resolveTheme('', 'four-houses').id, 'castle-torchlit');

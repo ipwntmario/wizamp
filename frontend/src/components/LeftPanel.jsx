@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import UsersPanel from "./UsersPanel";
 import Icon from "./Icon";
 import { availableThemes, resolveTheme, themeStorageKey } from "../themes";
@@ -22,6 +22,7 @@ export default function LeftPanel({
   themeChoices = {},
   onChooseTheme,
   libraryDocked = false,
+  volumeExpanded = false,
   canAccessDatabase = false,
   onOpenDatabase,
   onOpenSettings,
@@ -31,6 +32,9 @@ export default function LeftPanel({
   const gesture = useRef(null);
   const longPressTimer = useRef(null);
   const suppressClick = useRef(false);
+  const barRef = useRef(null);
+  const roomNameMeasureRef = useRef(null);
+  const [compactHeader, setCompactHeader] = useState(false);
 
   useEffect(() => persist(LS_PANEL_OPEN, String(open)), [open]);
   useEffect(() => () => clearTimeout(longPressTimer.current), []);
@@ -40,6 +44,23 @@ export default function LeftPanel({
   const latencyMs = roomState?.latencyMs ?? null;
   const offsetMs = roomState?.serverOffsetMs ?? null;
   const awcIdentity = roomIdentities?.awc || { role: "GM", displayName: "" };
+
+  useLayoutEffect(() => {
+    const update = () => {
+      if (!volumeExpanded || open || !window.matchMedia("(max-width: 760px)").matches) {
+        setCompactHeader(false);
+        return;
+      }
+      const barLeft = barRef.current?.getBoundingClientRect().left ?? 8;
+      const nameWidth = roomNameMeasureRef.current?.getBoundingClientRect().width ?? 0;
+      const fullBarRight = barLeft + 44 + 28 + 9 + nameWidth + 14 + 2;
+      const expandedVolumeLeft = window.innerWidth - 8 - Math.min(270, window.innerWidth - 118) - 2;
+      setCompactHeader(fullBarRight + 8 > expandedVolumeLeft);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [volumeExpanded, open, activeRoom.name]);
 
   function closePanel() {
     setOpen(false);
@@ -86,12 +107,12 @@ export default function LeftPanel({
 
   return (
     <aside
-      className={`session-panel ${open ? "is-open" : "is-closed"} ${libraryDocked ? "is-library-docked" : ""}`}
+      className={`session-panel ${open ? "is-open" : "is-closed"} ${libraryDocked ? "is-library-docked" : ""} ${compactHeader ? "is-header-compact" : ""}`}
       aria-label="Session rooms"
       onPointerMove={cancelHoldOnMove}
       onPointerCancel={endTouch}
     >
-      <div className="session-panel__bar">
+      <div ref={barRef} className="session-panel__bar">
         <button
           className="session-panel__menu"
           type="button"
@@ -108,7 +129,8 @@ export default function LeftPanel({
           <span className={`session-room__icon session-room__icon--${activeRoom.private ? "private" : "online"}`}>
             <Icon name={activeRoom.icon} size={19} />
           </span>
-          <span>{activeRoom.name}</span>
+          <span className="session-panel__current-name" aria-hidden={compactHeader}>{activeRoom.name}</span>
+          <span ref={roomNameMeasureRef} className="session-panel__current-measure" aria-hidden="true">{activeRoom.name}</span>
         </div>
       </div>
 
