@@ -924,7 +924,7 @@ body {
 .session-theme-picker__swatch--castle-torchlit { background: linear-gradient(135deg, #641016 0 25%, #d49b23 25% 50%, #285b34 50% 75%, #213d62 75%); }
 .session-panel__presence { margin-top: 12px; padding: 12px 5px 2px; border-top: 1px solid rgba(255,255,255,.08); }
 .session-panel__actions { display: grid; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
-.session-panel__action { display: flex; width: 100%; min-height: 54px; align-items: center; gap: 11px; padding: 8px 10px; border: 1px solid transparent; border-radius: 12px; color: rgba(255,255,255,.78); background: rgba(255,255,255,.025); text-align: left; transition: color .16s ease, background .16s ease, border-color .16s ease, transform .16s ease; }
+.session-panel__action { display: flex; width: 100%; min-height: 46px; align-items: center; gap: 11px; padding: 6px 10px; border: 1px solid transparent; border-radius: 12px; color: rgba(255,255,255,.78); background: rgba(255,255,255,.025); text-align: left; transition: color .16s ease, background .16s ease, border-color .16s ease, transform .16s ease; }
 .session-panel__action:hover { border-color: rgba(255,255,255,.09); color: #fff; background: rgba(255,255,255,.07); }
 .session-panel__action:active { transform: scale(.985); }
 .session-panel__action > svg { color: rgba(255,255,255,.3); transition: color .16s ease, transform .16s ease; }
@@ -933,6 +933,13 @@ body {
 .session-panel__action-copy { display: grid; min-width: 0; flex: 1; gap: 1px; }
 .session-panel__action-copy strong { font-size: 13px; }
 .session-panel__action-copy small { overflow: hidden; color: rgba(255,255,255,.4); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Keep the descriptions in the components for future use while showing concise labels. */
+.session-panel__action-copy small,
+.settings-modal__header p,
+.settings-group__heading p,
+.settings-field__copy small,
+.settings-about-link__copy small { display: none; }
 
 /* Settings */
 .settings-overlay {
@@ -965,7 +972,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 20px 15px;
+  padding: 16px 20px;
   border-bottom: 1px solid rgba(255,255,255,.08);
   background: rgba(25,26,34,.9);
 }
@@ -974,7 +981,7 @@ body {
 .settings-modal__title-trigger:focus-visible { outline: 2px solid #a99cff; outline-offset: 3px; }
 .settings-modal__header p { margin: 4px 0 0; color: rgba(255,255,255,.46); font-size: 12px; }
 .settings-modal__body { display: grid; gap: 12px; padding: 14px; }
-.settings-about-link { display: flex; min-height: 62px; align-items: center; gap: 11px; padding: 10px 14px; border: 1px solid rgba(255,255,255,.075); border-radius: 14px; color: #f6f7fb; background: rgba(255,255,255,.025); text-align: left; transition: border-color .16s ease, background .16s ease; }
+.settings-about-link { display: flex; min-height: 52px; align-items: center; gap: 11px; padding: 8px 14px; border: 1px solid rgba(255,255,255,.075); border-radius: 14px; color: #f6f7fb; background: rgba(255,255,255,.025); text-align: left; transition: border-color .16s ease, background .16s ease; }
 .settings-about-link:hover { border-color: rgba(143,124,255,.3); background: rgba(143,124,255,.08); }
 .settings-about-link__copy { display: grid; flex: 1; gap: 2px; }
 .settings-about-link__copy strong { font-size: 13px; }
@@ -987,7 +994,7 @@ body {
   border-radius: 14px;
   background: rgba(255,255,255,.025);
 }
-.settings-group__heading { display: flex; align-items: center; gap: 11px; padding: 13px 14px 11px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.settings-group__heading { display: flex; align-items: center; gap: 11px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
 .settings-group__icon {
   display: grid;
   width: 34px;
@@ -1004,11 +1011,11 @@ body {
 
 .settings-field {
   display: flex;
-  min-height: 55px;
+  min-height: 50px;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 9px 14px;
+  padding: 7px 14px;
   border-bottom: 1px solid rgba(255,255,255,.05);
 }
 .settings-field:last-child { border-bottom: 0; }
