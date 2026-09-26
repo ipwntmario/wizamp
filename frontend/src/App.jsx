@@ -36,6 +36,7 @@ import Transport from "./components/Transport";
 import StatusBar from "./components/StatusBar";
 import VolumeControl from "./components/VolumeControl";
 import TrackVolumeControl from "./components/TrackVolumeControl";
+import AutoplayButton from "./components/AutoplayButton";
 import PrimaryPlaybackButton from "./components/PrimaryPlaybackButton";
 import ClipProgress from "./components/ClipProgress";
 import DynamicClipPanel from "./components/DynamicClipPanel";
@@ -1415,6 +1416,10 @@ export default function App() {
     Object.keys(sections).length > 0 &&
     !Object.values(sections).some((section) => section?.type === "end")
   );
+  const changeAutoplay = (next) => {
+    setAutoplay(!!next);
+    if (room.onlineActive && isActiveRole) room.requestSetAutoplay?.(!!next);
+  };
 
   return (
     <div className={`app-shell ${libraryExpanded ? "is-library-expanded" : "is-library-collapsed"} ${resizingLibrary ? "is-library-resizing" : ""} ${showStatus ? "" : "is-status-hidden"} ${isReadOnlyRole ? "is-role-read-only" : ""}`} style={{
@@ -1473,10 +1478,6 @@ export default function App() {
               onAddToQueue={addTrackToQueue}
               onCollapse={() => setLibraryExpanded(false)}
               onNavigateToControls={() => setMobileView("controls")}
-              onAutoplayChange={(next) => {
-                setAutoplay(!!next);
-                if (room.onlineActive && isActiveRole) room.requestSetAutoplay?.(!!next);
-              }}
             />
             <button
               type="button"
@@ -1634,6 +1635,7 @@ export default function App() {
           undoLabel={undoHistory.at(-1)?.kind === "stop" ? "Undo stop" : undefined}
           isStopHighlighted={isStopHighlighted}
           unlockAudio={() => engine.unlockAudio?.()}
+          leftControl={<AutoplayButton enabled={autoplay} onToggle={changeAutoplay} disabled={!isActiveRole && room.onlineActive} />}
           rightControl={selectedTrack ? (
             <TrackVolumeControl
               open={trackVolUIOpen}
@@ -1652,16 +1654,17 @@ export default function App() {
         />
       )}
 
-      {/* Playback queue and shared track-volume control */}
+      {/* Playback queue with mirrored Auto-Play and track-volume controls */}
         <div className={`now-playing desktop-now-playing ${undoEffect?.kind === "track" ? "is-undoing" : ""}`}>
+          {!isPassiveRole && <div className="now-playing__side"><AutoplayButton enabled={autoplay} onToggle={changeAutoplay} disabled={!isActiveRole && room.onlineActive} /></div>}
           <QueueIndicator currentTrack={playingTrackName} queuedTrack={queuedTrack} queuedTrackProgress={queuedTrackProgress} titleFor={getTrackTitle} />
 
-          {selectedTrack && !isPassiveRole && (
+          {!isPassiveRole && <div className="now-playing__side">
             <TrackVolumeControl
               open={trackVolUIOpen}
               onOpenChange={setTrackVolUIOpen}
               volume={trackVolume}
-              disabled={!isActiveRole}
+              disabled={!playingTrackName || !isActiveRole}
               onVolumeChange={(volume) => {
                 setTrackVolume(volume);
                 engine.setTrackVolume?.(volume);
@@ -1670,7 +1673,7 @@ export default function App() {
                 }
               }}
             />
-          )}
+          </div>}
         </div>
       </div>
       </main>

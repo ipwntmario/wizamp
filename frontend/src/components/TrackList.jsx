@@ -58,7 +58,6 @@ export default function TrackList({
   queuedTrack,
   queuedTrackProgress = null,
   autoplay,
-  onAutoplayChange,
   undoEffect,
   disabled,
   sortMode = "alpha-asc",
@@ -173,22 +172,6 @@ export default function TrackList({
           <span>Filters</span>
           {activeTrackFilterCount(filters) > 0 && <span className="track-browser__filter-count">{activeTrackFilterCount(filters)}</span>}
         </button>
-        <label
-          className={`track-browser__autoplay ${autoplay ? "is-on" : ""}`}
-          title={autoplay ? "Auto-Play is ON" : "Auto-Play is OFF"}
-        >
-          <span className="track-browser__autoplay-copy">
-            <Icon name={autoplay ? "autoplayOn" : "autoplayOff"} size={19} />
-            <span>Auto-Play</span>
-          </span>
-          <span className="track-browser__autoplay-state">
-            <strong>{autoplay ? "On" : "Off"}</strong>
-            <span className="toggle-switch">
-              <input type="checkbox" checked={autoplay} onChange={(event) => onAutoplayChange?.(event.target.checked)} disabled={disabled} />
-              <span aria-hidden="true" />
-            </span>
-          </span>
-        </label>
       </div>
       {filtersOpen && <TrackFilterControls
         id="library-filters"

@@ -17,10 +17,12 @@ export default function Transport({
   undoLabel = "Undo last queued change",
   isStopHighlighted, // simple tracks or dynamic tracks with no ending section
   unlockAudio,
+  leftControl,
   rightControl,
 }) {
   return (
     <section className="transport-row">
+      {leftControl && <div className="transport-side-control transport-side-control--left">{leftControl}</div>}
       <div className="transport-controls">
         {/* Undo the most recent reversible playback or queue action */}
         <button
