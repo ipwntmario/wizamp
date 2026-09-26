@@ -847,14 +847,18 @@ body {
   width: 34px;
   height: 34px;
   flex: 0 0 34px;
+  box-sizing: border-box;
   place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
   border-radius: 9px;
   color: rgba(255,255,255,.58);
   background: transparent;
   transition: color .16s ease, background .16s ease;
 }
 
-.session-room__more:hover, .session-room__more:focus-visible { color: #fff; background: rgba(255,255,255,.1); outline: none; }
+.session-room__more:hover { color: #fff; background: rgba(255,255,255,.1); }
+.session-room__more:focus-visible { color: #fff; background: rgba(255,255,255,.1); outline: 2px solid #a99cff; outline-offset: 2px; }
 
 .session-identity {
   display: grid;

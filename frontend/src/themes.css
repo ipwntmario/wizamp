@@ -155,11 +155,11 @@
   .dynamic-clips-restore, .queue-indicator__peek-controls button
 ) { color: var(--theme-muted) !important; }
 :root:is([data-theme="light"], [data-theme="signet"], [data-theme="castle-torchlit"], [data-theme="high-contrast"], [data-theme="high-contrast-light"]) .session-room__more {
-  border: 1px solid var(--theme-border);
   color: var(--theme-accent);
-  background: var(--theme-raised);
-  box-shadow: inset 0 1px rgba(255,255,255,.2);
+  background: transparent;
+  box-shadow: none;
 }
+:root:is([data-theme="light"], [data-theme="signet"], [data-theme="castle-torchlit"], [data-theme="high-contrast"], [data-theme="high-contrast-light"]) .session-room__more:focus-visible { outline-color: var(--theme-accent); }
 :root:is([data-theme="light"], [data-theme="signet"], [data-theme="castle-torchlit"], [data-theme="high-contrast"], [data-theme="high-contrast-light"]) :is(.session-room__icon--private, .track-library__heading-copy svg) {
   color: var(--theme-accent);
 }
