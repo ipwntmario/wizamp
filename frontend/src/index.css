@@ -339,9 +339,11 @@ body {
 .track-browser__menu-wrap { position: relative; display: grid; place-items: center; }
 .track-browser__kebab { display: grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 0; border-radius: 9px; color: rgba(255,255,255,.48); background: transparent; }
 .track-browser__kebab:hover { border-color: transparent; color: #fff; background: rgba(255,255,255,.08); }
-.track-browser__menu { position: absolute; z-index: 2; top: calc(50% + 17px); right: 4px; width: 224px; overflow: hidden; padding: 5px; border: 1px solid rgba(255,255,255,.12); border-radius: 11px; background: rgba(16,17,23,.99); box-shadow: 0 14px 36px rgba(0,0,0,.48); }
+.track-browser__menu { box-sizing: border-box; position: absolute; z-index: 2; top: calc(50% + 17px); right: 4px; width: min(270px, calc(100vw - 32px)); overflow: hidden; padding: 5px; border: 1px solid rgba(255,255,255,.12); border-radius: 11px; background: rgba(16,17,23,.99); box-shadow: 0 14px 36px rgba(0,0,0,.48); }
 .track-browser__row:nth-last-child(-n+3) .track-browser__menu { top: auto; bottom: calc(50% + 17px); }
-.track-browser__menu button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 7px; color: rgba(255,255,255,.72); background: transparent; font-size: 11px; text-align: left; }
+.track-browser__menu button { display: flex; width: 100%; min-height: 34px; align-items: center; gap: 7px; padding: 8px 10px; border: 0; border-radius: 7px; color: rgba(255,255,255,.72); background: transparent; font-size: 11px; text-align: left; }
+.track-browser__menu-next { justify-content: space-between; }
+.track-browser__menu-back { margin-bottom: 4px; border-bottom: 1px solid var(--theme-line, rgba(255,255,255,.1)) !important; }
 .track-browser__menu button:hover { border-color: transparent; color: #fff; background: rgba(143,124,255,.14); }
 .track-browser__hint { flex: 0 0 auto; padding: 8px 14px 9px; border-top: 1px solid rgba(255,255,255,.06); color: rgba(255,255,255,.28); font-size: 9px; text-align: center; }
 
@@ -662,7 +664,6 @@ body {
 .volume-control__mute { border-radius: 0 12px 12px 0; }
 .volume-control__mute.is-muted { color: #b7abff; background: rgba(143,124,255,.09); }
 
-.autoplay-pending { position: fixed; z-index: 69; bottom: 64px; left: 12px; padding: 6px 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 9px; color: #fff; background: rgba(25,26,34,.94); box-shadow: 0 7px 20px rgba(0,0,0,.25); font-size: 12px; backdrop-filter: blur(14px); }
 
 .session-panel {
   --panel-width: min(340px, calc(100vw - 24px));
@@ -1414,7 +1415,7 @@ button:focus-visible {
   .track-library__collapse, .track-library-restore { display: none; }
   .track-library__resize-handle { display: none; }
   .track-browser__list { padding: 5px; }
-  .track-browser__menu { width: min(224px, calc(100vw - 54px)); }
+  .track-browser__menu { width: min(270px, calc(100vw - 54px)); }
   .mobile-playlists-view {
     position: fixed;
     z-index: 64;

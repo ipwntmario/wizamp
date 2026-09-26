@@ -72,7 +72,7 @@
   .transport-side-control, .status-history, .queue-indicator,
   .queue-indicator__items, .settings-modal, .about-panel,
   .database-modal, .rename-modal, .database-track-menu,
-  .section-controls__region, .dynamic-clips, .autoplay-pending
+  .section-controls__region, .dynamic-clips
 ) {
   border: 1px solid var(--theme-border) !important;
   color: var(--theme-text) !important;

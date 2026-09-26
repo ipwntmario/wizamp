@@ -120,14 +120,10 @@ export default function App() {
     try { localStorage.setItem("wizamp_autoplay", autoplay ? "1" : "0"); } catch {}
   }, [autoplay]);
 
-  // Keep track of the last ended track for correct Autoplay functionality
-  const lastEndedTrackRef = useRef(null);
-
-  // Requested autoplay target, consumed after assets and room clients are ready.
-  const [autoStartRequestedFor, setAutoStartRequestedFor] = useState(null);
   const [playRequestedFor, setPlayRequestedFor] = useState(null);
-  const playRequestedForRef = useRef(null);
   const [queuedTrack, setQueuedTrack] = useState(null);
+  // null follows Auto-Play; a boolean records an explicit library Play or Load choice.
+  const queuedTrackPlayAfterReleaseRef = useRef(null);
   const [queuedTrackProgress, setQueuedTrackProgress] = useState(null);
   const queuedTrackTimingRef = useRef(null);
   const [queuedChoiceProgress, setQueuedChoiceProgress] = useState({ section: null, mode: null });
@@ -350,34 +346,22 @@ export default function App() {
           setClipProgress(0);
 
           const playing = playingTrackNameRef.current;
-          const sel = selectedTrackRef.current;
-          console.log("[STOP] was playing:", playing, "selected:", sel);
-          lastEndedTrackRef.current = playing || null;
+          console.log("[STOP] was playing:", playing);
           setPlayingTrackName(null);
+          setPlayRequestedFor(null);
 
           const queued = queuedTrackRef.current;
           if (queued) {
+            const playAfterRelease = queuedTrackPlayAfterReleaseRef.current ?? autoplayRef.current;
             queuedTrackRef.current = null;
+            queuedTrackPlayAfterReleaseRef.current = null;
             setQueuedTrack(null);
             dropUndoActions("track");
             if (roomRef.current?.onlineActive && isActiveRoleRef.current) {
               roomRef.current.requestClearTrackQueue?.();
             }
-            setAutoStartRequestedFor(null);
-            setReleasedQueuedTrack({ name: queued, shouldPlay: autoplayRef.current, id: Date.now() });
+            setReleasedQueuedTrack({ name: queued, shouldPlay: playAfterRelease, id: Date.now() });
             return;
-          }
-
-          // If Auto-Play is ON, and dropdown points to a *different* track,
-          // request auto-start for that track (we will start AFTER preload completes).
-          if (autoplayRef.current && sel && sel !== lastEndedTrackRef.current
-              && playRequestedForRef.current !== sel) {
-            setAutoStartRequestedFor(sel);
-            console.log("[AUTOPLAY] requested for", sel);
-          } else {
-            console.log("[AUTOPLAY] not requested (autoplay:", autoplayRef.current,
-                        "selected:", sel, "lastEnded:", lastEndedTrackRef.current, ")");
-            setAutoStartRequestedFor(null);
           }
         }
       },
@@ -574,6 +558,11 @@ export default function App() {
 
     if (isLoadingTrack) return;  // <-- early bail
 
+    if (!playingTrackName && queuedTrackRef.current) {
+      await requestTrackPlayback(queuedTrackRef.current, { shouldPlay: true });
+      return;
+    }
+
     if (!engine.isPreloaded || playingTrackName !== selectedTrack) return;
 
     const target = currentSectionName || firstSection;
@@ -664,7 +653,6 @@ export default function App() {
   }, [loadSavedTrackVolume]);
 
   const requestPlaybackAfterLoad = useCallback((name) => {
-    playRequestedForRef.current = name;
     setPlayRequestedFor(name);
   }, []);
 
@@ -673,7 +661,7 @@ export default function App() {
     const { name, shouldPlay } = releasedQueuedTrack;
     handleSelectTrack(name);
     if (roomRef.current?.onlineActive && isActiveRole) roomRef.current.requestSetTrack?.(name);
-    if (shouldPlay) requestPlaybackAfterLoad(name);
+    if (shouldPlay && (!roomRef.current?.onlineActive || isActiveRole)) requestPlaybackAfterLoad(name);
     setReleasedQueuedTrack(null);
   }, [releasedQueuedTrack, handleSelectTrack, requestPlaybackAfterLoad, isActiveRole]);
 
@@ -858,10 +846,11 @@ export default function App() {
     dropUndoActions("mode");
   }, [engine, dropUndoActions]);
 
-  const onQueueTrackMsg = useCallback((name) => {
+  const onQueueTrackMsg = useCallback((name, playAfterRelease = null) => {
     if (!name) return;
     const alreadyQueued = queuedTrackRef.current === name;
     queuedTrackRef.current = name;
+    queuedTrackPlayAfterReleaseRef.current = typeof playAfterRelease === "boolean" ? playAfterRelease : null;
     setQueuedTrack(name);
     if (sections[queuedSectionRef.current]?.type === "end") setReplacementInProgress(true);
     if (alreadyQueued) return;
@@ -878,6 +867,7 @@ export default function App() {
 
   const onClearTrackQueueMsg = useCallback(() => {
     queuedTrackRef.current = null;
+    queuedTrackPlayAfterReleaseRef.current = null;
     setQueuedTrack(null);
     dropUndoActions("track");
   }, [dropUndoActions]);
@@ -1089,7 +1079,6 @@ export default function App() {
     role,
     onSetTrack,
     onPlay: ({ trackName, sectionName, serverMs }) => {
-      setAutoStartRequestedFor(null);
       // Late-join friendliness:
       // 1) If assets not ready, ensure selection + preload first.
       // 2) After preload, schedule at max(serverMs, serverNow + 1500ms) so everyone lines up.
@@ -1159,25 +1148,6 @@ export default function App() {
     }
   }, [isActive, isLoadingTrack, selectedTrack, playingTrackName, loadTrackAssets, loadAttempt]);
 
-  // One autoplay decision, after preload and (online) the room readiness barrier.
-  useEffect(() => {
-    const name = autoStartRequestedFor;
-    if (name && (!autoplay || name !== selectedTrack)) {
-      setAutoStartRequestedFor(null);
-      return;
-    }
-    if (!name || name !== selectedTrack || name !== playingTrackName || isLoadingTrack || isActive) return;
-    const sectionName = tracks[name]?.firstSection;
-    if (!sectionName) return;
-    if (room.onlineActive) {
-      if (!isActiveRole || !room.connected || !room.allReady) return;
-      room.requestPlay({ trackName: name, sectionName });
-    } else {
-      engine.playSection(sectionName);
-    }
-    setAutoStartRequestedFor(null);
-  }, [autoplay, autoStartRequestedFor, selectedTrack, playingTrackName, isLoadingTrack, isActive, tracks, room, isActiveRole, engine]);
-
   // Explicit Play actions are honored after selection/preloading, regardless of Auto-Play.
   useEffect(() => {
     const name = playRequestedFor;
@@ -1190,9 +1160,7 @@ export default function App() {
     } else {
       engine.playSection(sectionName);
     }
-    playRequestedForRef.current = null;
     setPlayRequestedFor(null);
-    setAutoStartRequestedFor(null);
   }, [playRequestedFor, selectedTrack, playingTrackName, isLoadingTrack, isActive, tracks, room, isActiveRole, engine]);
 
   // Set user volume
@@ -1242,7 +1210,7 @@ export default function App() {
   }
 
   function pushUndoAction(action) {
-    if (action.previous === action.next && !action.sectionNext) return;
+    if (action.previous === action.next && action.previousPlayAfterRelease === action.nextPlayAfterRelease && !action.sectionNext) return;
     updateUndoHistory(previous => [...previous, { ...action, id: `${Date.now()}-${previous.length}` }]);
   }
 
@@ -1296,6 +1264,7 @@ export default function App() {
 
   function clearTrackQueue({ broadcast = false, pruneHistory = true } = {}) {
     queuedTrackRef.current = null;
+    queuedTrackPlayAfterReleaseRef.current = null;
     setQueuedTrack(null);
     if (pruneHistory) dropUndoActions("track");
     if (broadcast && room.onlineActive && isActiveRole) room.requestClearTrackQueue?.();
@@ -1316,7 +1285,7 @@ export default function App() {
         if (room.onlineActive && isActiveRole) room.requestCancelStop?.();
         else engine.cancelStopFade?.();
       }
-      if (action.previous) void addTrackToQueue(action.previous, { recordUndo: false });
+      if (action.previous) void addTrackToQueue(action.previous, { recordUndo: false, playAfterRelease: action.previousPlayAfterRelease ?? null });
       else clearTrackQueue({ broadcast: true, pruneHistory: false });
       if (action.sectionNext && queuedSectionRef.current === action.sectionNext) {
         applySectionQueue(action.sectionPrevious || null);
@@ -1328,30 +1297,31 @@ export default function App() {
     }
   }
 
-  async function requestTrackPlayback(name, { alwaysStop = false } = {}) {
+  async function requestTrackPlayback(name, { alwaysStop = false, shouldPlay = true } = {}) {
     if (!name || (!isActiveRole && room.onlineActive)) return;
     await engine.unlockAudio?.();
     if (!isActive) {
       clearTrackQueue({ broadcast: true });
       selectTrackForRoom(name);
-      requestPlaybackAfterLoad(name);
+      if (shouldPlay) requestPlaybackAfterLoad(name);
+      else setPlayRequestedFor(null);
       return;
     }
 
     if (replacementPendingRef.current) {
-      void addTrackToQueue(name);
+      void addTrackToQueue(name, { playAfterRelease: shouldPlay });
       return;
     }
 
     // While another track is active, prepare the requested track without
-    // disturbing live playback. The Stop callback consumes this queue and
-    // applies the user's Auto-Play preference.
+    // disturbing live playback. The explicit Play or Load choice follows the queue.
     const previousTrack = queuedTrackRef.current;
+    const previousPlayAfterRelease = queuedTrackPlayAfterReleaseRef.current;
     const previousSection = queuedSectionRef.current;
     setReplacementInProgress(true);
-    void addTrackToQueue(name, { recordUndo: false });
+    void addTrackToQueue(name, { recordUndo: false, playAfterRelease: shouldPlay });
     if (alwaysStop || isPaused) {
-      pushUndoAction({ kind: "track", previous: previousTrack, next: name, stopPending: true });
+      pushUndoAction({ kind: "track", previous: previousTrack, next: name, previousPlayAfterRelease, nextPlayAfterRelease: shouldPlay, stopPending: true });
       handleStop({ recordUndo: false });
       return;
     }
@@ -1368,23 +1338,28 @@ export default function App() {
         kind: "track",
         previous: previousTrack,
         next: name,
+        previousPlayAfterRelease,
+        nextPlayAfterRelease: shouldPlay,
         sectionPrevious: previousSection,
         sectionNext: endSection,
       });
     } else {
-      pushUndoAction({ kind: "track", previous: previousTrack, next: name, stopPending: true });
+      pushUndoAction({ kind: "track", previous: previousTrack, next: name, previousPlayAfterRelease, nextPlayAfterRelease: shouldPlay, stopPending: true });
       handleStop({ recordUndo: false });
     }
   }
 
-  async function addTrackToQueue(name, { recordUndo = true, broadcast = true } = {}) {
+  async function addTrackToQueue(name, { recordUndo = true, broadcast = true, playAfterRelease = null } = {}) {
     if (!name || (!isActiveRole && room.onlineActive)) return;
     const previous = queuedTrackRef.current;
-    if (previous === name) return;
-    if (recordUndo) pushUndoAction({ kind: "track", previous, next: name });
+    const previousPlayAfterRelease = queuedTrackPlayAfterReleaseRef.current;
+    if (previous === name && previousPlayAfterRelease === playAfterRelease) return;
+    if (recordUndo) pushUndoAction({ kind: "track", previous, next: name, previousPlayAfterRelease, nextPlayAfterRelease: playAfterRelease });
     queuedTrackRef.current = name;
+    queuedTrackPlayAfterReleaseRef.current = playAfterRelease;
     setQueuedTrack(name);
-    if (broadcast && room.onlineActive && isActiveRole) room.requestQueueTrack?.(name);
+    if (broadcast && room.onlineActive && isActiveRole) room.requestQueueTrack?.(name, { playAfterRelease });
+    if (previous === name) return;
     try {
       const assets = await getTrackAssets(name);
       await engine.cacheTrackBuffers(name, assets.clips, { basePath: assets.basePath });
@@ -1463,9 +1438,9 @@ export default function App() {
               tracks={tracks}
               selectedTrack={selectedTrack}
               playingTrack={isActive ? playingTrackName : null}
+              hasLoadedTrack={!!playingTrackName}
               queuedTrack={queuedTrack}
               queuedTrackProgress={queuedTrackProgress}
-              autoplay={autoplay}
               undoEffect={undoEffect}
               disabled={!isActiveRole && room.onlineActive}
               sortMode={dbSort}
@@ -1474,7 +1449,10 @@ export default function App() {
               pinned={pinned}
               names={names}
               onPlay={(name) => requestTrackPlayback(name)}
-              onStopThenPlay={(name) => requestTrackPlayback(name, { alwaysStop: true })}
+              onPlayAfterEnding={(name) => requestTrackPlayback(name, { shouldPlay: true })}
+              onPlayAfterStopping={(name) => requestTrackPlayback(name, { alwaysStop: true, shouldPlay: true })}
+              onLoadAfterEnding={(name) => requestTrackPlayback(name, { shouldPlay: false })}
+              onLoadAfterStopping={(name) => requestTrackPlayback(name, { alwaysStop: true, shouldPlay: false })}
               onAddToQueue={addTrackToQueue}
               onCollapse={() => setLibraryExpanded(false)}
               onNavigateToControls={() => setMobileView("controls")}
@@ -1621,7 +1599,7 @@ export default function App() {
       {!isPassiveRole && (
         <Transport
           disabled={!isActiveRole && room.onlineActive}
-          primaryDisabled={!playingTrackName || replacementPending}
+          primaryDisabled={(!playingTrackName && !queuedTrack) || replacementPending}
           stopDisabled={replacementPending}
           isLoadingTrack={isLoadingTrack}
           isPlaying={isPlaying}
@@ -1686,12 +1664,6 @@ export default function App() {
         </section>
       )}
 
-      {autoStartRequestedFor && (
-        <div className="autoplay-pending">
-          Autoplay pending… <span style={{ opacity: 0.8 }}>{autoStartRequestedFor}</span>
-        </div>
-      )}
-
       <div className={`utility-dock ${showStatus ? "" : "status-hidden"}`}>
         {showStatus && <StatusBar text={displayedStatus} history={statusHistory} />}
         <div className="utility-dock__volume">
@@ -1729,7 +1701,7 @@ export default function App() {
           navigationControl={!isReadOnlyRole ? (
             <PrimaryPlaybackButton
               compact
-              disabled={!playingTrackName || replacementPending || (!isActiveRole && room.onlineActive)}
+              disabled={(!playingTrackName && !queuedTrack) || replacementPending || (!isActiveRole && room.onlineActive)}
               isLoadingTrack={isLoadingTrack}
               isPlaying={isPlaying}
               isPaused={isPaused}

@@ -85,7 +85,7 @@
   .utility-dock, .mobile-tab-bar, .mobile-main-volume .volume-control,
   .transport-side-control, .status-history, .track-browser__drawer,
   .track-browser__menu, .track-volume-control__popover, .settings-modal,
-  .about-panel, .mobile-playlists-view, .autoplay-pending, .database-track-menu
+  .about-panel, .mobile-playlists-view, .database-track-menu
 ) {
   border-color: var(--theme-border);
   color: var(--theme-text);
@@ -330,18 +330,16 @@
   background: linear-gradient(90deg, rgba(20, 20, 18, .35), rgba(219, 207, 170, .1) 48%, rgba(20, 20, 18, .35));
   box-shadow: inset 0 1px rgba(237, 223, 188, .16), 0 2px 4px rgba(18, 19, 18, .3);
 }
-:root[data-theme="castle-torchlit"] .track-browser__list { padding: 10px 9px; scrollbar-color: rgba(220, 208, 178, .35) transparent; }
+:root[data-theme="castle-torchlit"] .track-browser__list { scrollbar-color: rgba(220, 208, 178, .35) transparent; }
 :root[data-theme="castle-torchlit"] .track-browser__row {
   border-color: rgba(25, 26, 23, .78);
   border-top-color: rgba(222, 210, 179, .25);
   border-left-color: rgba(199, 190, 161, .15);
-  border-radius: 5px;
   background:
     linear-gradient(180deg, rgba(250, 237, 202, .07), transparent 24%, rgba(15, 17, 15, .14) 91%),
     radial-gradient(ellipse 105% 95% at 50% 27%, #706d60, #57544a 64%, #444139);
   box-shadow: inset 1px 1px 1px rgba(237, 224, 190, .14), inset -2px -2px 4px rgba(11, 13, 12, .22), 0 3px 4px rgba(15, 15, 13, .26);
 }
-:root[data-theme="castle-torchlit"] .track-browser__row + .track-browser__row { margin-top: 7px; }
 :root[data-theme="castle-torchlit"] .track-browser__row:hover {
   border-color: rgba(213, 202, 174, .55);
   background:
@@ -355,8 +353,6 @@
     radial-gradient(ellipse 105% 95% at 50% 27%, #7c7466, #60584d 64%, #494339);
   box-shadow: inset 1px 1px 1px rgba(251, 229, 177, .19), inset -2px -2px 4px rgba(10, 13, 12, .24), 0 3px 5px rgba(15, 15, 13, .28);
 }
-:root[data-theme="castle-torchlit"] .track-browser__track { border-radius: 4px 0 0 4px; }
-:root[data-theme="castle-torchlit"] .track-browser__kebab { border-radius: 4px; }
 :root[data-theme="castle-torchlit"] :is(.track-library-shell, .session-panel__drawer, .settings-modal, .about-panel, .database-modal, .rename-modal) {
   border: 2px ridge var(--house-bronze);
   box-shadow: inset 0 0 0 2px rgba(215, 176, 100, .12), var(--theme-shadow) !important;

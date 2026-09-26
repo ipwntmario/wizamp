@@ -32,7 +32,7 @@ export class RoomHub {
     this.state = state;
     this.env = env;
     this.clients = new Map(); // Map<WebSocket, {id,name,role,ready,roomId}>
-    this.roomState = new Map(); // Map<roomId, { selectedTrack?: string, seed?: number, queuedTrack?: string|null, queuedSection?: string|null, queuedMode?: string|null, trackVolume?: number, playing?: { trackName:string, sectionName:string, serverMs:number } }>
+    this.roomState = new Map(); // Map<roomId, { selectedTrack?: string, seed?: number, queuedTrack?: string|null, queuedTrackPlayAfterRelease?: boolean|null, queuedSection?: string|null, queuedMode?: string|null, trackVolume?: number, playing?: { trackName:string, sectionName:string, serverMs:number } }>
   }
 
   async fetch(req) {
@@ -94,9 +94,9 @@ export class RoomHub {
         this.clients.set(ws, user);
         console.log("[RoomHub] HELLO add:", user, "total:", this.clients.size);
         this.broadcastPresence(user.roomId);
-        // Send current room state (selectedTrack) to this client, if any
+        // Send current room state, including a queue made before any track was loaded.
         const rs = this.roomState.get(user.roomId);
-        if (rs && rs.selectedTrack) {
+        if (rs) {
           ws.send(JSON.stringify({
             type: "STATE",
             selectedTrack: rs.selectedTrack,
@@ -104,6 +104,7 @@ export class RoomHub {
             queuedSection: rs.queuedSection ?? null,
             queuedMode: rs.queuedMode ?? null,
             queuedTrack: rs.queuedTrack ?? null,
+            queuedTrackPlayAfterRelease: rs.queuedTrackPlayAfterRelease ?? null,
             trackVolume: typeof rs.trackVolume === "number" ? rs.trackVolume : null,
             autoplay: rs.autoplay ?? true,
             playing: rs.playing || null
@@ -361,10 +362,12 @@ export class RoomHub {
         const name = String(data.name || "");
         if (!name) break;
         const rs = this.roomState.get(roomId) || {};
+        const playAfterRelease = typeof data.playAfterRelease === "boolean" ? data.playAfterRelease : null;
         rs.queuedTrack = name;
+        rs.queuedTrackPlayAfterRelease = playAfterRelease;
         this.roomState.set(roomId, rs);
-        console.log("[RoomHub] QUEUE_TRACK_REQUEST", { roomId, name });
-        const payload = JSON.stringify({ type: "QUEUE_TRACK", name });
+        console.log("[RoomHub] QUEUE_TRACK_REQUEST", { roomId, name, playAfterRelease });
+        const payload = JSON.stringify({ type: "QUEUE_TRACK", name, ...(playAfterRelease !== null ? { playAfterRelease } : {}) });
         for (const [sock, uu] of this.clients) if (uu.roomId === roomId) { try { sock.send(payload); } catch {} }
         break;
       }
@@ -375,6 +378,7 @@ export class RoomHub {
         const roomId = u.roomId;
         const rs = this.roomState.get(roomId) || {};
         rs.queuedTrack = null;
+        rs.queuedTrackPlayAfterRelease = null;
         this.roomState.set(roomId, rs);
         console.log("[RoomHub] CLEAR_TRACK_QUEUE_REQUEST", { roomId });
         const payload = JSON.stringify({ type: "CLEAR_TRACK_QUEUE" });

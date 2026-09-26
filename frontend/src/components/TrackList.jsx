@@ -55,9 +55,9 @@ export default function TrackList({
   tracks,
   selectedTrack,
   playingTrack,
+  hasLoadedTrack,
   queuedTrack,
   queuedTrackProgress = null,
-  autoplay,
   undoEffect,
   disabled,
   sortMode = "alpha-asc",
@@ -66,19 +66,40 @@ export default function TrackList({
   pinned,
   names,
   onPlay,
-  onStopThenPlay,
+  onPlayAfterEnding,
+  onPlayAfterStopping,
+  onLoadAfterEnding,
+  onLoadAfterStopping,
   onAddToQueue,
   onCollapse,
   onNavigateToControls,
 }) {
   const [menuTrack, setMenuTrack] = useState(null);
+  const [menuAction, setMenuAction] = useState(null);
   const [hoveredTrack, setHoveredTrack] = useState(null);
   const [heldTrack, setHeldTrack] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const rootRef = useRef(null);
   const filterButtonRef = useRef(null);
   const longPressTimerRef = useRef(null);
   const pointerGestureRef = useRef(null);
+  const menuOpenTimerRef = useRef(null);
+  const menuCollapseTimerRef = useRef(null);
+
+  const clearMenuTimers = () => {
+    clearTimeout(menuOpenTimerRef.current);
+    clearTimeout(menuCollapseTimerRef.current);
+  };
+
+  const openMenuAction = (action) => {
+    clearMenuTimers();
+    setMenuAction(action);
+  };
+
+  const startMenuHover = (event, action) => {
+    if (event.pointerType !== "mouse") return;
+    clearMenuTimers();
+    menuOpenTimerRef.current = setTimeout(() => setMenuAction(action), 450);
+  };
 
   const orderedNames = useMemo(() => orderTracks(tracks, {
     sortMode, filters, pinned, names,
@@ -89,17 +110,29 @@ export default function TrackList({
   useEffect(() => {
     if (!menuTrack) return undefined;
     const closeMenu = (event) => {
-      if (!rootRef.current?.contains(event.target)) setMenuTrack(null);
+      if (!event.target.closest(".track-browser__menu-wrap")) {
+        clearMenuTimers();
+        setMenuTrack(null);
+        setMenuAction(null);
+      }
     };
     document.addEventListener("pointerdown", closeMenu);
-    return () => document.removeEventListener("pointerdown", closeMenu);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      clearMenuTimers();
+    };
   }, [menuTrack]);
 
-  useEffect(() => () => clearTimeout(longPressTimerRef.current), []);
+  useEffect(() => () => {
+    clearTimeout(longPressTimerRef.current);
+    clearMenuTimers();
+  }, []);
 
   const runAction = (action, name, { navigate = true } = {}) => {
+    clearMenuTimers();
     action?.(name);
     setMenuTrack(null);
+    setMenuAction(null);
     if (navigate) onNavigateToControls?.();
   };
 
@@ -148,7 +181,7 @@ export default function TrackList({
   };
 
   return (
-    <section className="track-library" ref={rootRef} aria-label="Track library">
+    <section className="track-library" aria-label="Track library">
       <div className="track-library__heading">
         <span className="track-library__heading-copy">
           <Icon name="library" size={18} />
@@ -205,10 +238,10 @@ export default function TrackList({
                     className="track-browser__quick-action"
                     disabled={disabled}
                     onClick={() => runAction(onPlay, name)}
-                    aria-label={`${autoplay ? "Play" : "Load"} ${titleFor(name)}`}
-                    title={autoplay ? "Play track" : "Load track"}
+                    aria-label={`Play ${titleFor(name)}`}
+                    title="Play track"
                   >
-                    <Icon name={autoplay ? "play" : "chevronRight"} size={16} />
+                    <Icon name="play" size={16} />
                   </button>
                   <button
                     type="button"
@@ -243,17 +276,53 @@ export default function TrackList({
                       type="button"
                       className="track-browser__kebab"
                       disabled={disabled}
-                      onClick={() => setMenuTrack(current => current === name ? null : name)}
+                      onClick={() => {
+                        clearMenuTimers();
+                        setMenuTrack(current => current === name ? null : name);
+                        setMenuAction(null);
+                      }}
                       aria-label={`Actions for ${titleFor(name)}`}
                       aria-expanded={menuTrack === name}
                     >
                       <Icon name="moreVertical" size={18} />
                     </button>
                     {menuTrack === name && (
-                      <div className="track-browser__menu" role="menu">
-                        <button type="button" role="menuitem" onClick={() => runAction(onPlay, name)}>{autoplay ? "Play" : "Load"} after ending current track</button>
-                        <button type="button" role="menuitem" onClick={() => runAction(onStopThenPlay, name)}>{autoplay ? "Play" : "Load"} after stopping current track</button>
-                        <button type="button" role="menuitem" onClick={() => runAction(onAddToQueue, name, { navigate: false })}>Add to queue</button>
+                      <div className="track-browser__menu" role="menu" aria-label={`Actions for ${titleFor(name)}`}
+                        onPointerEnter={(event) => { if (event.pointerType === "mouse") clearTimeout(menuCollapseTimerRef.current); }}
+                        onPointerLeave={(event) => {
+                          if (event.pointerType !== "mouse") return;
+                          clearTimeout(menuOpenTimerRef.current);
+                          if (menuAction) {
+                            clearTimeout(menuCollapseTimerRef.current);
+                            menuCollapseTimerRef.current = setTimeout(() => setMenuAction(null), 350);
+                          }
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            event.stopPropagation();
+                            clearMenuTimers();
+                            if (menuAction) setMenuAction(null);
+                            else setMenuTrack(null);
+                          }
+                        }}>
+                        {!hasLoadedTrack ? (
+                          <>
+                            <button type="button" role="menuitem" onClick={() => runAction(onPlay, name)}>Play</button>
+                            <button type="button" role="menuitem" onClick={() => runAction(onAddToQueue, name, { navigate: false })}>Add to queue</button>
+                          </>
+                        ) : menuAction ? (
+                          <>
+                            <button type="button" role="menuitem" className="track-browser__menu-back" onClick={() => openMenuAction(null)}><Icon name="chevronLeft" size={14} /> Back</button>
+                            <button type="button" role="menuitem" onClick={() => runAction(menuAction === "play" ? onPlayAfterEnding : onLoadAfterEnding, name)}>{menuAction === "play" ? "Play" : "Load"} after ending/stopping current track</button>
+                            <button type="button" role="menuitem" onClick={() => runAction(menuAction === "play" ? onPlayAfterStopping : onLoadAfterStopping, name)}>{menuAction === "play" ? "Play" : "Load"} after stopping current track</button>
+                          </>
+                        ) : (
+                          <>
+                            <button type="button" role="menuitem" className="track-browser__menu-next" onPointerEnter={(event) => startMenuHover(event, "play")} onPointerLeave={() => clearTimeout(menuOpenTimerRef.current)} onClick={() => openMenuAction("play")}>Play <Icon name="chevronRight" size={14} /></button>
+                            <button type="button" role="menuitem" className="track-browser__menu-next" onPointerEnter={(event) => startMenuHover(event, "load")} onPointerLeave={() => clearTimeout(menuOpenTimerRef.current)} onClick={() => openMenuAction("load")}>Load <Icon name="chevronRight" size={14} /></button>
+                            <button type="button" role="menuitem" onClick={() => runAction(onAddToQueue, name, { navigate: false })}>Add to queue</button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

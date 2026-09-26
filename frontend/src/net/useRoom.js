@@ -148,7 +148,7 @@ export function useRoom({
         // hydrate queued UI from snapshot (optional)
         if (data.queuedSection != null) onQueueSectionRef.current?.(String(data.queuedSection));
         if (data.queuedMode != null) onQueueModeRef.current?.(String(data.queuedMode));
-        if (data.queuedTrack != null) onQueueTrackRef.current?.(String(data.queuedTrack));
+        if (data.queuedTrack != null) onQueueTrackRef.current?.(String(data.queuedTrack), data.queuedTrackPlayAfterRelease);
         if (typeof data.trackVolume === "number") {
           onSetTrackVolumeRef.current?.(data.trackVolume);
         }
@@ -185,7 +185,7 @@ export function useRoom({
       } else if (data.type === "CLEAR_MODE_QUEUE") {
         onClearModeQueueRef.current?.();
       } else if (data.type === "QUEUE_TRACK") {
-        onQueueTrackRef.current?.(String(data.name || ""));
+        onQueueTrackRef.current?.(String(data.name || ""), data.playAfterRelease);
       } else if (data.type === "CLEAR_TRACK_QUEUE") {
         onClearTrackQueueRef.current?.();
       } else if (data.type === "SET_TRACK_VOLUME") {
@@ -304,9 +304,9 @@ export function useRoom({
     ws.send(JSON.stringify({ type: "CLEAR_MODE_QUEUE_REQUEST" }));
   }, []);
 
-  const requestQueueTrack = useCallback((name) => {
+  const requestQueueTrack = useCallback((name, { playAfterRelease = null } = {}) => {
     const ws = wsRef.current; if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type: "QUEUE_TRACK_REQUEST", name }));
+    ws.send(JSON.stringify({ type: "QUEUE_TRACK_REQUEST", name, ...(typeof playAfterRelease === "boolean" ? { playAfterRelease } : {}) }));
   }, []);
 
   const requestClearTrackQueue = useCallback(() => {

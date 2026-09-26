@@ -48,6 +48,41 @@ test('queued tracks are broadcast, stored, and cleared for the room', () => {
   assert.equal(hub.roomState.get('test').queuedTrack, null);
 });
 
+test('explicit queued Play and Load choices survive room broadcasts', () => {
+  const { hub, send, messages } = fixture();
+  send({ type: 'QUEUE_TRACK_REQUEST', name: 'Next Track', playAfterRelease: true });
+  assert.deepEqual(messages.at(-1), { type: 'QUEUE_TRACK', name: 'Next Track', playAfterRelease: true });
+  assert.equal(hub.roomState.get('test').queuedTrackPlayAfterRelease, true);
+
+  send({ type: 'QUEUE_TRACK_REQUEST', name: 'Next Track', playAfterRelease: false });
+  assert.deepEqual(messages.at(-1), { type: 'QUEUE_TRACK', name: 'Next Track', playAfterRelease: false });
+  assert.equal(hub.roomState.get('test').queuedTrackPlayAfterRelease, false);
+
+  send({ type: 'CLEAR_TRACK_QUEUE_REQUEST' });
+  assert.equal(hub.roomState.get('test').queuedTrackPlayAfterRelease, null);
+});
+
+test('a joiner receives a queued track even before the first track is loaded', () => {
+  const { hub, send } = fixture();
+  send({ type: 'QUEUE_TRACK_REQUEST', name: 'First Track', playAfterRelease: false });
+
+  const messages = [];
+  const joiner = { send: message => messages.push(JSON.parse(message)) };
+  hub.webSocketMessage(joiner, JSON.stringify({ type: 'HELLO', roomId: 'test', role: 'Player', name: 'Joiner' }));
+
+  assert.deepEqual(messages.find(message => message.type === 'STATE'), {
+    type: 'STATE',
+    seed: null,
+    queuedSection: null,
+    queuedMode: null,
+    queuedTrack: 'First Track',
+    queuedTrackPlayAfterRelease: false,
+    trackVolume: null,
+    autoplay: true,
+    playing: null,
+  });
+});
+
 test('cancelling a stop restores the room playing snapshot', () => {
   const { hub, send, messages } = fixture();
   const playing = { trackName: 'Track', sectionName: 'Main', serverMs: 12345 };
