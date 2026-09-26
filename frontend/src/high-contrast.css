@@ -1,0 +1,239 @@
+/* Flat, high-contrast alternative to the standard dark theme. */
+:root[data-theme="high-contrast"] {
+  color-scheme: dark;
+  --app-background: #090c0f;
+  --app-foreground: #fff;
+  --theme-page: #090c0f;
+  --theme-surface: #151b20;
+  --theme-raised: #202930;
+  --theme-text: #fff;
+  --theme-muted: #d6e0e6;
+  --theme-faint: #b5c4cd;
+  --theme-border: #8195a2;
+  --theme-line: #667b88;
+  --theme-accent: #78dcff;
+  --theme-tint: #1d4758;
+  --theme-button: #26323a;
+  --theme-button-text: #fff;
+  --theme-input: #090c0f;
+  --theme-shadow: none;
+  color: var(--theme-text);
+  background: var(--theme-page);
+}
+
+:root[data-theme="high-contrast"] :is(body, #root) { background: var(--theme-page) !important; }
+:root[data-theme="high-contrast"] a { color: var(--theme-accent); text-decoration: underline; }
+:root[data-theme="high-contrast"] a:hover { color: #fff; }
+
+/* A visible outline takes the place of depth, glow, and translucent glass. */
+:root[data-theme="high-contrast"] :is(
+  .track-library-shell, .track-library-restore, .track-browser__header,
+  .track-browser__drawer, .track-browser__menu, .track-volume-control__popover,
+  .session-panel__bar, .session-panel__drawer, .utility-dock,
+  .mobile-tab-bar, .mobile-playlists-view, .mobile-main-volume .volume-control,
+  .transport-side-control, .status-history, .queue-indicator,
+  .queue-indicator__items, .settings-modal, .about-panel,
+  .database-modal, .rename-modal, .database-track-menu,
+  .section-controls__region, .dynamic-clips, .autoplay-pending
+) {
+  border: 1px solid var(--theme-border) !important;
+  color: var(--theme-text) !important;
+  background: var(--theme-surface) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+:root[data-theme="high-contrast"] :is(.about-overlay, .settings-overlay, .database-overlay, .rename-overlay) {
+  background: rgba(0, 0, 0, .88) !important;
+  backdrop-filter: none !important;
+}
+:root[data-theme="high-contrast"] :is(
+  .settings-modal__header, .database-modal__header, .database-toolbar,
+  .database-list-heading, .about-panel__header, .about-panel__tabs,
+  .track-browser__drawer-heading, .track-library__heading,
+  .queue-indicator__items, .status-history__header, .status-history__list li.is-current,
+  .settings-group__heading, .section-controls__heading, .dynamic-clips__heading
+) {
+  border-color: var(--theme-line) !important;
+  background: var(--theme-raised) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+:root[data-theme="high-contrast"] :is(
+  .track-library-shell, .track-browser__drawer, .session-panel__drawer,
+  .settings-modal, .about-panel, .database-modal, .rename-modal
+) { border-radius: 8px !important; }
+
+/* Keep secondary information readable, even where the default dark CSS uses faint text. */
+:root[data-theme="high-contrast"] :is(
+  .track-library__heading-copy small, .track-browser__header-label,
+  .track-browser__drawer-heading small, .track-browser__track-copy small,
+  .track-browser__hint, .track-browser__autoplay strong,
+  .session-room__copy small, .session-panel__action-copy small,
+  .session-theme-picker legend, .session-theme-picker__group-title,
+  .status-bar__label, .status-history__header small, .status-history__list li,
+  .status-history__list time, .volume-control__value,
+  .track-volume-control__label, .track-volume-control__slider span,
+  .clip-progress__time, .section-controls__heading, .dynamic-clips__heading,
+  .queue-indicator__label, .queue-indicator__item small,
+  .about-panel__intro, .about-panel__concept p, .about-panel__flow p,
+  .about-panel__tip, .about-panel__updates span, .settings-modal__header p,
+  .settings-group__heading p, .settings-field__copy small,
+  .settings-about-link__copy small, .database-modal__subtitle,
+  .database-toolbar label, .database-list-heading, .rename-modal__form label,
+  .about-panel__tutorial span
+) { color: var(--theme-muted) !important; }
+:root[data-theme="high-contrast"] :is(
+  .track-library__collapse, .track-library-restore, .track-browser__kebab,
+  .track-browser__header svg, .status-bar__toggle, .volume-control__button,
+  .now-playing__volume, .database-icon-button, .database-expand,
+  .database-edit-button, .database-track-menu-button,
+  .dynamic-clips__heading button, .dynamic-clips-restore,
+  .queue-indicator__peek-controls button
+) { color: var(--theme-text) !important; }
+:root[data-theme="high-contrast"] :is(
+  .track-library__heading-copy small, .track-browser__header-label,
+  .track-browser__drawer-heading small, .track-browser__track-copy small,
+  .track-browser__hint, .session-room__copy small,
+  .session-panel__action-copy small, .session-theme-picker legend,
+  .session-theme-picker__group-title, .status-bar__label,
+  .clip-progress__time, .section-controls__heading,
+  .dynamic-clips__heading, .queue-indicator__label,
+  .settings-field__copy small, .settings-about-link__copy small,
+  .database-list-heading
+) { font-size: 11px; letter-spacing: .02em; }
+:root[data-theme="high-contrast"] :is(
+  .session-room__icon--private, .session-room__icon--online,
+  .settings-group__icon, .session-panel__action-icon,
+  .track-browser__state span, .about-panel__flow li > span,
+  .about-panel__concept > svg, .track-library__heading-copy small
+) { color: var(--theme-accent) !important; background: var(--theme-raised) !important; box-shadow: none !important; }
+
+:root[data-theme="high-contrast"] :is(
+  .session-room, .session-panel__action, .session-theme-picker__choice,
+  .settings-group, .settings-about-link, .settings-field,
+  .track-browser__row, .track-browser__autoplay, .database-row,
+  .database-row--mode, .about-panel__concepts, .about-panel__flow li,
+  .about-panel__updates li, .about-panel__tutorial
+) {
+  border-color: var(--theme-line) !important;
+  color: var(--theme-text);
+  background: var(--theme-surface) !important;
+  box-shadow: none !important;
+}
+:root[data-theme="high-contrast"] :is(
+  .session-room:hover, .session-panel__action:hover,
+  .track-browser__row:hover, .track-browser__menu button:hover,
+  .database-row:hover, .database-track-menu button:hover,
+  .settings-about-link:hover
+) { background: var(--theme-raised) !important; }
+:root[data-theme="high-contrast"] :is(
+  .session-room.is-selected, .track-browser__row.is-selected,
+  .track-browser__row.is-playing, .session-theme-picker__choice:has(input:checked)
+) {
+  border: 2px solid var(--theme-accent) !important;
+  color: var(--theme-text);
+  background: var(--theme-tint) !important;
+  box-shadow: none !important;
+}
+:root[data-theme="high-contrast"] :is(.track-browser__row.is-queued, .section-control-button.is-queued) {
+  border-color: var(--theme-accent) !important;
+  animation: none !important;
+  box-shadow: none !important;
+}
+:root[data-theme="high-contrast"] .session-theme-picker__choice {
+  min-height: 44px;
+  font-size: 12px;
+  border-radius: 5px;
+}
+:root[data-theme="high-contrast"] .session-theme-picker__swatch { box-shadow: none; }
+
+/* Controls use solid fills and distinct borders in every state. */
+:root[data-theme="high-contrast"] :is(
+  .track-browser__header, .queue-indicator__toggle,
+  .queue-indicator.is-open .queue-indicator__toggle,
+  .section-control-button, .transport-undo, .transport-stop,
+  .primary-playback-button, .database-button--quiet,
+  .rename-modal__form button, .session-room__more,
+  .track-browser__quick-action
+) {
+  border: 2px solid var(--theme-border) !important;
+  color: var(--theme-text) !important;
+  background: var(--theme-button) !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+:root[data-theme="high-contrast"] :is(
+  .track-browser__header:hover, .queue-indicator__toggle:hover,
+  .queue-indicator.is-open .queue-indicator__toggle:hover,
+  .section-control-button:not(:disabled):hover,
+  .transport-undo:not(:disabled):hover, .transport-stop:not(:disabled):hover,
+  .primary-playback-button:not(:disabled):hover,
+  .track-browser__quick-action:hover:not(:disabled)
+) { border-color: var(--theme-accent) !important; background: var(--theme-tint) !important; transform: none; }
+:root[data-theme="high-contrast"] :is(
+  .section-control-button--mode.is-active, .primary-playback-button:not(.is-compact),
+  .database-button--primary
+) {
+  border: 2px solid var(--theme-accent) !important;
+  color: #06131a !important;
+  background: var(--theme-accent) !important;
+  box-shadow: none !important;
+}
+:root[data-theme="high-contrast"] :is(
+  .primary-playback-button.is-playing, .primary-playback-button.is-loading
+) { border-color: var(--theme-accent) !important; color: #fff !important; background: var(--theme-tint) !important; }
+:root[data-theme="high-contrast"] :is(
+  .section-control-button--section.is-end, .transport-stop.is-highlighted
+) { border-color: #ffb1ad !important; color: #fff !important; background: #713236 !important; }
+:root[data-theme="high-contrast"] .primary-playback-button.is-compact {
+  border: 0 !important;
+  color: var(--theme-accent) !important;
+  background: transparent !important;
+}
+:root[data-theme="high-contrast"] :is(
+  .section-control-button.is-auto-locked, .section-controls.is-replacement-locked .section-control-button,
+  .primary-playback-button:disabled:not(.is-loading), .transport-stop:disabled,
+  .transport-undo:disabled, .track-browser__quick-action:disabled
+) { color: var(--theme-faint) !important; background: #20272c !important; opacity: .72 !important; }
+:root[data-theme="high-contrast"] :is(.queue-indicator__label, .queue-indicator__toggle svg) { color: var(--theme-accent) !important; }
+:root[data-theme="high-contrast"] :is(.queue-indicator__toggle, .track-browser__header) { border-radius: 6px !important; }
+:root[data-theme="high-contrast"] :is(.queue-indicator__item, .queue-indicator__top-row, .track-browser__autoplay.is-on) { background: var(--theme-surface) !important; }
+:root[data-theme="high-contrast"] :is(.track-browser__queue-progress, .section-control-button__queue-progress, .clip-progress) {
+  border: 1px solid var(--theme-border);
+  background: #090c0f !important;
+  box-shadow: none !important;
+}
+:root[data-theme="high-contrast"] :is(
+  .track-browser__queue-progress > span, .section-control-button__queue-progress > span,
+  .clip-progress__fill
+) { background: var(--theme-accent) !important; box-shadow: none !important; }
+:root[data-theme="high-contrast"] .clip-progress__thumb { border-color: #fff; background: var(--theme-accent); box-shadow: none; }
+:root[data-theme="high-contrast"] .status-bar__pulse { background: var(--theme-accent); box-shadow: none; }
+
+/* Inputs, switches, keyboard focus, and selected tabs remain obvious. */
+:root[data-theme="high-contrast"] :is(
+  .session-identity > label input, .session-identity > label select,
+  .database-toolbar select, .rename-modal__form input,
+  .settings-number, .settings-number input
+) { border-color: var(--theme-border) !important; color: #fff !important; background: var(--theme-input) !important; box-shadow: none !important; }
+:root[data-theme="high-contrast"] .toggle-switch > span { border: 2px solid var(--theme-border); background: #090c0f; }
+:root[data-theme="high-contrast"] .toggle-switch > span::after { background: #fff; box-shadow: none; }
+:root[data-theme="high-contrast"] .toggle-switch input:checked + span { border-color: var(--theme-accent); background: #176078; }
+:root[data-theme="high-contrast"] :is(.volume-control input[type="range"], .track-volume-control__slider input) { accent-color: var(--theme-accent); }
+:root[data-theme="high-contrast"] :is(.about-panel__tabs button.is-active, .mobile-tab-bar button.is-active) {
+  color: var(--theme-accent) !important;
+  background: var(--theme-tint) !important;
+}
+:root[data-theme="high-contrast"] :is(.about-panel__tabs button, .mobile-tab-bar button, .track-browser__menu button, .database-track-menu button) { color: var(--theme-text) !important; }
+:root[data-theme="high-contrast"] :is(button, a, input, select, [role="button"], [tabindex]):focus-visible,
+:root[data-theme="high-contrast"] .toggle-switch input:focus-visible + span,
+:root[data-theme="high-contrast"] .session-theme-picker__choice:has(input:focus-visible) {
+  outline: 3px solid #ffe177 !important;
+  outline-offset: 3px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="high-contrast"] *,
+  :root[data-theme="high-contrast"] *::before,
+  :root[data-theme="high-contrast"] *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

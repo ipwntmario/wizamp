@@ -12,14 +12,14 @@ test('each session starts with its own default and stores a separate choice', ()
 });
 
 test('every session can use every theme in its Standard or Fantasy group', () => {
-  const themeIds = ['dark', 'light', 'signet', 'castle-torchlit'];
+  const themeIds = ['dark', 'high-contrast', 'light', 'signet', 'castle-torchlit'];
   for (const roomId of ['', 'awc', 'future-room']) {
     assert.deepEqual(availableThemes(roomId).map(({ id }) => id), themeIds);
     assert.equal(resolveTheme(roomId, 'castle-torchlit').id, 'castle-torchlit');
   }
-  assert.deepEqual(availableThemes().map(({ group }) => group), ['Standard', 'Standard', 'Fantasy', 'Fantasy']);
+  assert.deepEqual(availableThemes().map(({ group }) => group), ['Standard', 'Standard', 'Standard', 'Fantasy', 'Fantasy']);
 });
 
 test('only the fantasy themes provide a wand cursor effect', () => {
-  assert.deepEqual(availableThemes().map(({ cursorEffect }) => cursorEffect ?? null), [null, null, 'wand', 'wand']);
+  assert.deepEqual(availableThemes().map(({ cursorEffect }) => cursorEffect ?? null), [null, null, null, 'wand', 'wand']);
 });
