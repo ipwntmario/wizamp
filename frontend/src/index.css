@@ -302,18 +302,19 @@ body {
 .track-browser__drawer-heading { display: flex; flex: 0 0 auto; align-items: baseline; justify-content: space-between; padding: 13px 15px 11px; border-bottom: 1px solid rgba(255,255,255,.07); font-size: 11px; font-weight: 780; letter-spacing: .09em; text-transform: uppercase; }
 .track-browser__drawer-heading small { color: rgba(255,255,255,.33); font-size: 9px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .track-browser__toolbar { display: flex; flex: 0 0 auto; min-width: 0; border-bottom: 1px solid rgba(255,255,255,.065); }
-.track-browser__filter-button { display: inline-flex; flex: 0 0 auto; min-height: 44px; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; border: 0; border-right: 1px solid rgba(255,255,255,.11); border-radius: 0; color: rgba(255,255,255,.78); background: rgba(255,255,255,.035); cursor: pointer; font: inherit; font-size: 11px; font-weight: 690; }
+.track-browser__filter-button { display: inline-flex; box-sizing: border-box; flex: 0 0 auto; min-height: 38px; align-items: center; justify-content: center; gap: 6px; padding: 4px 10px; border: 0; border-right: 1px solid rgba(255,255,255,.11); border-radius: 0; color: rgba(255,255,255,.78); background: rgba(255,255,255,.035); cursor: pointer; font: inherit; font-size: 11px; font-weight: 690; }
 .track-browser__filter-button:hover, .track-browser__filter-button[aria-expanded="true"] { color: #fff; background: rgba(255,255,255,.09); }
 .track-browser__filter-count { display: grid; min-width: 17px; height: 17px; place-items: center; border: 1px solid currentColor; border-radius: 4px; font-size: 10px; }
 .track-browser__autoplay {
   display: flex;
+  box-sizing: border-box;
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 44px;
+  min-height: 38px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 15px;
+  padding: 4px 12px;
   border: 0;
   border-bottom: 0;
   border-radius: 0;
@@ -1421,7 +1422,6 @@ button:focus-visible {
   .track-library__heading { display: none; }
   .track-library__collapse, .track-library-restore { display: none; }
   .track-library__resize-handle { display: none; }
-  .track-browser__autoplay { box-sizing: border-box; min-height: 38px; padding: 4px 12px; }
   .track-browser__list { padding: 5px; }
   .track-browser__menu { width: min(224px, calc(100vw - 54px)); }
   .mobile-playlists-view {
