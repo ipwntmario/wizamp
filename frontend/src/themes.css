@@ -154,6 +154,16 @@
   .database-edit-button, .database-track-menu-button, .dynamic-clips__heading button,
   .dynamic-clips-restore, .queue-indicator__peek-controls button
 ) { color: var(--theme-muted) !important; }
+:root:is([data-theme="light"], [data-theme="signet"], [data-theme="castle-torchlit"]) button.track-library-restore {
+  border-color: var(--theme-border);
+  color: var(--theme-accent) !important;
+  background: var(--theme-raised);
+  box-shadow: var(--theme-shadow);
+}
+:root:is([data-theme="light"], [data-theme="signet"], [data-theme="castle-torchlit"]) button.track-library-restore:hover {
+  border-color: var(--theme-accent);
+  background: var(--theme-button);
+}
 :root:is([data-theme="light"], [data-theme="signet"], [data-theme="castle-torchlit"], [data-theme="high-contrast"], [data-theme="high-contrast-light"]) .session-room__more {
   color: var(--theme-accent);
   background: transparent;
