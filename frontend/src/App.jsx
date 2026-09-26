@@ -69,7 +69,7 @@ export default function App() {
   const libraryResizePointer = useRef(null);
   const [mobileView, setMobileView] = useState("library");
   const [dynamicClipsExpanded, setDynamicClipsExpanded] = useState(() => {
-    try { return localStorage.getItem("wizamp_dynamicClipsExpanded") !== "0"; } catch { return true; }
+    try { return localStorage.getItem("wizamp_dynamicClipsExpanded") === "1"; } catch { return false; }
   });
   useEffect(() => {
     try { localStorage.setItem("wizamp_dynamicClipsExpanded", dynamicClipsExpanded ? "1" : "0"); } catch {}
