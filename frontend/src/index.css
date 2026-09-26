@@ -909,6 +909,7 @@ body {
 .session-theme-picker__swatch--dark { background: linear-gradient(135deg, #30324a, #171820); }
 .session-theme-picker__swatch--high-contrast { border-color: #fff; background: linear-gradient(135deg, #0a0d10 50%, #72d9ff 50%); box-shadow: none; }
 .session-theme-picker__swatch--light { background: linear-gradient(135deg, #fff, #d8ddec); }
+.session-theme-picker__swatch--high-contrast-light { border-color: #4e6470; background: linear-gradient(135deg, #fff 50%, #005a73 50%); box-shadow: none; }
 .session-theme-picker__swatch--signet { background: linear-gradient(135deg, #e4b670, #a73f80 55%, #343d8d); }
 .session-theme-picker__swatch--castle-torchlit { background: linear-gradient(135deg, #641016 0 25%, #d49b23 25% 50%, #285b34 50% 75%, #213d62 75%); }
 .session-panel__presence { margin-top: 12px; padding: 12px 5px 2px; border-top: 1px solid rgba(255,255,255,.08); }
