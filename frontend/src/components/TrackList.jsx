@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { orderTracks, trackTitle } from "../data/trackOrdering";
+import { activeTrackFilterCount, orderTracks, trackTitle } from "../data/trackOrdering";
 import Icon from "./Icon";
+import TrackFilterControls from "./TrackFilterControls";
 
 function OverflowTrackTitle({ children, active }) {
   const viewportRef = useRef(null);
@@ -61,8 +62,8 @@ export default function TrackList({
   undoEffect,
   disabled,
   sortMode = "alpha-asc",
-  dynamicFirst = true,
-  hideTests = false,
+  filters,
+  onChangeFilters,
   pinned,
   names,
   onPlay,
@@ -74,13 +75,15 @@ export default function TrackList({
   const [menuTrack, setMenuTrack] = useState(null);
   const [hoveredTrack, setHoveredTrack] = useState(null);
   const [heldTrack, setHeldTrack] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const rootRef = useRef(null);
+  const filterButtonRef = useRef(null);
   const longPressTimerRef = useRef(null);
   const pointerGestureRef = useRef(null);
 
   const orderedNames = useMemo(() => orderTracks(tracks, {
-    sortMode, dynamicFirst, hideTests, pinned, names,
-  }), [tracks, sortMode, dynamicFirst, hideTests, pinned, names]);
+    sortMode, filters, pinned, names,
+  }), [tracks, sortMode, filters, pinned, names]);
 
   const titleFor = (name) => trackTitle(name, tracks[name], names);
 
@@ -157,23 +160,46 @@ export default function TrackList({
           <Icon name="chevronLeft" size={18} />
         </button>
       </div>
-          <label
-            className={`track-browser__autoplay ${autoplay ? "is-on" : ""}`}
-            title={autoplay ? "Auto-Play is ON" : "Auto-Play is OFF"}
-          >
-            <span className="track-browser__autoplay-copy">
-              <Icon name={autoplay ? "autoplayOn" : "autoplayOff"} size={19} />
-              <span>Auto-Play</span>
+      <div className="track-browser__toolbar">
+        <button
+          ref={filterButtonRef}
+          type="button"
+          className="track-browser__filter-button"
+          aria-expanded={filtersOpen}
+          aria-controls="library-filters"
+          onClick={() => setFiltersOpen(value => !value)}
+        >
+          <Icon name="filter" size={16} />
+          <span>Filters</span>
+          {activeTrackFilterCount(filters) > 0 && <span className="track-browser__filter-count">{activeTrackFilterCount(filters)}</span>}
+        </button>
+        <label
+          className={`track-browser__autoplay ${autoplay ? "is-on" : ""}`}
+          title={autoplay ? "Auto-Play is ON" : "Auto-Play is OFF"}
+        >
+          <span className="track-browser__autoplay-copy">
+            <Icon name={autoplay ? "autoplayOn" : "autoplayOff"} size={19} />
+            <span>Auto-Play</span>
+          </span>
+          <span className="track-browser__autoplay-state">
+            <strong>{autoplay ? "On" : "Off"}</strong>
+            <span className="toggle-switch">
+              <input type="checkbox" checked={autoplay} onChange={(event) => onAutoplayChange?.(event.target.checked)} disabled={disabled} />
+              <span aria-hidden="true" />
             </span>
-            <span className="track-browser__autoplay-state">
-              <strong>{autoplay ? "On" : "Off"}</strong>
-              <span className="toggle-switch">
-                <input type="checkbox" checked={autoplay} onChange={(event) => onAutoplayChange?.(event.target.checked)} disabled={disabled} />
-                <span aria-hidden="true" />
-              </span>
-            </span>
-          </label>
+          </span>
+        </label>
+      </div>
+      {filtersOpen && <TrackFilterControls
+        id="library-filters"
+        filters={filters}
+        onChange={onChangeFilters}
+        shownCount={orderedNames.length}
+        totalCount={Object.keys(tracks || {}).length}
+        onEscape={() => { setFiltersOpen(false); filterButtonRef.current?.focus(); }}
+      />}
           <div className="track-browser__list">
+            {orderedNames.length === 0 && <p className="track-browser__empty" role="status">No tracks match these filters. Change them in Library Filters.</p>}
             {orderedNames.map((name) => {
               const track = tracks[name];
               const isPlaying = playingTrack === name;

@@ -1,6 +1,7 @@
-import { orderTracks, trackTitle } from "../data/trackOrdering";
+import { activeTrackFilterCount, DEFAULT_TRACK_FILTERS, orderTracks, trackTitle } from "../data/trackOrdering";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "./Icon";
+import TrackFilterControls from "./TrackFilterControls";
 
 /** Helper: consider a track "dynamic" when simple === false */
 const isDynamic = (t) => t?.simple === false;
@@ -13,11 +14,7 @@ export default function DatabaseModal({
   tracks, // { [trackName]: { defaultDisplayName, basePath, simple, test?, ... } }
   // Controlled prefs
   sortMode = "alpha-asc",     // "alpha-asc" | "alpha-desc"
-  dynamicFirst = true,
-  hideTests = false,
   onChangeSort,
-  onChangeDynamicFirst,
-  onChangeHideTests,
   pinned,                     // Set<string>
   onTogglePin,                // (name) => void
   onApplyRename,
@@ -28,6 +25,10 @@ export default function DatabaseModal({
   const [sectionsByTrack, setSectionsByTrack] = useState({});               // cache: { trackName: { sections } }
   const [loadingTrack, setLoadingTrack] = useState(null);
   const [trackMenuOpen, setTrackMenuOpen] = useState(null);
+  const [filters, setFilters] = useState(() => ({ ...DEFAULT_TRACK_FILTERS }));
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterButtonRef = useRef(null);
+  const activeFilterCount = activeTrackFilterCount(filters);
 
   useEffect(() => {
     if (!trackMenuOpen) return;
@@ -65,8 +66,8 @@ export default function DatabaseModal({
   };
 
   const sortedTrackNames = useMemo(() => orderTracks(tracks, {
-    sortMode, dynamicFirst, hideTests, pinned, names,
-  }), [tracks, sortMode, dynamicFirst, hideTests, pinned, names]);
+    sortMode, filters, pinned, names,
+  }), [tracks, sortMode, filters, pinned, names]);
 
   const fetchSectionsIfNeeded = async (trackName) => {
     if (sectionsByTrack[trackName]) return sectionsByTrack[trackName];
@@ -242,30 +243,17 @@ export default function DatabaseModal({
             </select>
           </label>
 
-          <label className="database-check">
-            <span>Keep dynamic on top</span>
-            <span className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={dynamicFirst}
-                onChange={(e) => onChangeDynamicFirst?.(e.target.checked)}
-                disabled={!(sortMode === "alpha-asc" || sortMode === "alpha-desc")}
-              />
-              <span aria-hidden="true" />
-            </span>
-          </label>
-
-          <label className="database-check">
-            <span>Hide test tracks</span>
-            <span className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={hideTests}
-                onChange={(e) => onChangeHideTests?.(e.target.checked)}
-              />
-              <span aria-hidden="true" />
-            </span>
-          </label>
+          <button
+            ref={filterButtonRef}
+            type="button"
+            className="database-button database-button--quiet database-filter-button"
+            aria-expanded={filtersOpen}
+            aria-controls="database-filters"
+            onClick={() => setFiltersOpen(value => !value)}
+          >
+            <Icon name="filter" size={16} />
+            Filters{activeFilterCount > 0 && <span className="database-filter-count">{activeFilterCount}</span>}
+          </button>
 
           <div className="database-toolbar__actions" style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             <button
@@ -283,6 +271,17 @@ export default function DatabaseModal({
               collapse all
             </button>
           </div>
+          {filtersOpen && <TrackFilterControls
+            id="database-filters"
+            filters={filters}
+            onChange={setFilters}
+            shownCount={sortedTrackNames.length}
+            totalCount={Object.keys(tracks || {}).length}
+            onEscape={() => {
+                setFiltersOpen(false);
+                filterButtonRef.current?.focus();
+            }}
+          />}
         </div>
 
         {/* Scrollable body */}
@@ -295,6 +294,12 @@ export default function DatabaseModal({
 
           {/* Tracks */}
           <div>
+            {sortedTrackNames.length === 0 && (
+              <div className="database-empty" role="status">
+                <p>No tracks match these filters.</p>
+                <button type="button" className="database-button database-button--quiet" onClick={() => setFilters({ ...DEFAULT_TRACK_FILTERS })}>Show all tracks</button>
+              </div>
+            )}
             {sortedTrackNames.map((trackName) => {
               const t = tracks[trackName];
               const expanded = expandedTracks.has(trackName);

@@ -18,6 +18,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback  } from "react";
 import { AudioEngine } from "./audio/audioEngine";
 import { useMusicData } from "./data/useMusicData";
+import { normalizeTrackFilters } from "./data/trackOrdering";
 import { findSelectableEndSection, getAutoLockedTargets } from "./data/sectionTransitions";
 import { replacementRemainingSeconds } from "./data/replacementTiming";
 import { useSession } from "./net/useSession";
@@ -231,8 +232,12 @@ export default function App() {
 
   // App.jsx (top-level state)
   const [dbSort, setDbSort] = useState(() => localStorage.getItem("wizamp_dbSort") || "alpha-asc");
-  const [dbDynamicFirst, setDbDynamicFirst] = useState(() => localStorage.getItem("wizamp_dbDynamicFirst") !== "false"); // default true
-  const [dbHideTests, setDbHideTests] = useState(() => localStorage.getItem("wizamp_dbHideTests") !== "false");
+  const [libraryFilters, setLibraryFilters] = useState(() => {
+    try {
+      const saved = localStorage.getItem("wizamp_libraryFilters");
+      return normalizeTrackFilters(saved ? JSON.parse(saved) : undefined);
+    } catch { return normalizeTrackFilters(); }
+  });
 
   // Pinned tracks (persisted as array of names)
   const [pinned, setPinned] = useState(() => {
@@ -446,8 +451,9 @@ export default function App() {
 
   // Track select menu persist (optional)
   useEffect(() => { localStorage.setItem("wizamp_dbSort", dbSort); }, [dbSort]);
-  useEffect(() => { localStorage.setItem("wizamp_dbDynamicFirst", String(dbDynamicFirst)); }, [dbDynamicFirst]);
-  useEffect(() => { localStorage.setItem("wizamp_dbHideTests", String(dbHideTests)); }, [dbHideTests]);
+  useEffect(() => {
+    try { localStorage.setItem("wizamp_libraryFilters", JSON.stringify(libraryFilters)); } catch { /* Storage may be disabled. */ }
+  }, [libraryFilters]);
 
   // Pinned effect
   useEffect(() => {
@@ -1458,8 +1464,8 @@ export default function App() {
               undoEffect={undoEffect}
               disabled={!isActiveRole && room.onlineActive}
               sortMode={dbSort}
-              dynamicFirst={dbDynamicFirst}
-              hideTests={dbHideTests}
+              filters={libraryFilters}
+              onChangeFilters={setLibraryFilters}
               pinned={pinned}
               names={names}
               onPlay={(name) => requestTrackPlayback(name)}
@@ -1772,16 +1778,12 @@ export default function App() {
       />
 
       {/* Database modal */}
-      <DatabaseModal
+      {dbOpen && <DatabaseModal
         open={dbOpen}
         onClose={() => setDbOpen(false)}
         tracks={tracks}
         sortMode={dbSort}
-        dynamicFirst={dbDynamicFirst}
-        hideTests={dbHideTests}
         onChangeSort={setDbSort}
-        onChangeDynamicFirst={setDbDynamicFirst}
-        onChangeHideTests={setDbHideTests}
         pinned={pinned}
         onTogglePin={togglePin}
         names={names}                 // NEW
@@ -1845,7 +1847,7 @@ export default function App() {
             return next;
           });
         }}
-      />
+      />}
 
       <CursorEffect enabled={cursorEffectEnabled} themeId={activeTheme.id} effect={activeTheme.cursorEffect} />
     </div>

@@ -196,8 +196,18 @@ test('simple tracks expose a timeline and can seek while playing or paused', () 
   assert.equal(engine.getPlaybackInfo().positionSeconds, 4);
 }));
 
-test('catalog ordering keeps pinned tests and honors renamed titles', () => {
+test('catalog ordering respects filters even for pinned tracks and honors renamed titles', () => {
   const tracks = { A: { simple: true }, B: { simple: false }, C: { simple: false, test: true }, D: { test: true } };
-  assert.deepEqual(orderTracks(tracks, { pinned: new Set(['C']), hideTests: true, dynamicFirst: true, sortMode: 'alpha-asc' }), ['C', 'B', 'A']);
+  assert.deepEqual(orderTracks(tracks, { pinned: new Set(['C']), filters: { tests: 'exclude' }, sortMode: 'alpha-asc' }), ['A', 'B']);
+  assert.deepEqual(orderTracks(tracks, { pinned: new Set(['C']), sortMode: 'alpha-desc' }), ['C', 'D', 'B', 'A']);
   assert.deepEqual(orderTracks({ A: {}, B: {} }, { names: { tracks: { A: { displayName: 'Z' } } }, sortMode: 'alpha-asc' }), ['B', 'A']);
+});
+
+test('track type and test status filters intersect independently', () => {
+  const tracks = { dynamic: { simple: false }, dynamicTest: { simple: false, test: true }, simple: { simple: true }, simpleTest: { simple: true, test: true } };
+  assert.deepEqual(orderTracks(tracks, { filters: { simple: false, tests: 'only' } }), ['dynamicTest']);
+  assert.deepEqual(orderTracks(tracks, { filters: { dynamic: false, tests: 'only' } }), ['simpleTest']);
+  assert.deepEqual(orderTracks(tracks, { filters: { tests: 'exclude' } }), ['dynamic', 'simple']);
+  assert.deepEqual(orderTracks(tracks, { filters: { dynamic: false, simple: false } }), []);
+  assert.equal(orderTracks(tracks, { filters: {} }).length, 4);
 });
