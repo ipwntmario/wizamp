@@ -1,6 +1,10 @@
-# Wizamp
+# Gizmagick
 
 A browser-based dynamic music player for tabletop sessions. Tracks can loop, transition between sections, switch musical modes, and synchronize playback across a room.
+
+Live app: [wizamp.app](https://wizamp.app).
+
+Gizmagick's logo assets are in `frontend/public/branding`: the full-color PNG is the main app logo, and the black and white SVG variants have transparent backgrounds for compact monochrome uses such as notification icons. The live domain and Cloudflare Worker name retain their existing names. Browser storage keys also retain the `wizamp` prefix so existing preferences are preserved.
 
 ## Local development
 
@@ -23,10 +27,12 @@ Set these values in `frontend/.env.local`, then restart Vite:
 
 ```dotenv
 VITE_ONLINE_MODE=true
-VITE_WS_URL=ws://127.0.0.1:8787/ws
+VITE_WS_URL=/ws
 ```
 
-Open two browser tabs with the same `?room=test-room` URL. Choose Audio Manager in one and Player or BTS in the other, unlock audio in both, and select a track. Online Play waits for room readiness. For an already deployed backend, use its `wss://.../ws` address instead.
+Vite proxies `/ws` to the local Worker on port 8787. The browser uses `ws://` on localhost and `wss://` when the app is opened through HTTPS, including an ngrok tunnel. To test on a phone or away from home, run Vite, the local Worker, and `ngrok http 5173`, then open the ngrok HTTPS URL. The Vite `allowedHosts` list must include your ngrok hostname; update `frontend/vite.config.js` if that hostname changes. If Vite selects another port, pass that port to ngrok instead. Restart Vite after changing `.env.local`.
+
+Open two browser tabs with the same `?room=test-room` URL. Choose Director in one and Member or Observer-Member in the other, unlock audio in both, and select a track. Online Play waits for room readiness. For an already deployed backend, use its `wss://.../ws` address instead. Production builds should continue to set `VITE_WS_URL` to the deployed Worker URL; the `/ws` proxy exists only in the Vite development server.
 
 The `server` folder contains the original presence-only Express prototype. It is retained for reference, but it does not implement playback commands and is not the development backend for the current frontend. Use `dev:worker` instead.
 
